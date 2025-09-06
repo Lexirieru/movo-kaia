@@ -1,0 +1,189 @@
+[
+    {
+        "type": "function",
+        "name": "approvePayroll",
+        "inputs": [
+            {
+                "name": "_payrollId",
+                "type": "uint256",
+                "internalType": "uint256"
+            },
+            {
+                "name": "receiver",
+                "type": "address",
+                "internalType": "address"
+            },
+            {
+                "name": "_networkChainId",
+                "type": "string",
+                "internalType": "string"
+            },
+            {
+                "name": "_walletAddress",
+                "type": "string",
+                "internalType": "string"
+            },
+            {
+                "name": "_amount",
+                "type": "uint256",
+                "internalType": "uint256"
+            },
+            {
+                "name": "_bankAccount",
+                "type": "string",
+                "internalType": "string"
+            },
+            {
+                "name": "_bankCode",
+                "type": "string",
+                "internalType": "string"
+            },
+            {
+                "name": "_bankName",
+                "type": "string",
+                "internalType": "string"
+            },
+            {
+                "name": "_bankAccountName",
+                "type": "string",
+                "internalType": "string"
+            }
+        ],
+        "outputs": [],
+        "stateMutability": "nonpayable"
+    },
+    {
+        "type": "event",
+        "name": "PayrollApproved",
+        "inputs": [
+            {
+                "name": "payrollId",
+                "type": "uint256",
+                "indexed": true,
+                "internalType": "uint256"
+            },
+            {
+                "name": "company",
+                "type": "address",
+                "indexed": true,
+                "internalType": "address"
+            },
+            {
+                "name": "employee",
+                "type": "address",
+                "indexed": true,
+                "internalType": "address"
+            },
+            {
+                "name": "networkChainId",
+                "type": "string",
+                "indexed": false,
+                "internalType": "string"
+            },
+            {
+                "name": "walletAddress",
+                "type": "string",
+                "indexed": false,
+                "internalType": "string"
+            },
+            {
+                "name": "amount",
+                "type": "uint256",
+                "indexed": false,
+                "internalType": "uint256"
+            },
+            {
+                "name": "bankAccount",
+                "type": "string",
+                "indexed": false,
+                "internalType": "string"
+            },
+            {
+                "name": "bankCode",
+                "type": "string",
+                "indexed": false,
+                "internalType": "string"
+            },
+            {
+                "name": "bankName",
+                "type": "string",
+                "indexed": false,
+                "internalType": "string"
+            },
+            {
+                "name": "bankAccountName",
+                "type": "string",
+                "indexed": false,
+                "internalType": "string"
+            }
+        ],
+        "anonymous": false
+    },
+    {
+        "type": "event",
+        "name": "WithdrawApproved",
+        "inputs": [
+            {
+                "name": "payrollId",
+                "type": "uint256",
+                "indexed": true,
+                "internalType": "uint256"
+            },
+            {
+                "name": "company",
+                "type": "address",
+                "indexed": true,
+                "internalType": "address"
+            },
+            {
+                "name": "employee",
+                "type": "address",
+                "indexed": true,
+                "internalType": "address"
+            },
+            {
+                "name": "networkChainId",
+                "type": "string",
+                "indexed": false,
+                "internalType": "string"
+            },
+            {
+                "name": "walletAddress",
+                "type": "string",
+                "indexed": false,
+                "internalType": "string"
+            },
+            {
+                "name": "amount",
+                "type": "uint256",
+                "indexed": false,
+                "internalType": "uint256"
+            },
+            {
+                "name": "bankAccount",
+                "type": "string",
+                "indexed": false,
+                "internalType": "string"
+            },
+            {
+                "name": "bankCode",
+                "type": "string",
+                "indexed": false,
+                "internalType": "string"
+            },
+            {
+                "name": "bankName",
+                "type": "string",
+                "indexed": false,
+                "internalType": "string"
+            },
+            {
+                "name": "bankAccountName",
+                "type": "string",
+                "indexed": false,
+                "internalType": "string"
+            }
+        ],
+        "anonymous": false
+    }
+]

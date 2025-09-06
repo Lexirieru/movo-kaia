@@ -1,0 +1,14 @@
+[
+    {
+        "question": "Apa itu NusaPay?",
+        "response": "NusaPay adalah platform cross-chain cross-border payment berbasis Chainlink CCIP..."
+    },
+    {
+        "question": "Bagaimana cara kerja NusaPay?",
+        "response": "NusaPay bekerja dengan melakukkan otomatisasi transfer dari crypto di dompet pengirim ke rekening bank / ewallet dari penerima dengan memanfaatkan teknologi Chainlink CCIP untuk menghubungkan berbagai blockchain dan sistem pembayaran tradisional."
+    },
+    {
+        "question": "NusaPay dibangun oleh siapa?",
+        "response": "Tim NusaPay terdiri atas lima orang, yaitu Axel sebagai Smart Contract Developer, Diaz sebagai UI/UX designer, Galang dan Radit sebagai Frontend Developer, dan Dien sebagai Backend Developer"
+    }
+]

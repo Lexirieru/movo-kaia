@@ -1,0 +1,6 @@
+[submodule "movo-sc/lib/forge-std"]
+	path = movo-sc/lib/forge-std
+	url = https://github.com/foundry-rs/forge-std
+[submodule "movo-sc/lib/openzeppelin-contracts"]
+	path = movo-sc/lib/openzeppelin-contracts
+	url = https://github.com/OpenZeppelin/openzeppelin-contracts

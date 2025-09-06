@@ -1,0 +1,116 @@
+[
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "txId",
+        "type": "string"
+      },
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "userId",
+        "type": "string"
+      },
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "companyId",
+        "type": "string"
+      },
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "templateName",
+        "type": "string"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "amount",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "recipient",
+        "type": "string"
+      },
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "IDRX_API_KEY",
+        "type": "string"
+      },
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "IDRX_SECRET_KEY",
+        "type": "string"
+      },
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "PRIVATE_KEY",
+        "type": "string"
+      }
+    ],
+    "name": "PayrollApproved",
+    "type": "event"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "string",
+        "name": "_txId",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "_userId",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "_companyId",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "_templateName",
+        "type": "string"
+      },
+      {
+        "internalType": "uint256",
+        "name": "_amount",
+        "type": "uint256"
+      },
+      {
+        "internalType": "string",
+        "name": "_recipient",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "_IDRX_API_KEY",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "_IDRX_SECRET_KEY",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "_PRIVATE_KEY",
+        "type": "string"
+      }
+    ],
+    "name": "approvePayroll",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  }
+]
