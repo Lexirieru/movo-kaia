@@ -132,6 +132,7 @@ export default function GroupEscrowLink({ groupId }: GroupEscrowLinkProps) {
                 <p className="text-white/60 text-sm">Escrow ID (Blockchain)</p>
                 <p className="text-white font-mono text-sm break-all">
                   {escrowData.escrowId}
+    
                 </p>
               </div>
             </div>

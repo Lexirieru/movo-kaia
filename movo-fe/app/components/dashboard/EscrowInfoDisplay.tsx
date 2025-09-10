@@ -25,6 +25,7 @@ interface EscrowInfoDisplayProps {
   tokenType: "USDC" | "IDRX";
 }
 
+
 export default function EscrowInfoDisplay({
   escrowId,
   tokenType,

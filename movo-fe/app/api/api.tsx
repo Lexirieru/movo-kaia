@@ -46,6 +46,8 @@ export const login = async (email: string, password: string) => {
   }
 };
 
+
+
 export const addBankAccount = async (
   email: string,
   bankAccountNumber: string,
@@ -63,6 +65,72 @@ export const addBankAccount = async (
   }
 };
 
+export const saveWalletAddress = async (walletAddress: string) => {
+  try{
+    const response = await api.post("/addWalletAddress", {
+      walletAddress,
+    })
+    return response.data; 
+  } catch (err) {
+    console.log(err);
+  }
+}
+
+
+/**
+ * Update user's wallet address
+ */
+export const updateWalletAddress = async (userId: string, walletAddress: string) => {
+  try {
+    const response = await api.put("/users/update-wallet", {
+      _id: userId,
+      walletAddress,
+    });
+    return response.data;
+  } catch (err) {
+    console.error("Error updating wallet address:", err);
+
+  }
+};
+
+/**
+ * Get user role based on wallet address and activity
+ */
+export const getUserRole = async (userId: string, walletAddress: string) => {
+  try {
+    const response = await api.get(`/users/${userId}/role`, {
+      params: { wallet: walletAddress },
+    });
+    return response.data;
+  } catch (err) {
+    console.error("Error getting user role:", err);
+    return {
+      success: false,
+      role: "unknown",
+    };
+  }
+};
+
+/**
+ * Check if wallet address has been used by another user
+ */
+export const checkWalletAddressAvailability = async (
+  walletAddress: string,
+  currentUserId?: string
+) => {
+  try {
+    const response = await api.get("/users/check-wallet", {
+      params: {
+        address: walletAddress,
+        userId: currentUserId || "",
+      },
+    });
+    return response.data;
+  } catch (err) {
+    console.error("Error checking wallet availability:", err);
+
+  }
+}
 export const getBankAccount = async (_id: string) => {
   try {
     const response = await api.post("/getBankAccount", { _id });
