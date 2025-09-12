@@ -201,37 +201,39 @@ export default function DashboardPage() {
 
           {loading ? (
             <p className="text-gray-400 text-center mt-20">Loading...</p>
-
           ) : !isConnected || !address ? (
             <WalletWarning />
-          ): (
+          ) : (
             <>
               <WalletAddressmanager onRoleChange={handleRoleChange} />
 
-              {roleLoading ?(
+              {roleLoading ? (
                 <div className="text-center mt-20">
                   <div className="inclince-flex items-center space-x-2 text-gray-400">
-                    <div className="w-6 h-6 border-2 border-gray-600 border-t-gray-400 rounded-full anime-spin">
-                    </div>
-                    <span>Determining role...</span> 
+                    <div className="w-6 h-6 border-2 border-gray-600 border-t-gray-400 rounded-full anime-spin"></div>
+                    <span>Determining role...</span>
                   </div>
                 </div>
-              ): userRole == "sender" ?(
-                <GroupDashboard/>
-              ): userRole == "receiver" ?(
-                <ReceiverDashboard/>
-              ): (
+              ) : userRole == "sender" ? (
+                <GroupDashboard />
+              ) : userRole == "receiver" ? (
+                <ReceiverDashboard />
+              ) : (
                 <>
                   <div className="text-center mt-12 mb-8">
-                    <h2 className="text-2xl font-bold text-white mb-2">Welcome to Movo</h2>
-                    <p className="text-gray-400 mb-8">Get started by creating a payment group or wait to receive payments from others</p>
+                    <h2 className="text-2xl font-bold text-white mb-2">
+                      Welcome to Movo
+                    </h2>
+                    <p className="text-gray-400 mb-8">
+                      Get started by creating a payment group or wait to receive
+                      payments from others
+                    </p>
                   </div>
-                  <GroupDashboard/>
+                  <GroupDashboard />
                 </>
               )}
             </>
           )}
-
         </DashboardWrapper>
       </div>
     </section>
