@@ -233,6 +233,17 @@ export default function RegisterForm() {
             Install MetaMask
           </a>
         </p>
+        <p className="text-xs text-gray-500">
+          Already have an account?{" "}
+          <a
+            href="/dashboard"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-cyan-400 hover:text-cyan-300 transition-colors duration-200"
+          >
+            Go to Dashboard
+          </a>
+        </p>
       </div>
     </div>
   );
