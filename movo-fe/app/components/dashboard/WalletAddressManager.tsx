@@ -4,14 +4,16 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/lib/userContext";
 import { useWallet } from "@/lib/walletContext";
-import { updateWalletAddress } from "@/app/api/api";
+import { updateWalletAddressRole } from "@/app/api/api";
 import { Wallet, Check, X, RefreshCw } from "lucide-react";
 
 interface WalletAddressManagerProps {
-  onRoleChange?: (role: "sender" | "receiver" | "unknown") => void;
+  onRoleChange?: (role: "sender" | "receiver" | "none") => void;
 }
 
-export default function WalletAddressManager({ onRoleChange }: WalletAddressManagerProps) {
+export default function WalletAddressManager({
+  onRoleChange,
+}: WalletAddressManagerProps) {
   const { user, refreshUser } = useAuth();
   const { address, isConnected } = useWallet();
   const [isUpdating, setIsUpdating] = useState(false);
@@ -27,7 +29,7 @@ export default function WalletAddressManager({ onRoleChange }: WalletAddressMana
     if (!address || !user?._id) {
       setMessage({
         type: "error",
-        text: "Please connect your wallet first"
+        text: "Please connect your wallet first",
       });
       return;
     }
@@ -36,34 +38,34 @@ export default function WalletAddressManager({ onRoleChange }: WalletAddressMana
     setMessage(null);
 
     try {
-      const response = await updateWalletAddress(user._id, address);
-      
+      const response = await updateWalletAddressRole(user._id, address, "none");
+
       if (response.success) {
         setMessage({
           type: "success",
-          text: "Wallet address updated successfully!"
+          text: "Wallet address updated successfully!",
         });
-        
+
         // Refresh user data to get updated wallet address
         await refreshUser();
-        
+
         // Determine role based on new wallet address
         const newRole = determineUserRole(address);
         onRoleChange?.(newRole);
-        
+
         // Clear message after 3 seconds
         setTimeout(() => setMessage(null), 3000);
       } else {
         setMessage({
           type: "error",
-          text: response.message || "Failed to update wallet address"
+          text: response.message || "Failed to update wallet address",
         });
       }
     } catch (error) {
       console.error("Error updating wallet address:", error);
       setMessage({
         type: "error",
-        text: "An error occurred while updating wallet address"
+        text: "An error occurred while updating wallet address",
       });
     } finally {
       setIsUpdating(false);
@@ -71,11 +73,13 @@ export default function WalletAddressManager({ onRoleChange }: WalletAddressMana
   };
 
   // Function to determine user role based on wallet address
-  const determineUserRole = (walletAddress: string): "sender" | "receiver" | "unknown" => {
+  const determineUserRole = (
+    walletAddress: string,
+  ): "sender" | "receiver" | "none" => {
     // This should be replaced with actual logic to check if wallet has created groups (sender)
     // or received payments (receiver). For now, we'll return "unknown" and let the app
     // determine based on user actions
-    return "unknown";
+    return "none";
   };
 
   if (!isConnected || !address) {
@@ -93,8 +97,9 @@ export default function WalletAddressManager({ onRoleChange }: WalletAddressMana
                 Wallet Address Update Required
               </h3>
               <p className="text-yellow-200/80 text-sm mb-3">
-                Your connected wallet address ({address.slice(0, 6)}...{address.slice(-4)}) 
-                is different from your stored address. Update to continue.
+                Your connected wallet address ({address.slice(0, 6)}...
+                {address.slice(-4)}) is different from your stored address.
+                Update to continue.
               </p>
               <div className="flex items-center space-x-2">
                 <button

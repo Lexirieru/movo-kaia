@@ -11,11 +11,15 @@ const movoSecretKey = process.env.IDRX_SECRET_KEY!;
 import FormData from "form-data";
 import { checkConnection } from "../config/atlas";
 
+// di form pendaftaran, walletAddress harus langsung didaftarin
+// di form pendaftaran, walletAddress harus langsung didaftarin
 export async function onBoardingUser(req: Request, res: Response) {
-  const { email, fullname, password } = req.body;
+  const { email, fullname, password, walletAddress } = req.body;
 
-  if (!email || !fullname) {
-    res.status(404).json({ message: "Email and fullname are required!" });
+  if (!email || !fullname || !walletAddress) {
+    res
+      .status(400)
+      .json({ message: "Email, fullname, and walletAddress are required!" });
     return;
   }
 
@@ -29,60 +33,96 @@ export async function onBoardingUser(req: Request, res: Response) {
     return;
   }
 
-  const saltRounds = 10;
-  const hashedPassword = await bcrypt.hash(password, saltRounds);
-
-  const response = await axios({
-    method: "GET",
-    url: "https://movopayment.vercel.app/movo%20full.png",
-    responseType: "arraybuffer",
-  });
-
-  let imageBuffer;
-  if (Buffer.isBuffer(response.data)) {
-    imageBuffer = response.data;
-  } else if (response.data instanceof ArrayBuffer) {
-    imageBuffer = Buffer.from(response.data);
-  } else {
-    imageBuffer = Buffer.from(response.data);
-  }
-
-  console.log("Image buffer size:", imageBuffer.length);
-
-  // PENTING: Gunakan FormData untuk proper multipart handling
-  const formData = new FormData();
-  formData.append("email", email);
-  formData.append("fullname", fullname);
-  formData.append("hashedPassword", hashedPassword);
-  formData.append("idFile", imageBuffer, {
-    filename: "movo-full.png",
-    contentType: "image/png",
-  });
-
-  // Untuk signature, tetap gunakan object biasa (tanpa FormData)
-  const dataForSignature = {
-    email,
-    fullname,
-    hashedPassword,
-    idFile: imageBuffer.toString("base64"), // Convert ke base64 untuk signature
-  };
-
-  const path = "https://idrx.co/api/auth/onboarding";
-  const bufferReq = Buffer.from(
-    JSON.stringify(dataForSignature),
-    "base64"
-  ).toString("utf8");
-
-  const timestamp = Math.round(new Date().getTime()).toString();
-  const sig = createSignature(
-    "POST",
-    path,
-    bufferReq,
-    timestamp,
-    movoSecretKey
-  );
-
   try {
+    // Validasi 1: Cek apakah email sudah digunakan
+    const existingUserByEmail = await UserModel.findOne({ email });
+    if (existingUserByEmail) {
+      res.status(409).json({
+        message: "Email address is already registered",
+        statusCode: 409,
+        error: "EMAIL_EXISTS",
+      });
+      return;
+    }
+
+    // Validasi 2: Cek apakah wallet address sudah digunakan di WalletAddresses array
+    const existingUserByWallet = await UserModel.findOne({
+      "WalletAddresses.walletAddress": walletAddress,
+    });
+
+    if (existingUserByWallet) {
+      res.status(409).json({
+        message: "Wallet address is already registered to another account",
+        statusCode: 409,
+        error: "WALLET_EXISTS",
+      });
+      return;
+    }
+
+    // Validasi 3: Format wallet address (optional - untuk Ethereum address)
+    const walletAddressRegex = /^0x[a-fA-F0-9]{40}$/;
+    if (!walletAddressRegex.test(walletAddress)) {
+      res.status(400).json({
+        message: "Invalid wallet address format",
+        statusCode: 400,
+        error: "INVALID_WALLET_FORMAT",
+      });
+      return;
+    }
+
+    const saltRounds = 10;
+    const hashedPassword = await bcrypt.hash(password, saltRounds);
+
+    const response = await axios({
+      method: "GET",
+      url: "https://movopayment.vercel.app/movo%20full.png",
+      responseType: "arraybuffer",
+    });
+
+    let imageBuffer;
+    if (Buffer.isBuffer(response.data)) {
+      imageBuffer = response.data;
+    } else if (response.data instanceof ArrayBuffer) {
+      imageBuffer = Buffer.from(response.data);
+    } else {
+      imageBuffer = Buffer.from(response.data);
+    }
+
+    console.log("Image buffer size:", imageBuffer.length);
+
+    // PENTING: Gunakan FormData untuk proper multipart handling
+    const formData = new FormData();
+    formData.append("email", email);
+    formData.append("fullname", fullname);
+    formData.append("hashedPassword", hashedPassword);
+    formData.append("idFile", imageBuffer, {
+      filename: "movo-full.png",
+      contentType: "image/png",
+    });
+
+    // Untuk signature, tetap gunakan object biasa (tanpa FormData)
+    const dataForSignature = {
+      email,
+      fullname,
+      hashedPassword,
+      idFile: imageBuffer.toString("base64"), // Convert ke base64 untuk signature
+    };
+
+    const path = "https://idrx.co/api/auth/onboarding";
+    const bufferReq = Buffer.from(
+      JSON.stringify(dataForSignature),
+      "base64"
+    ).toString("utf8");
+
+    const timestamp = Math.round(new Date().getTime()).toString();
+    const sig = createSignature(
+      "POST",
+      path,
+      bufferReq,
+      timestamp,
+      movoSecretKey
+    );
+
     const resData = await axios.post(path, formData, {
       headers: {
         ...formData.getHeaders(), // Penting: ambil headers dari FormData
@@ -92,10 +132,6 @@ export async function onBoardingUser(req: Request, res: Response) {
       },
     });
 
-    console.log("api key: ", resData.data.data.apiKey);
-    console.log("res.data: ");
-    console.log(resData.data);
-
     const newUser = new UserModel({
       idrxId: resData.data.data.id,
       email,
@@ -104,11 +140,16 @@ export async function onBoardingUser(req: Request, res: Response) {
       idFile: "movo-full.png",
       apiKey: resData.data.data.apiKey,
       secretKey: resData.data.data.apiSecret,
+      WalletAddresses: [
+        {
+          walletAddress,
+        },
+      ],
     });
 
     await newUser.save();
 
-    const token = await generateCookiesToken(email, newUser);
+    const token = await generateCookiesToken(newUser, walletAddress);
 
     res.cookie("user_session", token, {
       httpOnly: true,
@@ -118,13 +159,25 @@ export async function onBoardingUser(req: Request, res: Response) {
     });
 
     res.status(200).json({
-      message: "Login successful",
+      message: "Registration successful",
       statusCode: 200,
     });
 
     return;
   } catch (err: any) {
     console.log("Full error:", err.response?.data || err.message);
+
+    // Handle MongoDB duplicate key error (jika ada unique index)
+    if (err.code === 11000) {
+      const field = Object.keys(err.keyPattern)[0];
+      res.status(409).json({
+        message: `${field} is already registered`,
+        statusCode: 409,
+        error: "DUPLICATE_KEY",
+      });
+      return;
+    }
+
     if (
       err.message?.includes("buffering timed out") ||
       err.message?.includes("timeout")
@@ -134,6 +187,7 @@ export async function onBoardingUser(req: Request, res: Response) {
         statusCode: 408,
         error: "TIMEOUT",
       });
+      return;
     }
 
     res.status(500).json({
@@ -188,35 +242,9 @@ export async function onBoardingUser(req: Request, res: Response) {
 //   }
 // }
 
-export async function giveRole(req: Request, res: Response) {
-  const { _id, role } = req.body;
-  try {
-    const isUser = await UserModel.findById(_id);
-    if (!isUser) {
-      res.status(404).json({ message: "User with specified id not found!" });
-      return;
-    }
-
-    const userData = await UserModel.findByIdAndUpdate(
-      _id,
-      { role },
-      { new: true }
-    );
-    if (!userData) {
-      res.status(200).json({
-        message: "Success updating user data's role",
-        data: userData!.role,
-      });
-    }
-    return;
-  } catch (err) {
-    console.log(err);
-  }
-}
-
 // kepake diawal pendaftaran aja
 export async function addBankAccount(req: Request, res: Response) {
-  const { email, bankAccountNumber, bankCode } = req.body;
+  const { _id, bankAccountNumber, bankCode } = req.body;
   const form = {
     bankAccountNumber,
     bankCode,
@@ -228,7 +256,7 @@ export async function addBankAccount(req: Request, res: Response) {
   );
   const timestamp = Math.round(new Date().getTime()).toString();
 
-  const user = await UserModel.findOne({ email });
+  const user = await UserModel.findOne({ _id });
   if (!user) {
     res.status(404).json({ message: "User not found" });
     return;
@@ -258,8 +286,8 @@ export async function addBankAccount(req: Request, res: Response) {
     console.log(resData.data.data);
     console.log(resData.data.statusCode);
 
-    const updatedUser = await UserModel.findOneAndUpdate(
-      { email },
+    const updatedUser = await UserModel.findByIdAndUpdate(
+      _id,
       {
         hashBankAccountNumber,
         bankId: resData.data.data.id,
@@ -300,45 +328,200 @@ export async function addBankAccount(req: Request, res: Response) {
   }
 }
 
+// nambahin wallet Address ke akun orang tersebut di database (bukan primary WalletAddress karena itu dah didaftarin di registrasi)
 export async function addWalletAddress(req: Request, res: Response) {
-  const { _id, walletAddress } = req.body;
+  const { email, password, walletAddress } = req.body;
 
-  if (!_id || !walletAddress) {
-    res.status(400).json({ message: "id and walletAddress are required" });
+  if (!email || !password || !walletAddress) {
+    res
+      .status(400)
+      .json({ message: "email, password, and walletAddress are required" });
+    return;
+  }
+
+  // Find the user
+  const user = await UserModel.findOne({ email });
+  if (!user) {
+    res.status(404).json({ message: "User not found" });
+    return;
+  }
+
+  const isPasswordValid = await bcrypt.compare(password, user.hashedPassword);
+
+  if (!isPasswordValid) {
+    res.status(401).json({ message: "Invalid password" });
     return;
   }
 
   try {
-    const isWalletAddress = await UserModel.findOne({ walletAddress });
-    if (isWalletAddress) {
+    // Validasi format wallet address
+    const walletAddressRegex = /^0x[a-fA-F0-9]{40}$/;
+    if (!walletAddressRegex.test(walletAddress)) {
       res.status(400).json({
-        message:
-          "Wallet address has been used before, please use another wallet",
+        message: "Invalid wallet address format",
+        statusCode: 400,
+        error: "INVALID_WALLET_FORMAT",
       });
       return;
     }
 
-    const userData = await UserModel.findByIdAndUpdate(
-      _id,
-      { walletAddress },
+    // Check if wallet address is already used by any user (termasuk user ini sendiri)
+    const isWalletAddressUsed = await UserModel.findOne({
+      "WalletAddresses.walletAddress": walletAddress,
+    });
+
+    if (isWalletAddressUsed) {
+      // Cek apakah wallet ini milik user yang sama atau user lain
+      if (isWalletAddressUsed.email.toString() === email) {
+        res.status(400).json({
+          message: "This wallet address is already added to your account",
+          statusCode: 400,
+          error: "WALLET_ALREADY_OWNED",
+        });
+      } else {
+        res.status(409).json({
+          message: "Wallet address is already registered to another account",
+          statusCode: 409,
+          error: "WALLET_EXISTS",
+        });
+      }
+      return;
+    }
+    // Add new wallet address to the array
+    const userData = await UserModel.findOneAndUpdate(
+      { email },
+      {
+        $push: {
+          WalletAddresses: {
+            walletAddress,
+            availableBalance: 0, // default balance
+          },
+        },
+      },
       { new: true }
     );
 
     if (!userData) {
-      res.status(404).json({ message: "User not found" });
+      res.status(404).json({ message: "Failed to update user data" });
       return;
     }
+    const token = await generateCookiesToken(userData, walletAddress);
+
+    res.cookie("user_session", token, {
+      httpOnly: true,
+      sameSite: "none",
+      secure: true,
+      maxAge: 30 * 24 * 60 * 60 * 1000,
+    });
 
     res.status(200).json({
-      message: "Wallet address updated successfully",
-      data: userData,
+      message: "Wallet address added successfully",
+      statusCode: 200,
+      data: {
+        _id: userData._id,
+        email: userData.email,
+        fullname: userData.fullname,
+        WalletAddresses: userData.WalletAddresses,
+      },
     });
     return;
   } catch (err: any) {
-    console.error("Error updating wallet address:", err);
-    res.status(500).json({ error: err.message });
+    console.error("Error adding wallet address:", err);
+    res.status(500).json({
+      message: "Internal server error",
+      statusCode: 500,
+      error: err.message,
+    });
   }
 }
+
+export async function updateWalletAddressRole(req: Request, res: Response) {
+  // role disini hanya ada "none", "sender", "receiver"
+  const { _id, walletAddress, role } = req.body;
+
+  // Validation input
+  if (!_id || !walletAddress || !role) {
+    res.status(400).json({
+      message: "User ID, wallet address, and role are required",
+    });
+    return;
+  }
+
+  // Validate role enum
+  if (!["none", "sender", "receiver"].includes(role)) {
+    res.status(400).json({
+      message: "Role must be one of: none, sender, receiver",
+    });
+    return;
+  }
+
+  try {
+    // Check if user exists
+    const isUser = await UserModel.findById(_id);
+    if (!isUser) {
+      res.status(404).json({ message: "User with specified id not found!" });
+      return;
+    }
+
+    // Check if wallet address exists in user's WalletAddresses array
+    const walletExists = isUser.WalletAddresses?.find(
+      (wallet) => wallet.walletAddress === walletAddress
+    );
+
+    if (!walletExists) {
+      res.status(404).json({
+        message: "Wallet address not found in user's wallet list",
+      });
+      return;
+    }
+
+    // Update the specific wallet's role using arrayFilters
+    const updatedUser = await UserModel.findOneAndUpdate(
+      {
+        _id,
+        "WalletAddresses.walletAddress": walletAddress,
+      },
+      {
+        $set: { "WalletAddresses.$.role": role },
+      },
+      {
+        new: true,
+        runValidators: true, // This ensures enum validation runs
+      }
+    );
+
+    if (!updatedUser) {
+      res.status(404).json({
+        message: "Failed to update wallet role",
+      });
+      return;
+    }
+    res.status(200).json({
+      message: "Successfully updated wallet address role",
+    });
+
+    return;
+  } catch (err: any) {
+    console.error("Error updating wallet address role:", err);
+
+    // Handle MongoDB validation errors
+    if (err.name === "ValidationError") {
+      res.status(400).json({
+        message: "Validation error",
+        error: err.message,
+      });
+      return;
+    }
+
+    res.status(500).json({
+      message: "Internal server error",
+      error: err.message,
+    });
+    return;
+  }
+}
+
+// ...existing code...
 
 export async function getBankAccount(req: Request, res: Response) {
   const { _id } = req.body;
@@ -405,13 +588,13 @@ export async function getBankAccountFromDatabase(req: Request, res: Response) {
 
 // acuannya adalah bankId (bankId adalah id yang digenerate oleh idrx setiap selesai adding bank accounts)
 export async function deleteBankAccount(req: Request, res: Response) {
-  const { email } = req.body;
-  if (!email) {
-    res.status(404).json("Missing email");
+  const { _id } = req.body;
+  if (!_id) {
+    res.status(404).json("Missing id");
     return;
   }
 
-  const user = await UserModel.findOne({ email });
+  const user = await UserModel.findById(_id);
   if (!user) {
     res.status(404).json({ message: "User not found" });
     return;
@@ -438,8 +621,8 @@ export async function deleteBankAccount(req: Request, res: Response) {
   });
   console.log(resData);
 
-  const updatedUser = await UserModel.findOneAndUpdate(
-    { email },
+  const updatedUser = await UserModel.findByIdAndUpdate(
+    _id,
     {
       $unset: {
         bankId: "",

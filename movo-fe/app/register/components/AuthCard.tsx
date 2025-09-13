@@ -1,5 +1,4 @@
 import AuthHeader from "./AuthHeader";
-import LoginForm from "./LoginForm";
 import RegisterForm from "./RegisterForm";
 import AuthToggle from "./AuthToggle";
 
@@ -22,7 +21,7 @@ export default function AuthCard({
         <AuthHeader isLoginView={isLoginView} />
 
         <div className="relative overflow-hidden">
-          {isLoginView ? <LoginForm /> : <RegisterForm />}
+          <RegisterForm />
         </div>
 
         <AuthToggle isLoginView={isLoginView} onToggle={switchView} />

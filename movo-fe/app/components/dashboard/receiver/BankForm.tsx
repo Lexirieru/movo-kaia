@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import { DollarSign } from "lucide-react";
 import { bankDictionary } from "@/lib/dictionary";
-import FormInput from "@/app/auth/components/FormInput";
+import FormInput from "@/app/register/components/FormInput";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/userContext";
 import {

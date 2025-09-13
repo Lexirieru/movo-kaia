@@ -189,7 +189,7 @@ export default function CreateStreamModal({
               "Failed to add receiver to escrow onchain",
           );
         }
-
+        if (!user) return;
         await addReceiverToGroup(
           user._id,
           formData.token,
@@ -272,6 +272,7 @@ export default function CreateStreamModal({
         // Save escrow data to database to link escrowId with groupId
         await saveEscrowToDatabase(escrowData);
 
+        if (!user) return;
         // If escrow created successfully onchain, save to backend
         for (const receiver of formData.receivers) {
           await addReceiverToGroup(
@@ -344,12 +345,8 @@ export default function CreateStreamModal({
         {/* Header */}
         <div className="flex justify-between items-center p-6 border-b border-white/10">
           <div>
-            <h3 className="text-white text-xl font-semibold">
-              {modalTitle}
-            </h3>
-            <p className="text-white/60 text-sm mt-1">
-              {modalDescription}
-            </p>
+            <h3 className="text-white text-xl font-semibold">{modalTitle}</h3>
+            <p className="text-white/60 text-sm mt-1">{modalDescription}</p>
           </div>
           <button
             onClick={handleClose}
@@ -398,7 +395,10 @@ export default function CreateStreamModal({
                   </div>
                   <div>
                     <p className="text-cyan-300 font-medium">
-                      {isAddReceiverMode ? "Existing Escrow: " : "Selected Token: "}{formData.token}
+                      {isAddReceiverMode
+                        ? "Existing Escrow: "
+                        : "Selected Token: "}
+                      {formData.token}
                     </p>
                     {isAddReceiverMode && (
                       <p className="text-cyan-400/80 text-sm">

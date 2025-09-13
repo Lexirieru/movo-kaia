@@ -6,7 +6,7 @@ import {
   getBankAccount,
   getBankAccountFromDatabase,
   getOrganizationMembers,
-  giveRole,
+  updateWalletAddressRole,
   onBoardingUser,
   changeBankAccount,
 } from "../controllers/userGeneralController";
@@ -22,8 +22,11 @@ import {
   loadAllGroupTransactionHistory,
   loadSpecifiedGroup,
   removeReceiverDataFromGroup,
+  loadSpecifiedGroupTransactionHistory,
+  addReceiverToGroup,
 } from "../controllers/userSenderController";
 import {
+  loadAllJoinedGroupInformation,
   loadAllWithdrawHistory,
   loadSpecificGroupInformation,
 } from "../controllers/userReceiverController";
@@ -46,31 +49,20 @@ const routes: RouteDefinition[] = [
     action: onBoardingUser,
   },
   {
-    method: "get",
-    path: "/getOrganizationMembers",
-    action: getOrganizationMembers,
-  },
-
-  {
     method: "post",
     path: "/addBankAccount",
     action: addBankAccount,
   },
   {
     method: "post",
-    path: "/changeBankAccount",
-    action: changeBankAccount,
+    path: "/addWalletAddress",
+    action: addWalletAddress,
   },
 
   {
     method: "post",
-    path: "/addWalletAddress",
-    action: addWalletAddress,
-  },
-  {
-    method: "post",
-    path: "/getEscrowId",
-    action: getEscrowId,
+    path: "/updateWalletAddressRole",
+    action: updateWalletAddressRole,
   },
   {
     method: "post",
@@ -84,21 +76,33 @@ const routes: RouteDefinition[] = [
   },
   {
     method: "post",
-    path: "/addBankAccountToDatabase",
-    action: addBankAccountToDatabase,
-  },
-  {
-    method: "post",
     path: "/deleteBankAccount",
     action: deleteBankAccount,
   },
   {
     method: "post",
-    path: "/addGroup",
-    action: addGroup,
+    path: "/addBankAccountToDatabase",
+    action: addBankAccountToDatabase,
+  },
+
+  {
+    method: "post",
+    path: "/changeBankAccount",
+    action: changeBankAccount,
+  },
+
+  {
+    method: "get",
+    path: "/getOrganizationMembers",
+    action: getOrganizationMembers,
   },
 
   // userSenderController
+  {
+    method: "post",
+    path: "/addGroup",
+    action: addGroup,
+  },
   {
     method: "post",
     path: "/saveEscrowToDatabase",
@@ -106,24 +110,10 @@ const routes: RouteDefinition[] = [
   },
   {
     method: "post",
-    path: "/loadAllGroupTransactionHistory",
-    action: loadAllGroupTransactionHistory,
+    path: "/addReceiverToGroup",
+    action: addReceiverToGroup,
   },
-  {
-    method: "post",
-    path: "/loadAllWithdrawHistory",
-    action: loadAllWithdrawHistory,
-  },
-  {
-    method: "post",
-    path: "/loadAllGroup",
-    action: loadAllGroup,
-  },
-  {
-    method: "post",
-    path: "/deleteGroup",
-    action: deleteGroup,
-  },
+
   {
     method: "post",
     path: "/editReceiverAmountInGroup",
@@ -134,22 +124,64 @@ const routes: RouteDefinition[] = [
     path: "/removeReceiverDataFromGroup",
     action: removeReceiverDataFromGroup,
   },
-  // sender
+  {
+    method: "post",
+    path: "/getEscrowId",
+    action: getEscrowId,
+  },
+  {
+    method: "post",
+    path: "/loadAllGroup",
+    action: loadAllGroup,
+  },
   {
     method: "post",
     path: "/loadSpecifiedGroupForSender",
     action: loadSpecifiedGroup,
   },
-  // receiver
   {
     method: "post",
-    path: "/loadSpecifiedGroupForReceiver",
+    path: "/deleteGroup",
+    action: deleteGroup,
+  },
+  {
+    method: "post",
+    path: "/loadAllGroupTransactionHistory",
+    action: loadAllGroupTransactionHistory,
+  },
+  {
+    method: "post",
+    path: "/loadSpecifiedGroupTransactionHistory",
+    action: loadSpecifiedGroupTransactionHistory,
+  },
+
+  // userReceiverController
+  {
+    method: "post",
+    path: "/loadAllJoinedGroupInformation",
+    action: loadAllJoinedGroupInformation,
+  },
+  {
+    method: "post",
+    path: "/loadSpecificGroupInformation",
     action: loadSpecificGroupInformation,
   },
   {
     method: "post",
-    path: "/giveRole",
-    action: giveRole,
+    path: "/loadSpecificGroupInformation",
+    action: loadSpecificGroupInformation,
+  },
+
+  {
+    method: "post",
+    path: "/loadAllWithdrawHistory",
+    action: loadAllWithdrawHistory,
+  },
+
+  {
+    method: "post",
+    path: "/loadSpecifiedGroupForReceiver",
+    action: loadSpecificGroupInformation,
   },
 ];
 

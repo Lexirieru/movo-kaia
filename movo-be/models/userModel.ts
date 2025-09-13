@@ -39,12 +39,28 @@ const UserDataSchema = new Schema(
       required: true,
       unique: true,
     },
-    // dibuat satu akun hanya bisa terpaut ke satu wallet address
-    walletAddress: {
-      type: String,
-      required: false,
-      unique: false,
-    },
+    WalletAddresses: [
+      {
+        // dibuat satu akun hanya bisa terpaut ke satu wallet address
+        walletAddress: {
+          type: String,
+          required: false,
+          unique: false,
+        },
+        role: {
+          type: String,
+          required: true,
+          enum: ["none", "sender", "receiver"],
+          default: "none",
+        },
+        availableBalance: {
+          type: Number,
+          required: false,
+          default: 0,
+        },
+      },
+    ],
+
     depositWalletAddress: {
       type: String,
       required: false,
@@ -69,16 +85,6 @@ const UserDataSchema = new Schema(
     bankName: {
       type: String,
       required: false,
-    },
-
-    availableBalance: {
-      type: Number,
-      required: false,
-    },
-    role: {
-      type: String,
-      required: true,
-      default: "non",
     },
     ListOfRegisteredBankAccount: [
       {
@@ -111,6 +117,10 @@ const GroupOfUserSchema = new Schema(
       required: true,
     },
     nameOfGroup: {
+      type: String,
+      required: true,
+    },
+    senderWalletAddress: {
       type: String,
       required: true,
     },
@@ -185,7 +195,6 @@ const GroupOfUserSchema = new Schema(
           type: Number,
           required: false,
         },
-        // 🔥 Tambahan fields untuk bank account
         bankId: {
           type: String,
           required: false,
@@ -229,6 +238,10 @@ const LoginSessionTokenSchema = new Schema({
     required: true,
   },
   email: {
+    type: String,
+    required: true,
+  },
+  walletAddress: {
     type: String,
     required: true,
   },

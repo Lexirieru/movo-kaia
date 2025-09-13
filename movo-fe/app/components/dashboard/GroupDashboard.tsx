@@ -13,7 +13,7 @@ import TopupFundModal from "./groups/TopupFundModal";
 import { loadAllGroup, addGroup } from "@/app/api/api";
 
 export default function GroupDashboard() {
-  const { user, loading } = useAuth();
+  const { user, loading, currentWalletAddress } = useAuth();
   const [groups, setGroups] = useState<GroupOfUser[]>([]);
   const [hasFetched, setHasFetched] = useState(false);
   const router = useRouter();
@@ -24,10 +24,10 @@ export default function GroupDashboard() {
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (loading || !user?._id || hasFetched) return;
+    if (loading || !user?._id || !currentWalletAddress || hasFetched) return;
     const fetchGroups = async () => {
       try {
-        const groupData = await loadAllGroup(user._id);
+        const groupData = await loadAllGroup(user._id, currentWalletAddress);
         if (Array.isArray(groupData)) {
           const formattedGroups: GroupOfUser[] = groupData.map(
             (g: GroupOfUser) => ({
@@ -93,11 +93,13 @@ export default function GroupDashboard() {
       };
       // Add to local state immediately for better UX
       setGroups((prev) => [newGroup, ...prev]);
+      if (!user) throw new Error("User not found");
       const response = await addGroup(
         user._id,
         user.email,
         groupId,
         groupData.groupName,
+        currentWalletAddress,
       );
       if (response && response.data) {
         setIsCreateModalOpen(false);

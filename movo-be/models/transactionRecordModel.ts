@@ -9,6 +9,10 @@ const TransactionHistorySchema = new Schema({
     type: String,
     required: true,
   },
+  senderWalletAddress: {
+    type: String,
+    required: true,
+  },
   senderId: {
     type: String,
     required: true,
@@ -108,6 +112,10 @@ const WithdrawHistorySchema = new Schema(
     withdrawId: {
       type: String,
       required: false,
+    },
+    receiverWalletAddress: {
+      type: String,
+      required: true,
     },
     receiverId: {
       type: String,

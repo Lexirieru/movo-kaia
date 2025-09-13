@@ -1,4 +1,4 @@
-"use client"
+"use client";
 import { useState } from "react";
 import FormInput from "./FormInput";
 import { Mail } from "lucide-react";
@@ -13,8 +13,8 @@ export default function BankForm() {
   const { user } = useAuth();
 
   const [formData, setFormData] = useState({
-    bankName : "",
-    bankAccountNumber : "",
+    bankName: "",
+    bankAccountNumber: "",
   });
   const [isLoading, setIsLoading] = useState(false);
 
@@ -26,10 +26,15 @@ export default function BankForm() {
     setIsLoading(true);
     try {
       const bankCode = bankDictionary[formData.bankName];
-      const response = await addBankAccount(user.email, formData.bankAccountNumber, bankCode);
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      console.log(response)
-      console.log(response.data)
+      if (!user) throw new Error("User not found");
+      const response = await addBankAccount(
+        user.email,
+        formData.bankAccountNumber,
+        bankCode,
+      );
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+      console.log(response);
+      console.log(response.data);
       if (response.data) {
         router.push("/dashboard");
       } else {
@@ -42,7 +47,6 @@ export default function BankForm() {
       setIsLoading(false);
     }
   };
-
 
   return (
     <div className="space-y-6">
@@ -65,12 +69,11 @@ export default function BankForm() {
         required
       />
 
-      <SubmitButton 
-        isLoading={isLoading} 
+      <SubmitButton
+        isLoading={isLoading}
         onClick={handleSubmit}
         text="Add bank account"
       />
-
     </div>
   );
 }

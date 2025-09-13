@@ -211,6 +211,7 @@ export default function TopupFundModal({
         setTimeout(() => {
           // Refresh the group data after successful topup
           const refreshData = async () => {
+            if (!user) return;
             const groupResult = await loadSpecifiedGroup(user._id, groupId);
             if (groupResult) {
               setGroupData(groupResult);

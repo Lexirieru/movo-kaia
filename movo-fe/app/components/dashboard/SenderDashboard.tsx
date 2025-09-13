@@ -128,7 +128,7 @@ export default function SenderDashboard({
     if (!confirmRemove) return; // user batal, langsung keluar
     console.log(receiverId);
     try {
-      console.log(user);
+      if (!user) throw new Error("User not found");
       const groupDeleted = await removeReceiverDataFromGroup(
         receiverId,
         groupId,
@@ -168,6 +168,7 @@ export default function SenderDashboard({
         ),
       );
       console.log(user);
+      if (!user) throw new Error("User not found");
       const amountEdited = await editReceiverAmountInGroup(
         user._id,
         groupId,

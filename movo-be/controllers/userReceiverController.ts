@@ -6,19 +6,21 @@ import axios from "axios";
 import { burnIdrx } from "../utils/burnIdrx";
 import { bankDictionary } from "../utils/dictionary";
 
-const movoApiKey = process.env.IDRX_API_KEY!;
-const movoSecretKey = process.env.IDRX_SECRET_KEY!;
-
 // nampilin semua info group yang dia join (Nama grup, nama sendernya, total saldo dia di grup itu)
 export async function loadAllJoinedGroupInformation(
   req: Request,
   res: Response
 ) {
-  const { _id } = req.body;
+  const { _id, walletAddress } = req.body;
+  if (!_id || !walletAddress) {
+    res.status(404).json({ message: "id and walletAddress are required" });
+    return;
+  }
 
   try {
     const loadAllJoinedGroup = await GroupOfUserModel.find({
       "Receivers._id": _id,
+      "Receivers.walletAddress": walletAddress,
     })
       .sort({ timestamp: -1 }) // descending (terbaru di atas)
       .lean(); // supaya hasilnya plain JS object dan lebih cepat
@@ -41,7 +43,14 @@ export async function loadSpecificGroupInformation(
   req: Request,
   res: Response
 ) {
-  const { _id, groupId } = req.body;
+  const { _id, groupId, walletAddress } = req.body;
+
+  if (!_id || !groupId || !walletAddress) {
+    res
+      .status(404)
+      .json({ message: "id, groupId, and walletAddress are required" });
+    return;
+  }
 
   try {
     const loadSpecificGroup = await GroupOfUserModel.find({
@@ -63,47 +72,55 @@ export async function loadSpecificGroupInformation(
   }
 }
 // untuk leave group (db ngeremove receiver ini dari group)
-export async function leaveGroup(req: Request, res: Response) {
-  const { _id, groupId } = req.body;
+// export async function leaveGroup(req: Request, res: Response) {
+//   const { _id, walletAddress, groupId } = req.body;
 
-  try {
-    const specifiedGroup = await GroupOfUserModel.findOne({
-      groupId,
-      "Receivers._id": _id,
-    });
-    if (!specifiedGroup) {
-      res.status(404).json({
-        message: "Specified group not found",
-      });
-      return;
-    }
-    await GroupOfUserModel.updateOne(
-      { groupId },
-      {
-        $pull: {
-          Receivers: { id: _id },
-        },
-      }
-    );
+//   if (!_id || !groupId || !walletAddress) {
+//     res
+//       .status(404)
+//       .json({ message: "id, groupId, and walletAddress are required" });
+//     return;
+//   }
 
-    res.status(200).json({
-      message: "Specified receiver successfully removed from group",
-      groupId,
-      removedReceiverId: _id,
-    });
-    return;
-  } catch (err) {
-    console.log(err);
-    res.status(500).json({
-      message: "Error removing specified receiver from group",
-      error: err,
-    });
-    return;
-  }
-}
+//   try {
+//     const specifiedGroup = await GroupOfUserModel.findOne({
+//       groupId,
+//       "Receivers._id": _id,
+//     });
+//     if (!specifiedGroup) {
+//       res.status(404).json({
+//         message: "Specified group not found",
+//       });
+//       return;
+//     }
+//     await GroupOfUserModel.updateOne(
+//       { groupId },
+//       {
+//         $pull: {
+//           Receivers: { id: _id },
+//         },
+//       }
+//     );
+
+//     res.status(200).json({
+//       message: "Specified receiver successfully removed from group",
+//       groupId,
+//       removedReceiverId: _id,
+//     });
+//     return;
+//   } catch (err) {
+//     console.log(err);
+//     res.status(500).json({
+//       message: "Error removing specified receiver from group",
+//       error: err,
+//     });
+//     return;
+//   }
+// }
+
 // untuk ngefetch total saldo yang belum diwithdraw.
-export async function loadDashboardData(req: Request, res: Response) {
-  const { _id } = req.body;
+export async function loadUnwithdrawedBalance(req: Request, res: Response) {
+  const { _id, walletAddress } = req.body;
   try {
     const user = await UserModel.findById(_id);
     if (!user) {
@@ -111,7 +128,7 @@ export async function loadDashboardData(req: Request, res: Response) {
       return;
     }
     res.status(200).json({
-      availableBalance: user.availableBalance,
+      availableBalance: user.WalletAddresses[walletAddress].availableBalance,
     });
     return;
   } catch (err) {
@@ -236,10 +253,18 @@ export async function withdrawFromIDRXtoIDR(req: Request, res: Response) {
 
 // untuk nampilin all withdraw history
 export async function loadAllWithdrawHistory(req: Request, res: Response) {
-  const { _id } = req.body;
+  const { _id, walletAddress } = req.body;
+
+  if (!_id || !walletAddress) {
+    res.status(404).json({ message: "id and walletAddress are required" });
+    return;
+  }
 
   try {
-    const histories = await WithdrawHistoryModel.find({ receiverId: _id })
+    const histories = await WithdrawHistoryModel.find({
+      receiverId: _id,
+      receiverWalletAddress: walletAddress,
+    })
       .sort({ timestamp: -1 })
       .lean();
 
@@ -256,12 +281,20 @@ export async function loadAllWithdrawHistory(req: Request, res: Response) {
 }
 // untuk nampilin spesifik withdraw history
 export async function loadSpecificWithdrawHistory(req: Request, res: Response) {
-  const { _id, withdrawId } = req.body;
+  const { _id, withdrawId, walletAddress } = req.body;
+
+  if (!_id || !withdrawId || !walletAddress) {
+    res
+      .status(404)
+      .json({ message: "id, withdrawId, and walletAddress are required" });
+    return;
+  }
 
   try {
     const withdrawHistory = await WithdrawHistoryModel.findOne({
       receiverId: _id,
       withdrawId,
+      receiverWalletAddress: walletAddress,
     });
 
     res.status(200).json({

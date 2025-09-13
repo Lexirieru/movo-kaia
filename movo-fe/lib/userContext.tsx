@@ -9,24 +9,47 @@ import {
 } from "react";
 import { getMe } from "@/utils/auth";
 
-import {updateWalletAddress as updateWalletAPI} from "@/app/api/api"
+import {
+  updateWalletAddressRole,
+  updateWalletAddressRole as updateWalletAPI,
+} from "@/app/api/api";
 
+// Interface untuk user object yang lebih lengkap
 interface User {
   _id: string;
   email: string;
+  name?: string;
+  role?: "sender" | "receiver" | "none";
   walletAddress?: string;
-  role?: "sender" | "receiver" | "unknown";
+  WalletAddresses?: Array<{
+    walletAddress: string;
+    role: "sender" | "receiver";
+    availableBalance: number;
+  }>;
   createdAt: string;
   updatedAt?: string;
+  // Tambahkan attributes lain sesuai dengan response dari backend
+  [key: string]: any; // Untuk attributes yang belum terdefinisi
 }
 
-// tipe state auth
+// Interface untuk response dari getMe()
+interface GetMeResponse {
+  authenticated: boolean;
+  user: User;
+  currentWalletAddress: string;
+  currentRole: "sender" | "receiver" | "none";
+}
+
+// Tipe state auth
 interface AuthContextType {
   user: User | null;
   loading: boolean;
   authenticated: boolean;
+  currentWalletAddress: string;
+  currentRole: "sender" | "receiver" | "none";
   refreshUser: () => Promise<void>; // biar bisa reload user dari luar
-  updateUserWallet: (walletAddress: string) => Promise<boolean>;
+  checkAuth: () => Promise<void>; // Export checkAuth function
+  updateUserWallet: (walletAddress: string, role: string) => Promise<boolean>;
   clearUser: () => void;
 }
 
@@ -35,46 +58,58 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [currentWalletAddress, setCurrentWalletAddress] = useState<string>("");
+  const [currentRole, setCurrentRole] = useState<
+    "sender" | "receiver" | "none"
+  >("none");
 
   // cek auth pertama kali
   const checkAuth = async () => {
     setLoading(true);
     try {
-      const data = await getMe();
-      console.log(data);
-      
+      const data: GetMeResponse = await getMe();
+
       if (data && data.authenticated) {
         setUser(data.user);
+        setCurrentWalletAddress(data.currentWalletAddress || "");
+        setCurrentRole(data.currentRole || "none");
       } else {
         setUser(null);
+        setCurrentWalletAddress("");
+        setCurrentRole("none");
       }
     } catch (error) {
       console.error("Error checking auth:", error);
       setUser(null);
+      setCurrentWalletAddress("");
+      setCurrentRole("none");
     } finally {
       setLoading(false);
     }
   };
 
   // Function to update user wallet address
-  const updateUserWallet = async (walletAddress: string): Promise<boolean> => {
+  const updateUserWallet = async (
+    walletAddress: string,
+    role: string,
+  ): Promise<boolean> => {
     if (!user) return false;
 
     try {
-      const result = await updateWalletAPI(user._id, walletAddress);
-      
+      const result = await updateWalletAddressRole(
+        user._id,
+        walletAddress,
+        role,
+      );
+
       if (result.success) {
-        // Update user state dengan wallet address baru
-        setUser(prevUser => prevUser ? {
-          ...prevUser,
-          walletAddress: walletAddress,
-          updatedAt: new Date().toISOString()
-        } : null);
+        // Refresh user data dari server untuk get latest info
+        await checkAuth();
         return true;
       }
       return false;
     } catch (error) {
-      console.error('Error updating wallet:', error);
+      console.error("Error updating wallet:", error);
       return false;
     }
   };
@@ -82,8 +117,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Function to clear user data (logout)
   const clearUser = () => {
     setUser(null);
+    setCurrentWalletAddress("");
+    setCurrentRole("none");
     // Clear any stored auth tokens if you have them
-    localStorage.removeItem('authToken');
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("authToken");
+    }
+  };
+
+  // Refresh user - alias untuk checkAuth
+  const refreshUser = async () => {
+    await checkAuth();
   };
 
   useEffect(() => {
@@ -93,8 +137,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const value: AuthContextType = {
     user,
     loading,
+    currentWalletAddress,
+    currentRole,
     authenticated: !!user,
-    refreshUser: checkAuth,
+    refreshUser,
+    checkAuth, // Export checkAuth function
     updateUserWallet,
     clearUser,
   };

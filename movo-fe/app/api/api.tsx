@@ -24,12 +24,14 @@ export const register = async (
   email: string,
   fullname: string,
   password: string,
+  walletAddress: string,
 ) => {
   try {
     const response = await api.post("/onBoardingUser", {
       email,
       fullname,
       password,
+      walletAddress,
     });
     return response.data;
   } catch (err) {
@@ -37,25 +39,39 @@ export const register = async (
   }
 };
 
-export const login = async (email: string, password: string) => {
+export const loginWithWallet = async (walletAddress: string) => {
   try {
-    const response = await api.post("/login", { email, password });
+    const response = await api.post("/loginWithWallet", { walletAddress });
+    return response.data;
+  } catch (err) {
+    console.log(err);
+  }
+};
+export const pairWallet = async (
+  email: string,
+  password: string,
+  walletAddress: string,
+) => {
+  try {
+    const response = await api.post("/pairWallet", {
+      email,
+      password,
+      walletAddress,
+    });
     return response.data;
   } catch (err) {
     console.log(err);
   }
 };
 
-
-
 export const addBankAccount = async (
-  email: string,
+  _id: string,
   bankAccountNumber: string,
   bankCode: string,
 ) => {
   try {
     const response = await api.post("/addBankAccount", {
-      email,
+      _id,
       bankAccountNumber,
       bankCode,
     });
@@ -65,72 +81,41 @@ export const addBankAccount = async (
   }
 };
 
-export const saveWalletAddress = async (walletAddress: string) => {
-  try{
+// ngesync walletAddress ke sebuah akun
+export const addWalletAddress = async (
+  email: string,
+  password: string,
+  walletAddress: string,
+) => {
+  try {
     const response = await api.post("/addWalletAddress", {
+      email,
+      password,
       walletAddress,
-    })
-    return response.data; 
+    });
+    return response.data;
   } catch (err) {
     console.log(err);
   }
-}
-
-
-/**
- * Update user's wallet address
- */
-export const updateWalletAddress = async (userId: string, walletAddress: string) => {
-  try {
-    const response = await api.put("/users/update-wallet", {
-      _id: userId,
-      walletAddress,
-    });
-    return response.data;
-  } catch (err) {
-    console.error("Error updating wallet address:", err);
-
-  }
 };
 
-/**
- * Get user role based on wallet address and activity
- */
-export const getUserRole = async (userId: string, walletAddress: string) => {
-  try {
-    const response = await api.get(`/users/${userId}/role`, {
-      params: { wallet: walletAddress },
-    });
-    return response.data;
-  } catch (err) {
-    console.error("Error getting user role:", err);
-    return {
-      success: false,
-      role: "unknown",
-    };
-  }
-};
-
-/**
- * Check if wallet address has been used by another user
- */
-export const checkWalletAddressAvailability = async (
+export const updateWalletAddressRole = async (
+  _id: string,
   walletAddress: string,
-  currentUserId?: string
+  role: string,
 ) => {
   try {
-    const response = await api.get("/users/check-wallet", {
-      params: {
-        address: walletAddress,
-        userId: currentUserId || "",
-      },
+    const response = await api.put("/updateWalletAddressRole", {
+      _id,
+      walletAddress,
+      role,
     });
     return response.data;
   } catch (err) {
-    console.error("Error checking wallet availability:", err);
-
+    console.error("Error updating wallet address role:", err);
   }
-}
+};
+
 export const getBankAccount = async (_id: string) => {
   try {
     const response = await api.post("/getBankAccount", { _id });
@@ -235,10 +220,7 @@ export const saveEscrowToDatabase = async (escrowData: {
   createdAt: string;
 }) => {
   try {
-    const response = await axios.post(
-      `${process.env.NEXT_PUBLIC_API_BASE_URL}/saveEscrowToDatabase`,
-      escrowData,
-    );
+    const response = await axios.post(`/saveEscrowToDatabase`, escrowData);
     console.log(response.data);
     return response.data;
   } catch (error) {
@@ -247,23 +229,36 @@ export const saveEscrowToDatabase = async (escrowData: {
   }
 };
 
-export const loadAllWithdrawHistory = async (_id: string) => {
+export const loadAllWithdrawHistory = async (
+  _id: string,
+  walletAddress: string,
+) => {
   try {
-    const response = await api.post("/loadAllWithdrawHistory", { _id });
+    const response = await api.post("/loadAllWithdrawHistory", {
+      _id,
+      walletAddress,
+    });
     return response.data.data;
   } catch (err) {
     console.log(err);
   }
 };
 
-export const loadAllGroupTransactionHistory = async (_id: string) => {
+export const loadAllGroupTransactionHistory = async (
+  _id: string,
+  walletAddress: string,
+) => {
   try {
-    const response = await api.post("/loadAllGroupTransactionHistory", { _id });
+    const response = await api.post("/loadAllGroupTransactionHistory", {
+      _id,
+      walletAddress,
+    });
     return response.data.data;
   } catch (err) {
     console.log(err);
   }
 };
+
 export const deleteGroup = async (_id: string, groupId: string) => {
   try {
     const response = await api.post("/deleteGroup", { _id, groupId });
@@ -272,6 +267,7 @@ export const deleteGroup = async (_id: string, groupId: string) => {
     console.log(err);
   }
 };
+
 export const editReceiverAmountInGroup = async (
   senderId: string,
   groupId: string,
@@ -311,11 +307,13 @@ export const removeReceiverDataFromGroup = async (
 export const loadSpecifiedGroupTransactionHistory = async (
   _id: string,
   groupId: string,
+  txId: string,
 ) => {
   try {
-    const response = await api.post("/loadAllGroupTransactionHistory", {
+    const response = await api.post("/loadSpecifiedGroupTransactionHistory", {
       _id,
       groupId,
+      txId,
     });
     return response.data.data;
   } catch (err) {
@@ -339,9 +337,9 @@ export const loadSpecifiedGroup = async (
   }
 };
 
-export const loadAllGroup = async (_id: string) => {
+export const loadAllGroup = async (_id: string, walletAddress: string) => {
   try {
-    const response = await api.post("/loadAllGroup", { _id });
+    const response = await api.post("/loadAllGroup", { _id, walletAddress });
     return response.data.data;
   } catch (err) {
     console.log(err);
@@ -353,6 +351,7 @@ export const addGroup = async (
   email: string,
   groupId: string,
   nameOfGroup: string,
+  walletAddress: string,
 ) => {
   try {
     const response = await api.post("/addGroup", {
@@ -360,6 +359,7 @@ export const addGroup = async (
       email,
       groupId,
       nameOfGroup,
+      walletAddress,
     });
     return response.data; // backend return { message, payroll }
   } catch (err) {
@@ -380,30 +380,4 @@ export const getUsdcIdrxRate = async () => {
 export const logout = async () => {
   const response = await api.post("/logout"); // backend akan hapus cookie
   return response.data.message;
-};
-
-// Get escrow by escrowId
-export const getEscrowByEscrowId = async (escrowId: string) => {
-  try {
-    const response = await axios.get(
-      `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/escrows/${escrowId}`,
-    );
-    return response.data;
-  } catch (error) {
-    console.error("Error getting escrow by escrowId:", error);
-    throw error;
-  }
-};
-
-// Get all escrows for a user (as sender)
-export const getUserEscrows = async (userId: string) => {
-  try {
-    const response = await axios.get(
-      `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/escrows/user/${userId}`,
-    );
-    return response.data;
-  } catch (error) {
-    console.error("Error getting user escrows:", error);
-    throw error;
-  }
 };

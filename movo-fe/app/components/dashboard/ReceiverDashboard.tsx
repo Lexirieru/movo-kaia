@@ -1,7 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Search, DollarSign, Wallet, CheckCircle2, Clock, Filter } from "lucide-react";
+import {
+  Search,
+  DollarSign,
+  Wallet,
+  CheckCircle2,
+  Clock,
+  Filter,
+} from "lucide-react";
 import ClaimModal from "./receiver/ClaimModal";
 import { useAuth } from "@/lib/userContext";
 import { loadAllWithdrawHistory } from "@/app/api/api";
@@ -11,28 +18,35 @@ interface ReceiverDashboardProps {
   onDropdownOpen?: () => void;
 }
 
-export default function ReceiverDashboard({ onDropdownOpen }: ReceiverDashboardProps) {
-  const { user, loading } = useAuth();
+export default function ReceiverDashboard({
+  onDropdownOpen,
+}: ReceiverDashboardProps) {
+  const { user, loading, currentWalletAddress } = useAuth();
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedWithdraws, setSelectedWithdraws] = useState<string[]>([]);
   const [showClaimModal, setShowClaimModal] = useState(false);
   const [hasFetched, setHasFetched] = useState(false);
   const [withdrawHistory, setWithdrawHistory] = useState<WithdrawHistory[]>([]);
-  const [filterType, setFilterType] = useState<"all" | "pending" | "completed">("all");
+  const [filterType, setFilterType] = useState<"all" | "pending" | "completed">(
+    "all",
+  );
 
   useEffect(() => {
     if (loading || !user?._id || hasFetched) return;
 
     const fetchWithdrawHistory = async () => {
       try {
-        const historyTemplate = await loadAllWithdrawHistory(user._id);
+        const historyTemplate = await loadAllWithdrawHistory(
+          user._id,
+          currentWalletAddress,
+        );
         if (!historyTemplate || !Array.isArray(historyTemplate)) {
           console.warn("Withdraw history not found or not an array.");
           setWithdrawHistory([]); // fallback empty array
           setHasFetched(true);
           return;
         }
-        
+
         const templatesWithdrawHistory: WithdrawHistory[] = historyTemplate.map(
           (w: any) => ({
             withdrawId: w.withdrawId,
@@ -48,7 +62,7 @@ export default function ReceiverDashboard({ onDropdownOpen }: ReceiverDashboardP
             bankName: w.bankName ?? "",
             bankAccountName: w.bankAccountName ?? "",
             bankAccountNumber: w.bankAccountNumber ?? "",
-          })
+          }),
         );
         setWithdrawHistory(templatesWithdrawHistory);
         setHasFetched(true);
@@ -62,16 +76,20 @@ export default function ReceiverDashboard({ onDropdownOpen }: ReceiverDashboardP
 
   // Filter by search and type
   const filteredWithdraws = withdrawHistory.filter((w) => {
-    const matchesSearch = 
+    const matchesSearch =
       w.bankName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       w.choice?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       w.originCurrency?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       w.bankAccountNumber?.toLowerCase().includes(searchTerm.toLowerCase());
 
-    const matchesFilter = 
-      filterType === "all" ? true :
-      filterType === "pending" ? !w.withdrawId :
-      filterType === "completed" ? w.withdrawId : true;
+    const matchesFilter =
+      filterType === "all"
+        ? true
+        : filterType === "pending"
+          ? !w.withdrawId
+          : filterType === "completed"
+            ? w.withdrawId
+            : true;
 
     return matchesSearch && matchesFilter;
   });
@@ -80,7 +98,7 @@ export default function ReceiverDashboard({ onDropdownOpen }: ReceiverDashboardP
     setSelectedWithdraws((prev) =>
       prev.includes(withdrawId)
         ? prev.filter((id) => id !== withdrawId)
-        : [...prev, withdrawId]
+        : [...prev, withdrawId],
     );
   };
 
@@ -89,7 +107,10 @@ export default function ReceiverDashboard({ onDropdownOpen }: ReceiverDashboardP
       .filter((w) => !w.withdrawId)
       .map((w) => w.withdrawId ?? "");
 
-    if (selectedWithdraws.length === selectableWithdraws.length && selectableWithdraws.length > 0) {
+    if (
+      selectedWithdraws.length === selectableWithdraws.length &&
+      selectableWithdraws.length > 0
+    ) {
       setSelectedWithdraws([]);
     } else {
       setSelectedWithdraws(selectableWithdraws);
@@ -97,11 +118,13 @@ export default function ReceiverDashboard({ onDropdownOpen }: ReceiverDashboardP
   };
 
   const totalSelectedAmount = filteredWithdraws
-    .filter((w) => !w.withdrawId && selectedWithdraws.includes(w.withdrawId ?? ""))
+    .filter(
+      (w) => !w.withdrawId && selectedWithdraws.includes(w.withdrawId ?? ""),
+    )
     .reduce((acc, w) => acc + Number(w.amount), 0);
 
-  const selectedWithdrawsData = filteredWithdraws.filter((w) => 
-    selectedWithdraws.includes(w.withdrawId ?? "")
+  const selectedWithdrawsData = filteredWithdraws.filter((w) =>
+    selectedWithdraws.includes(w.withdrawId ?? ""),
   );
 
   const handleClaim = () => {
@@ -110,19 +133,24 @@ export default function ReceiverDashboard({ onDropdownOpen }: ReceiverDashboardP
     }
   };
 
-  const pendingCount = withdrawHistory.filter(w => !w.withdrawId).length;
-  const completedCount = withdrawHistory.filter(w => w.withdrawId).length;
+  const pendingCount = withdrawHistory.filter((w) => !w.withdrawId).length;
+  const completedCount = withdrawHistory.filter((w) => w.withdrawId).length;
 
   // Calculate total amount safely
-  const totalAmount = withdrawHistory.reduce((acc, w) => acc + Number(w.amount), 0);
-  const formattedTotalAmount = typeof totalAmount === 'number' && !isNaN(totalAmount) 
-    ? totalAmount.toFixed(2) 
-    : '0.00';
+  const totalAmount = withdrawHistory.reduce(
+    (acc, w) => acc + Number(w.amount),
+    0,
+  );
+  const formattedTotalAmount =
+    typeof totalAmount === "number" && !isNaN(totalAmount)
+      ? totalAmount.toFixed(2)
+      : "0.00";
 
   // Format total selected amount safely
-  const formattedSelectedAmount = typeof totalSelectedAmount === 'number' && !isNaN(totalSelectedAmount) 
-    ? totalSelectedAmount.toFixed(4) 
-    : '0.0000';
+  const formattedSelectedAmount =
+    typeof totalSelectedAmount === "number" && !isNaN(totalSelectedAmount)
+      ? totalSelectedAmount.toFixed(4)
+      : "0.0000";
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-black">
@@ -155,17 +183,21 @@ export default function ReceiverDashboard({ onDropdownOpen }: ReceiverDashboardP
             <div className="flex items-center space-x-3">
               <Clock className="w-8 h-8 text-yellow-400" />
               <div>
-                <div className="text-2xl font-bold text-white">{pendingCount}</div>
+                <div className="text-2xl font-bold text-white">
+                  {pendingCount}
+                </div>
                 <div className="text-white/60 text-sm">Pending Claims</div>
               </div>
             </div>
           </div>
-          
+
           <div className="bg-white/5 rounded-xl p-4 border border-white/10">
             <div className="flex items-center space-x-3">
               <CheckCircle2 className="w-8 h-8 text-green-400" />
               <div>
-                <div className="text-2xl font-bold text-white">{completedCount}</div>
+                <div className="text-2xl font-bold text-white">
+                  {completedCount}
+                </div>
                 <div className="text-white/60 text-sm">Completed</div>
               </div>
             </div>
@@ -202,7 +234,9 @@ export default function ReceiverDashboard({ onDropdownOpen }: ReceiverDashboardP
             <Filter className="w-5 h-5 text-white/60" />
             <select
               value={filterType}
-              onChange={(e) => setFilterType(e.target.value as "all" | "pending" | "completed")}
+              onChange={(e) =>
+                setFilterType(e.target.value as "all" | "pending" | "completed")
+              }
               className="bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
             >
               <option value="all">All Withdraws</option>
@@ -215,7 +249,10 @@ export default function ReceiverDashboard({ onDropdownOpen }: ReceiverDashboardP
         {/* Mobile Cards View */}
         <div className="lg:hidden space-y-4">
           {filteredWithdraws.map((w) => (
-            <div key={w.withdrawId} className="bg-white/5 rounded-xl p-4 border border-white/10">
+            <div
+              key={w.withdrawId}
+              className="bg-white/5 rounded-xl p-4 border border-white/10"
+            >
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center space-x-3">
                   {!w.withdrawId && (
@@ -230,11 +267,13 @@ export default function ReceiverDashboard({ onDropdownOpen }: ReceiverDashboardP
                     <span className="text-white text-sm font-bold">U</span>
                   </div>
                   <div>
-                    <div className="text-white font-medium">{w.originCurrency}</div>
+                    <div className="text-white font-medium">
+                      {w.originCurrency}
+                    </div>
                     <div className="text-white/60 text-sm">{w.amount} USDC</div>
                   </div>
                 </div>
-                
+
                 <div className="flex items-center space-x-2">
                   {w.withdrawId ? (
                     <span className="bg-green-500/20 text-green-400 px-2 py-1 rounded-lg text-xs">
@@ -286,30 +325,51 @@ export default function ReceiverDashboard({ onDropdownOpen }: ReceiverDashboardP
                     <input
                       type="checkbox"
                       checked={
-                        filteredWithdraws.filter(w => !w.withdrawId).length > 0 &&
-                        selectedWithdraws.length === filteredWithdraws.filter(w => !w.withdrawId).length
+                        filteredWithdraws.filter((w) => !w.withdrawId).length >
+                          0 &&
+                        selectedWithdraws.length ===
+                          filteredWithdraws.filter((w) => !w.withdrawId).length
                       }
                       onChange={handleSelectAll}
                       className="w-4 h-4"
                     />
                   </th>
-                  <th className="text-left p-4 text-white/80 font-medium">Token</th>
-                  <th className="text-left p-4 text-white/80 font-medium">Amount</th>
-                  <th className="text-left p-4 text-white/80 font-medium">Type</th>
-                  <th className="text-left p-4 text-white/80 font-medium">Destination</th>
-                  <th className="text-left p-4 text-white/80 font-medium">Status</th>
-                  <th className="text-left p-4 text-white/80 font-medium">Actions</th>
+                  <th className="text-left p-4 text-white/80 font-medium">
+                    Token
+                  </th>
+                  <th className="text-left p-4 text-white/80 font-medium">
+                    Amount
+                  </th>
+                  <th className="text-left p-4 text-white/80 font-medium">
+                    Type
+                  </th>
+                  <th className="text-left p-4 text-white/80 font-medium">
+                    Destination
+                  </th>
+                  <th className="text-left p-4 text-white/80 font-medium">
+                    Status
+                  </th>
+                  <th className="text-left p-4 text-white/80 font-medium">
+                    Actions
+                  </th>
                 </tr>
               </thead>
               <tbody>
                 {filteredWithdraws.map((w) => (
-                  <tr key={w.withdrawId} className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                  <tr
+                    key={w.withdrawId}
+                    className="border-b border-white/5 hover:bg-white/5 transition-colors"
+                  >
                     <td className="p-4">
                       {!w.withdrawId ? (
                         <input
                           type="checkbox"
-                          checked={selectedWithdraws.includes(w.withdrawId ?? "")}
-                          onChange={() => handleSelectWithdraw(w.withdrawId ?? "")}
+                          checked={selectedWithdraws.includes(
+                            w.withdrawId ?? "",
+                          )}
+                          onChange={() =>
+                            handleSelectWithdraw(w.withdrawId ?? "")
+                          }
                           className="w-4 h-4"
                         />
                       ) : (
@@ -319,9 +379,13 @@ export default function ReceiverDashboard({ onDropdownOpen }: ReceiverDashboardP
                     <td className="p-4">
                       <div className="flex items-center space-x-3">
                         <div className="w-8 h-8 bg-gradient-to-r from-green-400 to-emerald-500 rounded-full flex items-center justify-center">
-                          <span className="text-white text-sm font-bold">U</span>
+                          <span className="text-white text-sm font-bold">
+                            U
+                          </span>
                         </div>
-                        <span className="text-white font-medium">{w.originCurrency}</span>
+                        <span className="text-white font-medium">
+                          {w.originCurrency}
+                        </span>
                       </div>
                     </td>
                     <td className="p-4">
@@ -355,12 +419,16 @@ export default function ReceiverDashboard({ onDropdownOpen }: ReceiverDashboardP
                       {w.withdrawId ? (
                         <div className="flex items-center space-x-2">
                           <CheckCircle2 className="w-4 h-4 text-green-400" />
-                          <span className="text-green-400 text-sm">Completed</span>
+                          <span className="text-green-400 text-sm">
+                            Completed
+                          </span>
                         </div>
                       ) : (
                         <div className="flex items-center space-x-2">
                           <Clock className="w-4 h-4 text-yellow-400" />
-                          <span className="text-yellow-400 text-sm">Pending</span>
+                          <span className="text-yellow-400 text-sm">
+                            Pending
+                          </span>
                         </div>
                       )}
                     </td>
@@ -376,9 +444,7 @@ export default function ReceiverDashboard({ onDropdownOpen }: ReceiverDashboardP
                           Claim
                         </button>
                       ) : (
-                        <span className="text-white/40 text-sm">
-                          Completed
-                        </span>
+                        <span className="text-white/40 text-sm">Completed</span>
                       )}
                     </td>
                   </tr>
@@ -396,7 +462,9 @@ export default function ReceiverDashboard({ onDropdownOpen }: ReceiverDashboardP
             </div>
             <div className="text-white/60 mb-2">No withdraws found</div>
             <div className="text-white/40 text-sm">
-              {searchTerm ? `No results for "${searchTerm}"` : "No withdraw history available"}
+              {searchTerm
+                ? `No results for "${searchTerm}"`
+                : "No withdraw history available"}
             </div>
           </div>
         )}
