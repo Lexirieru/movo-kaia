@@ -47,22 +47,6 @@ export const loginWithWallet = async (walletAddress: string) => {
     console.log(err);
   }
 };
-export const pairWallet = async (
-  email: string,
-  password: string,
-  walletAddress: string,
-) => {
-  try {
-    const response = await api.post("/pairWallet", {
-      email,
-      password,
-      walletAddress,
-    });
-    return response.data;
-  } catch (err) {
-    console.log(err);
-  }
-};
 
 export const addBankAccount = async (
   _id: string,

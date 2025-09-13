@@ -192,99 +192,10 @@ router.post(
   }
 );
 
-// New endpoint for wallet pairing
-router.post(
-  "/pairWallet",
-  async (req: Request, res: Response, next: NextFunction) => {
-    const { email, password, walletAddress } = req.body;
-
-    if (!email || !password || !walletAddress) {
-      res.status(400).json({
-        message: "Email, password, and wallet address are required",
-      });
-      return;
-    }
-
-    try {
-      // Find user by email
-      const user = await UserModel.findOne({ email });
-      if (!user) {
-        res.status(404).json({
-          message: "Account with specified email not found",
-        });
-        return;
-      }
-
-      // Verify password
-      const isPasswordValid = await bcrypt.compare(
-        password,
-        user.hashedPassword
-      );
-      if (!isPasswordValid) {
-        res.status(401).json({ message: "Invalid password" });
-        return;
-      }
-
-      // Check if wallet already exists in any account
-      const existingWalletUser = await UserModel.findOne({
-        "WalletAddresses.walletAddress": new RegExp(`^${walletAddress}$`, "i"),
-      });
-
-      if (existingWalletUser) {
-        res.status(409).json({
-          message: "This wallet is already linked to another account",
-        });
-        return;
-      }
-
-      // Add wallet to user's account
-      const updatedUser = await UserModel.findByIdAndUpdate(
-        user._id,
-        {
-          $push: {
-            WalletAddresses: {
-              walletAddress,
-              role: "sender", // or default role
-              availableBalance: 0,
-            },
-          },
-        },
-        { new: true }
-      );
-
-      if (!updatedUser) {
-        res.status(500).json({ message: "Failed to pair wallet" });
-        return;
-      }
-
-      // Generate new token with the paired wallet
-      const token = await generateCookiesToken(updatedUser, walletAddress);
-
-      res.cookie("user_session", token, {
-        httpOnly: true,
-        sameSite: "none",
-        secure: true,
-        maxAge: 30 * 24 * 60 * 60 * 1000,
-      });
-
-      res.status(200).json({
-        statusCode: 200,
-        message: "Wallet paired successfully",
-      });
-      return;
-    } catch (err) {
-      console.error("Error pairing wallet:", err);
-      res.status(500).json({ message: "Internal server error" });
-      return;
-    }
-  }
-);
-
 export async function generateCookiesToken(
   newUser: InstanceType<typeof UserModel>,
   walletAddress: string
 ) {
-  console.log(walletAddress);
   // nge return wallet yang merupakan object dari WalletAddresses kalok ketemu
   const walletData = newUser.WalletAddresses.find(
     (wallet) => wallet.walletAddress == walletAddress
@@ -323,7 +234,7 @@ router.post("/logout", (req: Request, res: Response) => {
     }
     const token = req.cookies?.user_session;
     // Hapus token dari database
-    const deleted = await LoginSessionTokenModel.deleteOne({ token });
+    const deleted = await LoginSessionTokenModel.deleteMany({ token });
 
     req.session.destroy(() => {
       res.clearCookie("user_session");

@@ -17,13 +17,12 @@ interface WalletContextType {
   address: string | undefined;
   isConnecting: boolean;
   isLoading: boolean;
-  isWalletSyncing: boolean; // NEW: Track ketika wallet sedang sync dengan backend
+  isWalletSyncing: boolean; // wallet sync sama backend
   disconnect: () => void;
   connectWallet: () => Promise<void>;
-  getCurrentWalletAddress: () => Promise<string | null>;
   walletAddress: string;
   isWalletConnected: boolean;
-  setRefreshUserCallback: (callback: () => Promise<void>) => void; // NEW: Callback untuk refresh user
+  setRefreshUserCallback: (callback: () => Promise<void>) => void; // callaback untuk refresh user
 }
 
 const WalletContext = createContext<WalletContextType | undefined>(undefined);
@@ -33,12 +32,17 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const { disconnect } = useDisconnect();
   const { connect } = useConnect();
   const [isLoading, setIsLoading] = useState(true);
-  const [isWalletSyncing, setIsWalletSyncing] = useState(false); // NEW: Track sync status
+  const [isWalletSyncing, setIsWalletSyncing] = useState(false);
   const [prevAddress, setPrevAddress] = useState<string | undefined>(undefined);
   const [refreshUserCallback, setRefreshUserCallback] = useState<
     (() => Promise<void>) | null
-  >(null); // NEW: Callback reference
+  >(null);
+  const [isInitialized, setIsInitialized] = useState(false); // NEW: Track jika sudah initialized
+  const [processedAddresses, setProcessedAddresses] = useState<Set<string>>(
+    new Set(),
+  ); // NEW: Track processed addresses
   const router = useRouter();
+
   useEffect(() => {
     // Check for existing connection on mount
     const checkConnection = async () => {
@@ -55,57 +59,118 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       // Reduce loading time
       const timer = setTimeout(() => {
         setIsLoading(false);
+
+        // Set initial prevAddress untuk prevent first-load login
+        if (address && isConnected) {
+          console.log(
+            "🔄 Setting initial prevAddress to prevent duplicate login:",
+            address,
+          );
+          setPrevAddress(address);
+        }
+
+        setIsInitialized(true); // Mark as initialized setelah loading selesai
       }, 500);
 
       return () => clearTimeout(timer);
     };
 
     checkConnection();
-  }, []);
+  }, [address, isConnected]); // Add dependencies
 
   // Auto-login ketika wallet terconnect dan address berubah
   useEffect(() => {
     const handleWalletConnection = async () => {
-      // Cek jika wallet baru saja terconnect (address berubah dari undefined ke ada value)
-      if (isConnected && address && address !== prevAddress) {
-        console.log("🔗 New wallet connected:", address);
-        setIsWalletSyncing(true); // NEW: Set syncing state
+      if (!isInitialized) {
+        return;
+      }
 
-        try {
-          console.log("🚀 Attempting auto-login with wallet...");
-          const response = await loginWithWallet(address);
-          console.log(response);
-          if (response && response.statusCode === 200) {
-            console.log("✅ Auto-login successful");
-            // Refresh user data jika callback tersedia
-            if (refreshUserCallback) {
-              await refreshUserCallback();
-            }
-            // Tunggu sebentar untuk memastikan backend sudah update
-            await new Promise((resolve) => setTimeout(resolve, 500));
-          } else if (response.statusCode === 404 && response.redirect) {
-            console.log("⚠️ Auto-login failed:", response);
-            router.push(response.redirect);
+      if (isWalletSyncing) {
+        return;
+      }
+
+      // KONDISI LOGIN: Wallet terconnect dan address ada
+      if (isConnected && address) {
+        // PENGECEKAN 3: Cek jika address sudah pernah diproses
+        if (processedAddresses.has(address.toLowerCase())) {
+          // Update prevAddress jika belum di-set
+          if (prevAddress !== address) {
+            setPrevAddress(address);
           }
-        } catch (error: any) {
-          console.error("❌ Auto-login error:", error);
-          // Backend akan handle redirect, jadi tidak perlu handle di sini
+          return;
         }
 
-        // Update previous address
+        // KONDISI untuk LOGIN:
+        // 1. Address berubah dari prevAddress yang ada
+        // 2. Atau fresh connect (prevAddress undefined tapi bukan first load)
+        const shouldLogin =
+          (prevAddress && address !== prevAddress) || // Address berubah
+          (!prevAddress && !isLoading); // Fresh connect setelah loading selesai
+
+        if (shouldLogin) {
+          console.log(prevAddress, address);
+          setIsWalletSyncing(true);
+
+          try {
+            const response = await loginWithWallet(address);
+            console.log(response);
+
+            if (response && response.statusCode === 200) {
+              // Mark address sebagai processed
+              setProcessedAddresses(
+                (prev) => new Set([...prev, address.toLowerCase()]),
+              );
+              // callback untuk refresh userdata
+              if (refreshUserCallback) {
+                await refreshUserCallback();
+              }
+              // Tunggu sebentar untuk memastikan backend sudah update
+              await new Promise((resolve) => setTimeout(resolve, 500));
+            } else if (
+              response &&
+              response.statusCode === 404 &&
+              response.redirect
+            ) {
+              console.log("redirecting to syncing page");
+              router.push(response.redirect);
+            }
+          } catch (error: any) {
+            console.error(error);
+          } finally {
+            setIsWalletSyncing(false);
+          }
+        } else {
+          console.log(
+            "🔄 Setting prevAddress without login (first load):",
+            address,
+          );
+        }
+
+        // update previous address dengan address sekarang
         setPrevAddress(address);
-        setIsWalletSyncing(false); // NEW: Clear syncing state
       } else if (!isConnected && prevAddress) {
-        // Wallet disconnected
+        console.log("💸 Wallet disconnected");
+        // set prevAddress to undefined
         setPrevAddress(undefined);
-        setIsWalletSyncing(false); // NEW: Clear syncing state
+        setProcessedAddresses(new Set()); // Clear processed addresses
+        setIsWalletSyncing(false);
       }
     };
 
     handleWalletConnection();
-  }, [isConnected, address, prevAddress, router]);
+  }, [
+    isConnected,
+    address,
+    prevAddress,
+    router,
+    isInitialized,
+    isWalletSyncing,
+    refreshUserCallback,
+    processedAddresses,
+    isLoading,
+  ]);
 
-  // Function to connect wallet
+  // fungsi untuk connect wallet
   const connectWallet = async (): Promise<void> => {
     try {
       console.log("🔌 Attempting to connect wallet...");
@@ -123,47 +188,28 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // Function to get current wallet address
-  const getCurrentWalletAddress = async (): Promise<string | null> => {
-    if (typeof window.ethereum !== "undefined") {
-      try {
-        const accounts = await window.ethereum.request({
-          method: "eth_accounts",
-        });
-        if (accounts.length > 0) {
-          console.log("💰 Current wallet address:", accounts[0]);
-          return accounts[0];
-        }
-      } catch (error) {
-        console.error("Error getting wallet address:", error);
-      }
-    }
-    return null;
-  };
-
   // Listen for account changes in MetaMask
   useEffect(() => {
     if (typeof window.ethereum !== "undefined") {
       const handleAccountsChanged = async (accounts: string[]) => {
-        console.log("🔄 MetaMask accounts changed:", accounts);
-
         if (accounts.length === 0) {
-          console.log("🚪 User disconnected wallet from MetaMask");
-
           try {
-            // Logout sebelum disconnect
+            // logout dari backend sebelum disconnect
             await logout();
             console.log("✅ Logout API called successfully");
           } catch (error) {
             console.error("❌ Error during logout:", error);
           }
-
           // Always disconnect wagmi regardless of logout success/failure
           disconnect();
           setPrevAddress(undefined);
-        } else if (accounts[0] !== prevAddress) {
-          // Account switched - akan trigger auto-login di useEffect di atas
+          setProcessedAddresses(new Set()); // Clear processed addresses
+          setIsWalletSyncing(false);
+        } else if (accounts[0] !== prevAddress && isInitialized) {
+          // Account switched - clear processed addresses untuk allow new account login
           console.log("🔄 Account switched to:", accounts[0]);
+          setProcessedAddresses(new Set());
+          // Don't set prevAddress here, let the main useEffect handle it
         }
       };
 
@@ -182,22 +228,21 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         window.ethereum.removeListener("chainChanged", handleChainChanged);
       };
     }
-  }, [disconnect, prevAddress]);
+  }, [disconnect, prevAddress, isInitialized]);
 
   const value: WalletContextType = {
     isConnected,
     address,
     isConnecting,
     isLoading,
-    isWalletSyncing, // NEW: Add syncing state
+    isWalletSyncing,
     disconnect,
     connectWallet,
-    getCurrentWalletAddress,
     setRefreshUserCallback: (callback: () => Promise<void>) =>
-      setRefreshUserCallback(() => callback), // NEW: Set callback
+      setRefreshUserCallback(() => callback),
     // Aliases for backward compatibility
     walletAddress: address || "",
-    isWalletConnected: isConnected,
+    isWalletConnected: isConnected && !isWalletSyncing,
   };
 
   return (
