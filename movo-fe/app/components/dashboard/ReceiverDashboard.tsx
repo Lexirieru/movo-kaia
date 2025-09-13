@@ -32,7 +32,7 @@ export default function ReceiverDashboard({
   );
 
   useEffect(() => {
-    if (loading || !user?._id || hasFetched) return;
+    if (loading || !user?._id || !currentWalletAddress || hasFetched) return;
 
     const fetchWithdrawHistory = async () => {
       try {
@@ -72,7 +72,13 @@ export default function ReceiverDashboard({
     };
 
     fetchWithdrawHistory();
-  }, [loading, user, hasFetched]);
+  }, [loading, user, currentWalletAddress, hasFetched]);
+
+  // Reset hasFetched ketika currentWalletAddress berubah
+  useEffect(() => {
+    setHasFetched(false);
+    setWithdrawHistory([]); // Clear existing history when wallet changes
+  }, [currentWalletAddress]);
 
   // Filter by search and type
   const filteredWithdraws = withdrawHistory.filter((w) => {

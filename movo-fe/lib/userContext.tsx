@@ -47,6 +47,7 @@ interface AuthContextType {
   authenticated: boolean;
   currentWalletAddress: string;
   currentRole: "sender" | "receiver" | "none";
+  isRefreshing: boolean; // NEW: Track ketika data user sedang di-refresh
   refreshUser: () => Promise<void>; // biar bisa reload user dari luar
   checkAuth: () => Promise<void>; // Export checkAuth function
   updateUserWallet: (walletAddress: string, role: string) => Promise<boolean>;
@@ -58,6 +59,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false); // NEW: Track refresh state
   const [currentWalletAddress, setCurrentWalletAddress] = useState<string>("");
   const [currentRole, setCurrentRole] = useState<
     "sender" | "receiver" | "none"
@@ -85,6 +87,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setCurrentRole("none");
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Refresh user - dengan tracking state
+  const refreshUser = async () => {
+    setIsRefreshing(true);
+    try {
+      const data: GetMeResponse = await getMe();
+
+      if (data && data.authenticated) {
+        setUser(data.user);
+        setCurrentWalletAddress(data.currentWalletAddress || "");
+        setCurrentRole(data.currentRole || "none");
+      } else {
+        setUser(null);
+        setCurrentWalletAddress("");
+        setCurrentRole("none");
+      }
+    } catch (error) {
+      console.error("Error refreshing user:", error);
+      setUser(null);
+      setCurrentWalletAddress("");
+      setCurrentRole("none");
+    } finally {
+      setIsRefreshing(false);
     }
   };
 
@@ -125,11 +152,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // Refresh user - alias untuk checkAuth
-  const refreshUser = async () => {
-    await checkAuth();
-  };
-
   useEffect(() => {
     checkAuth();
   }, []);
@@ -137,6 +159,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const value: AuthContextType = {
     user,
     loading,
+    isRefreshing, // NEW: Add refreshing state
     currentWalletAddress,
     currentRole,
     authenticated: !!user,

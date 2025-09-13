@@ -43,12 +43,18 @@ export default function GroupDashboard() {
       }
     };
     fetchGroups();
-  }, [loading, user, hasFetched]);
+  }, [loading, user, currentWalletAddress, hasFetched]);
 
   // --- LOGIKA FILTER & KALKULASI ---
   const filteredGroups = groups.filter((group) =>
     (group.nameOfGroup ?? "").toLowerCase().includes(searchTerm.toLowerCase()),
   );
+
+  // Reset hasFetched ketika currentWalletAddress berubah
+  useEffect(() => {
+    setHasFetched(false);
+    setGroups([]); // Clear existing groups when wallet changes
+  }, [currentWalletAddress]);
 
   const handleGroupDeleted = () => {
     // Reset fetch flag supaya useEffect dijalankan lagi

@@ -17,11 +17,13 @@ interface WalletContextType {
   address: string | undefined;
   isConnecting: boolean;
   isLoading: boolean;
+  isWalletSyncing: boolean; // NEW: Track ketika wallet sedang sync dengan backend
   disconnect: () => void;
   connectWallet: () => Promise<void>;
   getCurrentWalletAddress: () => Promise<string | null>;
   walletAddress: string;
   isWalletConnected: boolean;
+  setRefreshUserCallback: (callback: () => Promise<void>) => void; // NEW: Callback untuk refresh user
 }
 
 const WalletContext = createContext<WalletContextType | undefined>(undefined);
@@ -31,7 +33,11 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const { disconnect } = useDisconnect();
   const { connect } = useConnect();
   const [isLoading, setIsLoading] = useState(true);
+  const [isWalletSyncing, setIsWalletSyncing] = useState(false); // NEW: Track sync status
   const [prevAddress, setPrevAddress] = useState<string | undefined>(undefined);
+  const [refreshUserCallback, setRefreshUserCallback] = useState<
+    (() => Promise<void>) | null
+  >(null); // NEW: Callback reference
   const router = useRouter();
   useEffect(() => {
     // Check for existing connection on mount
@@ -58,12 +64,12 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // Auto-login ketika wallet terconnect dan address berubah
-  // Auto-login ketika wallet terconnect dan address berubah
   useEffect(() => {
     const handleWalletConnection = async () => {
       // Cek jika wallet baru saja terconnect (address berubah dari undefined ke ada value)
       if (isConnected && address && address !== prevAddress) {
         console.log("🔗 New wallet connected:", address);
+        setIsWalletSyncing(true); // NEW: Set syncing state
 
         try {
           console.log("🚀 Attempting auto-login with wallet...");
@@ -71,6 +77,12 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           console.log(response);
           if (response && response.statusCode === 200) {
             console.log("✅ Auto-login successful");
+            // Refresh user data jika callback tersedia
+            if (refreshUserCallback) {
+              await refreshUserCallback();
+            }
+            // Tunggu sebentar untuk memastikan backend sudah update
+            await new Promise((resolve) => setTimeout(resolve, 500));
           } else if (response.statusCode === 404 && response.redirect) {
             console.log("⚠️ Auto-login failed:", response);
             router.push(response.redirect);
@@ -82,14 +94,16 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
         // Update previous address
         setPrevAddress(address);
+        setIsWalletSyncing(false); // NEW: Clear syncing state
       } else if (!isConnected && prevAddress) {
         // Wallet disconnected
         setPrevAddress(undefined);
+        setIsWalletSyncing(false); // NEW: Clear syncing state
       }
     };
 
     handleWalletConnection();
-  }, [isConnected, address, prevAddress]);
+  }, [isConnected, address, prevAddress, router]);
 
   // Function to connect wallet
   const connectWallet = async (): Promise<void> => {
@@ -175,9 +189,12 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     address,
     isConnecting,
     isLoading,
+    isWalletSyncing, // NEW: Add syncing state
     disconnect,
     connectWallet,
     getCurrentWalletAddress,
+    setRefreshUserCallback: (callback: () => Promise<void>) =>
+      setRefreshUserCallback(() => callback), // NEW: Set callback
     // Aliases for backward compatibility
     walletAddress: address || "",
     isWalletConnected: isConnected,

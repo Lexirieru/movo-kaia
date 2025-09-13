@@ -2,11 +2,9 @@
 
 import { useEffect, useState } from "react";
 import Image from "next/image";
-import SenderDashboard from "../components/dashboard/SenderDashboard";
 import ReceiverDashboard from "../components/dashboard/ReceiverDashboard";
 import DashboardWrapper from "../components/dashboard/DashboardWrapper";
 import WalletWarning from "../components/dashboard/WalletWarning";
-import { addWalletAddress } from "../api/api";
 import WalletAddressmanager from "../components/dashboard/WalletAddressManager";
 // OnchainKit Wallet Components
 import {
