@@ -6,6 +6,7 @@ import ReceiverDashboard from "../components/dashboard/ReceiverDashboard";
 import DashboardWrapper from "../components/dashboard/DashboardWrapper";
 import WalletWarning from "../components/dashboard/WalletWarning";
 import { getUserRole } from "../api/api";
+import SideBar from "../components/dashboard/SideBar";
 // OnchainKit Wallet Components
 import {
   ConnectWallet,
@@ -36,6 +37,7 @@ export default function DashboardPage() {
     "none",
   );
   const [roleLoading, setRoleLoading] = useState(false);
+  const [SideBarOpen, setSideBarOpen] = useState(false);
   const effectiveWalletAddress = currentWalletAddress || address || "";
   // Sync userRole dengan currentRole dari context
   useEffect(() => {
@@ -116,12 +118,30 @@ export default function DashboardPage() {
   }
 
   return (
-    <section className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-black">
+    <div className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-black">
       {/* Header - Selalu tampil */}
-      <div className="bg-black/20 backdrop-blur-sm border-b border-white/10 relative z-10">
-        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
+      <header className="fixed top-0 left-0 right-0 bg-black/20 backdrop-blur-sm border-b border-white/10 z-50">
+        <div className="container mx-auto px-4 py-3 flex items-center justify-between">
           {/* Logo */}
           <div className="flex items-center space-x-3">
+            <button
+              onClick={() => setSideBarOpen(!SideBarOpen)}
+              className="p-2 hover:bg-gray-800/50 transition-colors rounded-lg lg:hidden"
+            >
+              <svg
+                className="w-6 h-6 text-white"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M4 6h16M4 12h16M4 18h16"
+                />
+              </svg>
+            </button>
             <Image
               src="/movo non-text.png"
               alt="Movo Logo"
@@ -132,6 +152,7 @@ export default function DashboardPage() {
             <h1 className="text-xl font-bold text-cyan-400">Movo</h1>
           </div>
 
+          {/* Role n wallet */}
           <div className="flex items-center space-x-4">
             {effectiveWalletAddress && (
               <div className="flex items-center space-x-2">
@@ -174,45 +195,57 @@ export default function DashboardPage() {
             </Wallet>
           </div>
         </div>
+      </header>
+
+      {/* Layout */}
+      <div className="flex pt-16">
+        <SideBar
+          isOpen
+          onClose={() => setSideBarOpen(false)}
+          userRole={userRole}
+        />
+
+        <main className={`flex-1 transition-all duration-300 ${
+          SideBarOpen ? 'lg:ml-64' : ''
+        }`}>
+          <div className="px-4 py-6 min-h-[calc(100vh-4rem)]">
+            <div className="container mx-auto">
+              {!isConnected || !address ? (
+                <WalletWarning />
+              ) : !effectiveWalletAddress ? (
+                <div className="text-center py-12">
+                  <p className="text-gray-400">Connecting wallet...</p>
+                </div>
+              ) : roleLoading ? (
+                <div className="text-center mt-20">
+                  <div className="inline-flex items-center space-x-2 text-gray-400">
+                    <div className="w-6 h-6 border-2 border-gray-600 border-t-gray-400 rounded-full animate-spin"></div>
+                    <span>Determining role...</span>
+                  </div>
+                </div>
+              ) : userRole === "receiver" ? (
+                <ReceiverDashboard />
+              ) : (
+                <>
+                  {userRole === "none" && (
+                    <div className="text-center mt-12 mb-8">
+                      <h2 className="text-2xl font-bold text-white mb-2">
+                        Welcome to Movo
+                      </h2>
+                      <p className="text-gray-400 mb-8">
+                        Get started by creating a payment group or wait to receive
+                        payments from others
+                      </p>
+                    </div>
+                  )}
+                  <GroupDashboard onRoleChange={refreshUserRole} />
+                </>
+              )}
+            </div>
+          </div>
+        </main>
       </div>
 
-      {/* Main Content - */}
-      <div className="container mx-auto px-4 py-6 relative z-0">
-        <DashboardWrapper>
-          {/* Cek wallet connection dulu */}
-          {!isConnected || !address ? (
-            <WalletWarning />
-          ) : !effectiveWalletAddress ?(
-            <div className="text-center py-12">
-              <p className="text-gray-400">Connecting wallet...</p>
-            </div>
-          ): roleLoading? (
-            <div className="text-center mt-20">
-              <div className="inline-flex items-center space-x-2 text-gray-400">
-                <div className="w-6 h-6 border-2 border-gray-600 border-t-gray-400 rounded-full animate-spin"></div>
-                <span>Determining role...</span>
-              </div>
-            </div>
-          ) : userRole === "receiver" ? (
-            <ReceiverDashboard />
-          ) : (
-            <>
-              {userRole === "none" && (
-                <div className="text-center mt-12 mb-8">
-                  <h2 className="text-2xl font-bold text-white mb-2">Welcome to Movo</h2>
-                  <p className="text-gray-400 mb-8">
-                    Get started by creating a payment group or wait to receive
-                    payments from others
-                  </p>
-                </div>
-              )}
-              <GroupDashboard onRoleChange={refreshUserRole} />
-            </>
-          
-            
-          )}
-        </DashboardWrapper>
-      </div>
-    </section>
+    </div>
   );
 }
