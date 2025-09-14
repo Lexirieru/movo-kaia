@@ -521,6 +521,82 @@ export async function updateWalletAddressRole(req: Request, res: Response) {
   }
 }
 
+export async function getUserRole(req: Request, res: Response) {
+  const { userId, walletAddress } = req.body;
+
+  if (!userId || !walletAddress) {
+    res.status(400).json({
+      message: "User ID and wallet address are required",
+      statusCode: 400,
+    });
+    return;
+  }
+
+  try {
+    // Check if user exists
+    const user = await UserModel.findById(userId);
+    if (!user) {
+      res.status(404).json({
+        message: "User not found",
+        statusCode: 404,
+      });
+      return;
+    }
+
+    // Check if wallet belongs to this user
+    const walletExists = user.WalletAddresses?.find(
+      (wallet) => wallet.walletAddress === walletAddress
+    );
+
+    if (!walletExists) {
+      res.status(404).json({
+        message: "Wallet address not found in user's wallet list",
+        statusCode: 404,
+      });
+      return;
+    }
+
+    // Check current role in wallet
+    const currentRole = walletExists.role || "none";
+
+    // TODO: Replace with your actual model imports
+    // Check if user has created groups (sender activity)
+    // const hasGroups = await GroupModel.findOne({ senderId: userId, senderWalletAddress: walletAddress });
+
+    // Check if user has received payments (receiver activity)  
+    // const hasReceivedPayments = await TransactionHistoryModel.findOne({
+    //   "receivers.walletAddress": walletAddress
+    // });
+
+    // For now, just return the current role
+    let role: "sender" | "receiver" | "none" = "none";
+    
+    if (currentRole === "sender") {
+      role = "sender";
+    } else if (currentRole === "receiver") {
+      role = "receiver";
+    } else {
+      role = "none";
+    }
+
+    res.status(200).json({
+      success: true,
+      role,
+      currentRole,
+      hasGroups: role === "sender", // placeholder
+      hasReceivedPayments: role === "receiver", // placeholder
+      statusCode: 200,
+    });
+
+  } catch (err: any) {
+    console.error("Error getting user role:", err);
+    res.status(500).json({
+      message: "Internal server error",
+      statusCode: 500,
+      error: err.message,
+    });
+  }
+}
 // ...existing code...
 
 export async function getBankAccount(req: Request, res: Response) {
