@@ -100,6 +100,24 @@ export const updateWalletAddressRole = async (
   }
 };
 
+export const getUserRole = async (userId: string, walletAddress: string) => {
+  try {
+    const response = await api.post("/getUserRole", {
+      userId,
+      walletAddress,
+    });
+    return response.data;
+  } catch (err) {
+    console.error("Error getting user role:", err);
+    return {
+      success: false,
+      role: "none",
+      hasGroups: false,
+      hasReceivedPayments: false,
+    };
+  }
+};
+
 export const getBankAccount = async (_id: string) => {
   try {
     const response = await api.post("/getBankAccount", { _id });

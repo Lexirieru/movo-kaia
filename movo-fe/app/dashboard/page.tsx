@@ -5,7 +5,7 @@ import Image from "next/image";
 import ReceiverDashboard from "../components/dashboard/ReceiverDashboard";
 import DashboardWrapper from "../components/dashboard/DashboardWrapper";
 import WalletWarning from "../components/dashboard/WalletWarning";
-import WalletAddressmanager from "../components/dashboard/WalletAddressManager";
+import { getUserRole } from "../api/api";
 // OnchainKit Wallet Components
 import {
   ConnectWallet,
@@ -36,7 +36,7 @@ export default function DashboardPage() {
     "none",
   );
   const [roleLoading, setRoleLoading] = useState(false);
-
+  const effectiveWalletAddress = currentWalletAddress || address || "";
   // Sync userRole dengan currentRole dari context
   useEffect(() => {
     const determineRole = async () => {
@@ -51,6 +51,19 @@ export default function DashboardPage() {
         } else {
           setUserRole("none");
         }
+
+        const roleResult = await getUserRole(user._id, effectiveWalletAddress);
+        if (roleResult.success) {
+          let determinedRole: "sender" | "receiver" | "none" = "none";
+          if (roleResult.hasGroups) {
+            determinedRole = "sender";
+          } else if (roleResult.hasReceivedPayments) {
+            determinedRole = "receiver";
+          } else {
+            determinedRole = "none";
+          }
+          setUserRole(determinedRole);
+        }
       } catch (error) {
         console.error("Error determining user role:", error);
         setUserRole("none");
@@ -64,6 +77,30 @@ export default function DashboardPage() {
 
   const handleRoleChange = (newRole: "sender" | "receiver" | "none") => {
     setUserRole(newRole);
+  };
+
+  const refreshUserRole = async () => {
+    if (!user?._id || !effectiveWalletAddress) return;
+
+    setRoleLoading(true);
+    try {
+      const roleResult = await getUserRole(user._id, effectiveWalletAddress);
+      if (roleResult.success) {
+        let newRole: "sender" | "receiver" | "none" = "none";
+
+        if (roleResult.hasGroups) {
+          newRole = "sender";
+        } else if (roleResult.hasReceivedPayments) {
+          newRole = "receiver";
+        }
+
+        setUserRole(newRole);
+      }
+    } catch (error) {
+      console.error("Error refreshing user role:", error);
+    } finally {
+      setRoleLoading(false);
+    }
   };
 
   // Show loading state
@@ -96,7 +133,7 @@ export default function DashboardPage() {
           </div>
 
           <div className="flex items-center space-x-4">
-            {currentWalletAddress && (
+            {effectiveWalletAddress && (
               <div className="flex items-center space-x-2">
                 <div
                   className={`px-3 py-1 rounded-full text-xs font-medium ${
@@ -145,36 +182,34 @@ export default function DashboardPage() {
           {/* Cek wallet connection dulu */}
           {!isConnected || !address ? (
             <WalletWarning />
+          ) : !effectiveWalletAddress ?(
+            <div className="text-center py-12">
+              <p className="text-gray-400">Connecting wallet...</p>
+            </div>
+          ): roleLoading? (
+            <div className="text-center mt-20">
+              <div className="inline-flex items-center space-x-2 text-gray-400">
+                <div className="w-6 h-6 border-2 border-gray-600 border-t-gray-400 rounded-full animate-spin"></div>
+                <span>Determining role...</span>
+              </div>
+            </div>
+          ) : userRole === "receiver" ? (
+            <ReceiverDashboard />
           ) : (
             <>
-              <WalletAddressmanager onRoleChange={handleRoleChange} />
-
-              {roleLoading ? (
-                <div className="text-center mt-20">
-                  <div className="inline-flex items-center space-x-2 text-gray-400">
-                    <div className="w-6 h-6 border-2 border-gray-600 border-t-gray-400 rounded-full animate-spin"></div>
-                    <span>Determining role...</span>
-                  </div>
+              {userRole === "none" && (
+                <div className="text-center mt-12 mb-8">
+                  <h2 className="text-2xl font-bold text-white mb-2">Welcome to Movo</h2>
+                  <p className="text-gray-400 mb-8">
+                    Get started by creating a payment group or wait to receive
+                    payments from others
+                  </p>
                 </div>
-              ) : userRole === "sender" ? (
-                <GroupDashboard />
-              ) : userRole === "receiver" ? (
-                <ReceiverDashboard />
-              ) : (
-                <>
-                  <div className="text-center mt-12 mb-8">
-                    <h2 className="text-2xl font-bold text-white mb-2">
-                      Welcome to Movo
-                    </h2>
-                    <p className="text-gray-400 mb-8">
-                      Get started by creating a payment group or wait to receive
-                      payments from others
-                    </p>
-                  </div>
-                  <GroupDashboard />
-                </>
               )}
+              <GroupDashboard onRoleChange={refreshUserRole} />
             </>
+          
+            
           )}
         </DashboardWrapper>
       </div>

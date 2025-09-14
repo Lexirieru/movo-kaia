@@ -12,7 +12,11 @@ import CreateGroupModal from "./groups/CreateGroupModal";
 import TopupFundModal from "./groups/TopupFundModal";
 import { loadAllGroup, addGroup } from "@/app/api/api";
 
-export default function GroupDashboard() {
+interface GroupDashboardProps {
+  onRoleChange?: () => void
+}
+
+export default function GroupDashboard({onRoleChange}: GroupDashboardProps) {
   const { user, loading, currentWalletAddress } = useAuth();
   const [groups, setGroups] = useState<GroupOfUser[]>([]);
   const [hasFetched, setHasFetched] = useState(false);
@@ -109,6 +113,9 @@ export default function GroupDashboard() {
       );
       if (response && response.data) {
         setIsCreateModalOpen(false);
+        if(onRoleChange){
+          onRoleChange()
+        }
         router.push(`/dashboard/sender/${groupId}`);
       }
     } catch (err) {
