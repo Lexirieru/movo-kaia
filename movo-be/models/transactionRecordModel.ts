@@ -44,7 +44,7 @@ const TransactionHistorySchema = new Schema({
   },
   Receivers: [
     {
-      email: {
+      walletAddress: {
         type: String,
         required: true,
       },
