@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   Search,
   DollarSign,
@@ -10,75 +10,25 @@ import {
   Filter,
 } from "lucide-react";
 import ClaimModal from "./receiver/ClaimModal";
-import { useAuth } from "@/lib/userContext";
-import { loadAllWithdrawHistory } from "@/app/api/api";
 import { WithdrawHistory } from "@/types/historyTemplate";
 
 interface ReceiverDashboardProps {
   onDropdownOpen?: () => void;
+  withdrawHistory: WithdrawHistory[];
+  isLoading?: boolean;
 }
 
 export default function ReceiverDashboard({
   onDropdownOpen,
+  withdrawHistory,
+  isLoading = false,
 }: ReceiverDashboardProps) {
-  const { user, loading, currentWalletAddress } = useAuth();
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedWithdraws, setSelectedWithdraws] = useState<string[]>([]);
   const [showClaimModal, setShowClaimModal] = useState(false);
-  const [hasFetched, setHasFetched] = useState(false);
-  const [withdrawHistory, setWithdrawHistory] = useState<WithdrawHistory[]>([]);
   const [filterType, setFilterType] = useState<"all" | "pending" | "completed">(
     "all",
   );
-
-  useEffect(() => {
-    if (loading || !user?._id || !currentWalletAddress || hasFetched) return;
-
-    const fetchWithdrawHistory = async () => {
-      try {
-        const historyTemplate = await loadAllWithdrawHistory(
-          user._id,
-          currentWalletAddress,
-        );
-        if (!historyTemplate || !Array.isArray(historyTemplate)) {
-          console.warn("Withdraw history not found or not an array.");
-          setWithdrawHistory([]); // fallback empty array
-          setHasFetched(true);
-          return;
-        }
-
-        const templatesWithdrawHistory: WithdrawHistory[] = historyTemplate.map(
-          (w: any) => ({
-            withdrawId: w.withdrawId,
-            receiverId: w.receiverId,
-            amount: w.amount,
-            choice: w.choice,
-            originCurrency: w.originCurrency,
-            targetCurrency: w.targetCurrency ?? "",
-            networkChainId: w.networkChainId ?? "",
-            walletAddress: w.walletAddress ?? "",
-            depositWalletAddress: w.depositWalletAddress ?? "",
-            bankId: w.bankId ?? "",
-            bankName: w.bankName ?? "",
-            bankAccountName: w.bankAccountName ?? "",
-            bankAccountNumber: w.bankAccountNumber ?? "",
-          }),
-        );
-        setWithdrawHistory(templatesWithdrawHistory);
-        setHasFetched(true);
-      } catch (err) {
-        console.error("Failed to fetch withdraw history", err);
-      }
-    };
-
-    fetchWithdrawHistory();
-  }, [loading, user, currentWalletAddress, hasFetched]);
-
-  // Reset hasFetched ketika currentWalletAddress berubah
-  useEffect(() => {
-    setHasFetched(false);
-    setWithdrawHistory([]); // Clear existing history when wallet changes
-  }, [currentWalletAddress]);
 
   // Filter by search and type
   const filteredWithdraws = withdrawHistory.filter((w) => {
@@ -158,6 +108,22 @@ export default function ReceiverDashboard({
       ? totalSelectedAmount.toFixed(4)
       : "0.0000";
 
+  // Show loading state
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-black">
+        <div className="container mx-auto p-6 space-y-6">
+          <div className="flex items-center justify-center min-h-[400px]">
+            <div className="text-center">
+              <div className="w-16 h-16 border-4 border-cyan-400/30 border-t-cyan-400 rounded-full animate-spin mx-auto mb-4"></div>
+              <p className="text-gray-400">Loading withdraw history...</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-black">
       <div className="container mx-auto p-6 space-y-6">
@@ -165,7 +131,7 @@ export default function ReceiverDashboard({
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
           <div>
             <h2 className="text-3xl font-bold text-white mb-2">
-              Available Withdraws
+              Available Withdrawal
             </h2>
             <p className="text-white/60">
               Manage your withdraw requests and claim your tokens.

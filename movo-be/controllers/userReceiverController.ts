@@ -1,6 +1,9 @@
 import { Request, Response } from "express";
 import { GroupOfUserModel, UserModel } from "../models/userModel"; // Pastikan path-nya benar
-import { WithdrawHistoryModel } from "../models/transactionRecordModel";
+import {
+  TransactionHistoryModel,
+  WithdrawHistoryModel,
+} from "../models/transactionRecordModel";
 import { generateSignatureForRedeem } from "../utils/generate_signature";
 import axios from "axios";
 import { burnIdrx } from "../utils/burnIdrx";
@@ -252,6 +255,35 @@ export async function withdrawFromIDRXtoIDR(req: Request, res: Response) {
 }
 
 // untuk nampilin all withdraw history
+export async function loadAllTransactionHistory(req: Request, res: Response) {
+  const { _id, walletAddress } = req.body;
+
+  if (!_id || !walletAddress) {
+    res.status(404).json({ message: "id and walletAddress are required" });
+    return;
+  }
+
+  try {
+    const histories = await TransactionHistoryModel.find({
+      receiverId: _id,
+      receiverWalletAddress: walletAddress,
+    })
+      .sort({ timestamp: -1 })
+      .lean();
+
+    res.status(200).json({
+      message: "Withdraw history successfully loaded",
+      data: histories,
+    });
+  } catch (err: any) {
+    res.status(500).json({
+      message: "Error loading withdraw history",
+      error: err.message,
+    });
+  }
+}
+
+// untuk nampilin all withdraw history
 export async function loadAllWithdrawHistory(req: Request, res: Response) {
   const { _id, walletAddress } = req.body;
 
@@ -279,6 +311,7 @@ export async function loadAllWithdrawHistory(req: Request, res: Response) {
     });
   }
 }
+
 // untuk nampilin spesifik withdraw history
 export async function loadSpecificWithdrawHistory(req: Request, res: Response) {
   const { _id, withdrawId, walletAddress } = req.body;

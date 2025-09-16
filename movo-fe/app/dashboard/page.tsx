@@ -5,7 +5,8 @@ import Image from "next/image";
 import ReceiverDashboard from "../components/dashboard/ReceiverDashboard";
 import DashboardWrapper from "../components/dashboard/DashboardWrapper";
 import WalletWarning from "../components/dashboard/WalletWarning";
-import { getUserRole } from "../api/api";
+import { loadAllWithdrawHistory } from "../api/api";
+import { WithdrawHistory } from "@/types/historyTemplate";
 import SideBar from "../components/dashboard/SideBar";
 // OnchainKit Wallet Components
 import {
@@ -38,6 +39,9 @@ export default function DashboardPage() {
   );
   const [roleLoading, setRoleLoading] = useState(false);
   const [SideBarOpen, setSideBarOpen] = useState(false);
+  const [withdrawHistory, setWithdrawHistory] = useState<WithdrawHistory[]>([]);
+  const [hasFetched, setHasFetched] = useState(false);
+  const [withdrawLoading, setWithdrawLoading] = useState(false);
   const effectiveWalletAddress = currentWalletAddress || address || "";
   // Sync userRole dengan currentRole dari context
   useEffect(() => {
@@ -54,17 +58,11 @@ export default function DashboardPage() {
           setUserRole("none");
         }
 
-        const roleResult = await getUserRole(user._id, effectiveWalletAddress);
-        if (roleResult.success) {
-          let determinedRole: "sender" | "receiver" | "none" = "none";
-          if (roleResult.hasGroups) {
-            determinedRole = "sender";
-          } else if (roleResult.hasReceivedPayments) {
-            determinedRole = "receiver";
-          } else {
-            determinedRole = "none";
-          }
-          setUserRole(determinedRole);
+        const roleResult = await currentRole;
+        if (roleResult) {
+          setUserRole(roleResult);
+        } else {
+          setUserRole("none");
         }
       } catch (error) {
         console.error("Error determining user role:", error);
@@ -77,6 +75,66 @@ export default function DashboardPage() {
     determineRole();
   }, [user?._id, currentWalletAddress, currentRole]);
 
+  // Fetch withdraw history untuk receiver
+  useEffect(() => {
+    if (
+      loading ||
+      !user?._id ||
+      !currentWalletAddress ||
+      hasFetched ||
+      userRole !== "receiver"
+    )
+      return;
+
+    const fetchWithdrawHistory = async () => {
+      setWithdrawLoading(true);
+      try {
+        const historyTemplate = await loadAllWithdrawHistory(
+          user._id,
+          currentWalletAddress,
+        );
+        if (!historyTemplate || !Array.isArray(historyTemplate)) {
+          console.warn("Withdraw history not found or not an array.");
+          setWithdrawHistory([]);
+          setHasFetched(true);
+          return;
+        }
+
+        const templatesWithdrawHistory: WithdrawHistory[] = historyTemplate.map(
+          (w: any) => ({
+            withdrawId: w.withdrawId,
+            receiverId: w.receiverId,
+            amount: w.amount,
+            choice: w.choice,
+            originCurrency: w.originCurrency,
+            targetCurrency: w.targetCurrency ?? "",
+            networkChainId: w.networkChainId ?? "",
+            walletAddress: w.walletAddress ?? "",
+            depositWalletAddress: w.depositWalletAddress ?? "",
+            bankId: w.bankId ?? "",
+            bankName: w.bankName ?? "",
+            bankAccountName: w.bankAccountName ?? "",
+            bankAccountNumber: w.bankAccountNumber ?? "",
+          }),
+        );
+        setWithdrawHistory(templatesWithdrawHistory);
+        setHasFetched(true);
+      } catch (err) {
+        console.error("Failed to fetch withdraw history", err);
+      } finally {
+        setWithdrawLoading(false);
+      }
+    };
+
+    fetchWithdrawHistory();
+  }, [loading, user, currentWalletAddress, hasFetched, userRole]);
+
+  // Reset hasFetched ketika currentWalletAddress berubah
+  useEffect(() => {
+    setHasFetched(false);
+    setWithdrawHistory([]);
+  }, [currentWalletAddress]);
+
   const handleRoleChange = (newRole: "sender" | "receiver" | "none") => {
     setUserRole(newRole);
   };
@@ -86,17 +144,11 @@ export default function DashboardPage() {
 
     setRoleLoading(true);
     try {
-      const roleResult = await getUserRole(user._id, effectiveWalletAddress);
-      if (roleResult.success) {
-        let newRole: "sender" | "receiver" | "none" = "none";
-
-        if (roleResult.hasGroups) {
-          newRole = "sender";
-        } else if (roleResult.hasReceivedPayments) {
-          newRole = "receiver";
-        }
-
-        setUserRole(newRole);
+      const roleResult = await currentRole;
+      if (roleResult) {
+        setUserRole(roleResult);
+      } else {
+        setUserRole("none");
       }
     } catch (error) {
       console.error("Error refreshing user role:", error);
@@ -205,9 +257,11 @@ export default function DashboardPage() {
           userRole={userRole}
         />
 
-        <main className={`flex-1 transition-all duration-300 ${
-          SideBarOpen ? 'lg:ml-64' : ''
-        }`}>
+        <main
+          className={`flex-1 transition-all duration-300 ${
+            SideBarOpen ? "lg:ml-64" : ""
+          }`}
+        >
           <div className="px-4 py-6 min-h-[calc(100vh-4rem)]">
             <div className="container mx-auto">
               {!isConnected || !address ? (
@@ -224,7 +278,10 @@ export default function DashboardPage() {
                   </div>
                 </div>
               ) : userRole === "receiver" ? (
-                <ReceiverDashboard />
+                <ReceiverDashboard
+                  withdrawHistory={withdrawHistory}
+                  isLoading={withdrawLoading}
+                />
               ) : (
                 <>
                   {userRole === "none" && (
@@ -233,8 +290,8 @@ export default function DashboardPage() {
                         Welcome to Movo
                       </h2>
                       <p className="text-gray-400 mb-8">
-                        Get started by creating a payment group or wait to receive
-                        payments from others
+                        Get started by creating a payment group or wait to
+                        receive payments from others
                       </p>
                     </div>
                   )}
@@ -245,7 +302,6 @@ export default function DashboardPage() {
           </div>
         </main>
       </div>
-
     </div>
   );
 }

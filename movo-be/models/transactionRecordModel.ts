@@ -107,6 +107,52 @@ export const TransactionHistoryModel = mongoose.model(
   TransactionHistorySchema
 );
 
+const IncomingTransactionSchema = new Schema(
+  {
+    receiverWalletAddress: {
+      type: String,
+      required: true,
+    },
+    receiverId: {
+      type: String,
+      required: true,
+    },
+    totalAmount: {
+      type: String,
+      required: true,
+    },
+    availableAmount: {
+      type: String,
+      required: true,
+    },
+    originCurrency: {
+      type: String,
+      required: true,
+    },
+    senderWalletAddress: {
+      type: String,
+      required: true,
+    },
+    senderName: {
+      type: String,
+      required: true,
+    },
+    createdAt: {
+      type: String,
+      required: true,
+      default: Date.now,
+    },
+  },
+  {
+    timestamps: true,
+  }
+);
+
+export const IncomingTransactionModel = mongoose.model(
+  "IncomingTransaction",
+  IncomingTransactionSchema
+);
+
 const WithdrawHistorySchema = new Schema(
   {
     withdrawId: {
