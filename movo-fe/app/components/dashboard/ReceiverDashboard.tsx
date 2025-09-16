@@ -165,7 +165,7 @@ export default function ReceiverDashboard({
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
           <div>
             <h2 className="text-3xl font-bold text-white mb-2">
-              Withdraw History
+              Available Withdraws
             </h2>
             <p className="text-white/60">
               Manage your withdraw requests and claim your tokens.

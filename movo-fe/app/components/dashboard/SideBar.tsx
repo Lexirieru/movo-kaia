@@ -31,12 +31,14 @@ export default function SideBar({ isOpen, onClose, userRole }: SideBarProps) {
       )}
 
       {/* Sidebar */}
-      <aside className={`
+      <aside
+        className={`
         fixed top-16 left-0 h-[calc(100vh-4rem)] w-64 bg-gray-900/95 backdrop-blur-xl border-r border-gray-700/50 z-50
         transform transition-transform duration-300 ease-in-out
-        ${isOpen ? 'translate-x-0' : '-translate-x-full'}
+        ${isOpen ? "translate-x-0" : "-translate-x-full"}
         lg:translate-x-0 lg:static lg:z-10
-      `}>
+      `}
+      >
         {/* Sidebar Header */}
         <div className="flex items-center justify-between p-4 border-b border-gray-700/50">
           <h2 className="text-lg font-semibold text-white">Navigation</h2>
@@ -67,16 +69,18 @@ export default function SideBar({ isOpen, onClose, userRole }: SideBarProps) {
             onClick={handleHistoryClick}
             disabled={userRole === "none"}
             className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition-colors text-left ${
-              userRole === "none" 
-                ? "opacity-50 cursor-not-allowed" 
+              userRole === "none"
+                ? "opacity-50 cursor-not-allowed"
                 : "hover:bg-gray-800/50"
             }`}
           >
             <History className="w-5 h-5 text-gray-400" />
             <span className="text-gray-300">
-              {userRole === "sender" ? "Group History" : 
-               userRole === "receiver" ? "Transaction History" : 
-               "History"}
+              {userRole === "sender"
+                ? "Group History"
+                : userRole === "receiver"
+                  ? "Withdraw History"
+                  : "History"}
             </span>
           </button>
         </nav>
