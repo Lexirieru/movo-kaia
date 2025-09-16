@@ -89,7 +89,7 @@ export const updateWalletAddressRole = async (
   role: string,
 ) => {
   try {
-    const response = await api.put("/updateWalletAddressRole", {
+    const response = await api.post("/updateWalletAddressRole", {
       _id,
       walletAddress,
       role,
@@ -227,6 +227,7 @@ export const loadAllIncomingTransaction = async (
     console.log(err);
   }
 };
+
 export const loadAllWithdrawHistory = async (
   _id: string,
   walletAddress: string,

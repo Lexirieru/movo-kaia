@@ -10,13 +10,13 @@ import GroupList from "./groups/GroupList";
 import { Plus } from "lucide-react";
 import CreateGroupModal from "./groups/CreateGroupModal";
 import TopupFundModal from "./groups/TopupFundModal";
-import { loadAllGroup, addGroup } from "@/app/api/api";
+import { loadAllGroup, addGroup, updateWalletAddressRole } from "@/app/api/api";
 
 interface GroupDashboardProps {
-  onRoleChange?: () => void
+  onRoleChange?: () => void;
 }
 
-export default function GroupDashboard({onRoleChange}: GroupDashboardProps) {
+export default function GroupDashboard({ onRoleChange }: GroupDashboardProps) {
   const { user, loading, currentWalletAddress } = useAuth();
   const [groups, setGroups] = useState<GroupOfUser[]>([]);
   const [hasFetched, setHasFetched] = useState(false);
@@ -111,10 +111,19 @@ export default function GroupDashboard({onRoleChange}: GroupDashboardProps) {
         groupData.groupName,
         currentWalletAddress,
       );
+
+      const giveRoleSender = await updateWalletAddressRole(
+        user._id,
+        currentWalletAddress,
+        "sender",
+      );
+
+      console.log("Role update response:", giveRoleSender);
+
       if (response && response.data) {
         setIsCreateModalOpen(false);
-        if(onRoleChange){
-          onRoleChange()
+        if (onRoleChange) {
+          onRoleChange();
         }
         router.push(`/dashboard/sender/${groupId}`);
       }
