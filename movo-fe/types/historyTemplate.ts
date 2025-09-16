@@ -6,14 +6,14 @@ export interface WithdrawHistory {
   amount: string;
   choice?: string;
   originCurrency: string;
-  targetCurrency?: string; 
-  networkChainId?: string; 
+  targetCurrency?: string;
+  networkChainId?: string;
   walletAddress?: string;
   depositWalletAddress?: string;
-  bankId?: string; 
-  bankName?: string; 
-  bankAccountName?: string; 
-  bankAccountNumber?: string; 
+  bankId?: string;
+  bankName?: string;
+  bankAccountName?: string;
+  bankAccountNumber?: string;
 }
 
 export interface TransactionHistory {
@@ -21,21 +21,31 @@ export interface TransactionHistory {
   txHash?: string;
   senderId: string;
   senderName: string;
-  receiverName : string;
+  receiverName: string;
   groupId: string;
-  groupName: string; 
+  groupName: string;
   totalAmount: string;
-  Receiver : ReceiverInGroup[];
-  totalReceiver : string;
-  blockNumber : string;
-  blockHash : string;
-  from : string;
-  to : string;
-  status : string;
-  gasUsed : string;
-  gasPrice : string;
-  timeStmap : string;
-  originCurrency : string;
+  Receiver: ReceiverInGroup[];
+  totalReceiver: string;
+  blockNumber: string;
+  blockHash: string;
+  from: string;
+  to: string;
+  status: string;
+  gasUsed: string;
+  gasPrice: string;
+  timeStmap: string;
+  originCurrency: string;
   depositWalletAddress?: string;
-  tokenIcon? : string;
+  tokenIcon?: string;
+}
+
+export interface IncomingTransaction {
+  receiverWalletAddress: string;
+  receiverId: string;
+  availableAmount: string;
+  originCurrency: string;
+  senderWalletAddress: string;
+  senderName: string;
+  createdAt: Date;
 }

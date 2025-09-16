@@ -278,10 +278,7 @@ export default function DashboardPage() {
                   </div>
                 </div>
               ) : userRole === "receiver" ? (
-                <ReceiverDashboard
-                  withdrawHistory={withdrawHistory}
-                  isLoading={withdrawLoading}
-                />
+                <ReceiverDashboard />
               ) : (
                 <>
                   {userRole === "none" && (

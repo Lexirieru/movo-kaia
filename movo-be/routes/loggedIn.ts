@@ -26,6 +26,7 @@ import {
   addReceiverToGroup,
 } from "../controllers/userSenderController";
 import {
+  loadAllIncomingTransaction,
   loadAllJoinedGroupInformation,
   loadAllWithdrawHistory,
   loadSpecificGroupInformation,
@@ -143,6 +144,11 @@ const routes: RouteDefinition[] = [
     method: "post",
     path: "/deleteGroup",
     action: deleteGroup,
+  },
+  {
+    method: "post",
+    path: "/loadAllIncomingTransaction",
+    action: loadAllIncomingTransaction,
   },
   {
     method: "post",

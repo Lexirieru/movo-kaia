@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { GroupOfUserModel, UserModel } from "../models/userModel"; // Pastikan path-nya benar
 import {
+  IncomingTransactionModel,
   TransactionHistoryModel,
   WithdrawHistoryModel,
 } from "../models/transactionRecordModel";
@@ -307,6 +308,33 @@ export async function loadAllWithdrawHistory(req: Request, res: Response) {
   } catch (err: any) {
     res.status(500).json({
       message: "Error loading withdraw history",
+      error: err.message,
+    });
+  }
+}
+export async function loadAllIncomingTransaction(req: Request, res: Response) {
+  const { _id, walletAddress } = req.body;
+
+  if (!_id || !walletAddress) {
+    res.status(404).json({ message: "id and walletAddress are required" });
+    return;
+  }
+
+  try {
+    const histories = await IncomingTransactionModel.find({
+      receiverWalletAddress: walletAddress,
+      receiverId: _id,
+    })
+      .sort({ timestamp: -1 })
+      .lean();
+
+    res.status(200).json({
+      message: "Incoming transaction successfully loaded",
+      data: histories,
+    });
+  } catch (err: any) {
+    res.status(500).json({
+      message: "Error loading Incoming transaction",
       error: err.message,
     });
   }

@@ -213,6 +213,20 @@ export const saveEscrowToDatabase = async (escrowData: {
   }
 };
 
+export const loadAllIncomingTransaction = async (
+  _id: string,
+  walletAddress: string,
+) => {
+  try {
+    const response = await api.post("/loadAllIncomingTransaction", {
+      _id,
+      walletAddress,
+    });
+    return response.data.data;
+  } catch (err) {
+    console.log(err);
+  }
+};
 export const loadAllWithdrawHistory = async (
   _id: string,
   walletAddress: string,

@@ -27,155 +27,155 @@ export const senderListener = async () => {
     escrowABI,
     provider
   );
-  contract.on(
-    "PayrollApproved",
-    async (
-      escrowId,
-      sender,
-      totalAmount,
-      createdAt,
-      receivers,
-      amounts,
-      event
-    ) => {
-      console.log("📢 New Escrow Created!");
-      console.log("Escrow ID:", escrowId);
-      console.log("Sender:", sender);
-      console.log("Total Amount:", totalAmount.toString());
-      console.log("Created At (timestamp):", createdAt.toString());
-      console.log("Receivers:", receivers);
-      console.log(
-        "Amounts:",
-        amounts.map((a: any) => a.toString())
-      );
-      console.log("Block:", event.blockNumber);
+  // contract.on(
+  //   "PayrollApproved",
+  //   async (
+  //     escrowId,
+  //     sender,
+  //     totalAmount,
+  //     createdAt,
+  //     receivers,
+  //     amounts,
+  //     event
+  //   ) => {
+  //     console.log("📢 New Escrow Created!");
+  //     console.log("Escrow ID:", escrowId);
+  //     console.log("Sender:", sender);
+  //     console.log("Total Amount:", totalAmount.toString());
+  //     console.log("Created At (timestamp):", createdAt.toString());
+  //     console.log("Receivers:", receivers);
+  //     console.log(
+  //       "Amounts:",
+  //       amounts.map((a: any) => a.toString())
+  //     );
+  //     console.log("Block:", event.blockNumber);
 
-      // cari user sender
-      const userData = await UserModel.findOne({ walletAddress: sender });
-      if (!userData) {
-        console.log("User data not found!");
-        return;
-      }
+  //     // cari user sender
+  //     const userData = await UserModel.findOne({ walletAddress: sender });
+  //     if (!userData) {
+  //       console.log("User data not found!");
+  //       return;
+  //     }
 
-      // update group dengan escrowId terbaru
-      const addEscrowId = await GroupOfUserModel.findOneAndUpdate(
-        { senderId: userData._id },
-        { $set: { escrowId } },
-        { new: true, sort: { createdAt: -1 } }
-      );
+  //     // update group dengan escrowId terbaru
+  //     const addEscrowId = await GroupOfUserModel.findOneAndUpdate(
+  //       { senderId: userData._id },
+  //       { $set: { escrowId } },
+  //       { new: true, sort: { createdAt: -1 } }
+  //     );
 
-      if (addEscrowId) {
-        console.log("EscrowId berhasil ditambahkan ke group:", addEscrowId._id);
-      } else {
-        console.log("Failed to fetch escrow ID");
-      }
+  //     if (addEscrowId) {
+  //       console.log("EscrowId berhasil ditambahkan ke group:", addEscrowId._id);
+  //     } else {
+  //       console.log("Failed to fetch escrow ID");
+  //     }
 
-      // loop setiap receiver dan amount pasangannya
-      for (let i = 0; i < receivers.length; i++) {
-        const receiverAddress = receivers[i];
-        const amount = amounts[i];
+  //     // loop setiap receiver dan amount pasangannya
+  //     for (let i = 0; i < receivers.length; i++) {
+  //       const receiverAddress = receivers[i];
+  //       const amount = amounts[i];
 
-        const receiverData = await UserModel.findOne({
-          walletAddress: receiverAddress,
-        });
+  //       const receiverData = await UserModel.findOne({
+  //         walletAddress: receiverAddress,
+  //       });
 
-        if (!receiverData) {
-          console.log(`Receiver ${receiverAddress} not found in DB`);
-          continue;
-        }
+  //       if (!receiverData) {
+  //         console.log(`Receiver ${receiverAddress} not found in DB`);
+  //         continue;
+  //       }
 
-        const addIncomingTransactionToReceiver = new IncomingTransactionModel({
-          receiverWalletAddress: walletAddress,
-          receiverId,
-          totalAmount: amount,
-          availableAmount: amount,
-          originCurrency,
-          senderWalletAddress: userData?.WalletAddresses.,
-          senderName : ,
-        });
+  //       // const addIncomingTransactionToReceiver = new IncomingTransactionModel({
+  //       //   receiverWalletAddress: walletAddress,
+  //       //   receiverId,
+  //       //   totalAmount: amount,
+  //       //   availableAmount: amount,
+  //       //   originCurrency,
+  //       //   senderWalletAddress: userData?.WalletAddresses.,
+  //       //   senderName : ,
+  //       // });
 
-        await addIncomingTransactionToReceiver.save();
-        console.log(
-          `Incoming transaction ditambahkan utk receiver ${receiverAddress}, amount: ${amount.toString()}`
-        );
-      }
-    }
-  );
+  //       // await addIncomingTransactionToReceiver.save();
+  //       // console.log(
+  //       //   `Incoming transaction ditambahkan utk receiver ${receiverAddress}, amount: ${amount.toString()}`
+  //       // );
+  //     }
+  //   }
+  // );
 
-  contract.on(
-    "EscrowCreated",
-    async (
-      escrowId,
-      sender,
-      totalAmount,
-      createdAt,
-      receivers,
-      amounts,
-      event
-    ) => {
-      console.log("📢 New Escrow Created!");
-      console.log("Escrow ID:", escrowId);
-      console.log("Sender:", sender);
-      console.log("Total Amount:", totalAmount.toString());
-      console.log("Created At (timestamp):", createdAt.toString());
-      console.log("Receivers:", receivers);
-      console.log(
-        "Amounts:",
-        amounts.map((a: any) => a.toString())
-      );
-      console.log("Block:", event.blockNumber);
+  // contract.on(
+  //   "EscrowCreated",
+  //   async (
+  //     escrowId,
+  //     sender,
+  //     totalAmount,
+  //     createdAt,
+  //     receivers,
+  //     amounts,
+  //     event
+  //   ) => {
+  //     console.log("📢 New Escrow Created!");
+  //     console.log("Escrow ID:", escrowId);
+  //     console.log("Sender:", sender);
+  //     console.log("Total Amount:", totalAmount.toString());
+  //     console.log("Created At (timestamp):", createdAt.toString());
+  //     console.log("Receivers:", receivers);
+  //     console.log(
+  //       "Amounts:",
+  //       amounts.map((a: any) => a.toString())
+  //     );
+  //     console.log("Block:", event.blockNumber);
 
-      // cari user sender
-      const userData = await UserModel.findOne({ walletAddress: sender });
-      if (!userData) {
-        console.log("User data not found!");
-        return;
-      }
+  //     // cari user sender
+  //     const userData = await UserModel.findOne({ walletAddress: sender });
+  //     if (!userData) {
+  //       console.log("User data not found!");
+  //       return;
+  //     }
 
-      // update group dengan escrowId terbaru
-      const addEscrowId = await GroupOfUserModel.findOneAndUpdate(
-        { senderId: userData._id },
-        { $set: { escrowId } },
-        { new: true, sort: { createdAt: -1 } }
-      );
+  //     // update group dengan escrowId terbaru
+  //     const addEscrowId = await GroupOfUserModel.findOneAndUpdate(
+  //       { senderId: userData._id },
+  //       { $set: { escrowId } },
+  //       { new: true, sort: { createdAt: -1 } }
+  //     );
 
-      if (addEscrowId) {
-        console.log("EscrowId berhasil ditambahkan ke group:", addEscrowId._id);
-      } else {
-        console.log("Failed to fetch escrow ID");
-      }
+  //     if (addEscrowId) {
+  //       console.log("EscrowId berhasil ditambahkan ke group:", addEscrowId._id);
+  //     } else {
+  //       console.log("Failed to fetch escrow ID");
+  //     }
 
-      // loop setiap receiver dan amount pasangannya
-      for (let i = 0; i < receivers.length; i++) {
-        const receiverAddress = receivers[i];
-        const amount = amounts[i];
+  //     // loop setiap receiver dan amount pasangannya
+  //     for (let i = 0; i < receivers.length; i++) {
+  //       const receiverAddress = receivers[i];
+  //       const amount = amounts[i];
 
-        const receiverData = await UserModel.findOne({
-          walletAddress: receiverAddress,
-        });
+  //       const receiverData = await UserModel.findOne({
+  //         walletAddress: receiverAddress,
+  //       });
 
-        if (!receiverData) {
-          console.log(`Receiver ${receiverAddress} not found in DB`);
-          continue;
-        }
+  //       if (!receiverData) {
+  //         console.log(`Receiver ${receiverAddress} not found in DB`);
+  //         continue;
+  //       }
 
-        const addIncomingTransactionToReceiver = new IncomingTransactionModel({
-          receiverWalletAddress: walletAddress,
-          receiverId,
-          totalAmount: amount,
-          availableAmount: amount,
-          originCurrency,
-          senderWalletAddress: userData?.WalletAddresses.,
-          senderName : ,
-        });
+  //       // const addIncomingTransactionToReceiver = new IncomingTransactionModel({
+  //       //   receiverWalletAddress: walletAddress,
+  //       //   receiverId,
+  //       //   totalAmount: amount,
+  //       //   availableAmount: amount,
+  //       //   originCurrency,
+  //       //   senderWalletAddress: userData?.WalletAddresses.,
+  //       //   senderName : ,
+  //       // });
 
-        await addIncomingTransactionToReceiver.save();
-        console.log(
-          `Incoming transaction ditambahkan utk receiver ${receiverAddress}, amount: ${amount.toString()}`
-        );
-      }
-    }
-  );
+  //       // await addIncomingTransactionToReceiver.save();
+  //       // console.log(
+  //       //   `Incoming transaction ditambahkan utk receiver ${receiverAddress}, amount: ${amount.toString()}`
+  //       // );
+  //     }
+  //   }
+  // );
 
   // 👂 Listener event sc waktu sender top up fund ke escrow
   // contract.on(

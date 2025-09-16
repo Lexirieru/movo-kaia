@@ -10,7 +10,10 @@ import {
   Filter,
 } from "lucide-react";
 import { useAuth } from "@/lib/userContext";
-import { loadSpecifiedGroup, loadSpecifiedGroupTransactionHistory } from "@/app/api/api";
+import {
+  loadSpecifiedGroup,
+  loadSpecifiedGroupTransactionHistory,
+} from "@/app/api/api";
 import { GroupOfUser, ReceiverInGroup } from "@/types/receiverInGroupTemplate";
 
 interface Stream {
@@ -37,40 +40,42 @@ export default function SenderDashboard({
   const [streams, setStreams] = useState<Stream[]>([]);
   const [hasFetched, setHasFetched] = useState(false);
   const [filterType, setFilterType] = useState<"all" | "pending" | "completed">(
-    "all"
+    "all",
   );
 
   useEffect(() => {
-  if (loading || !user?._id || hasFetched) return;
+    if (loading || !user?._id || hasFetched) return;
 
-  const fetchGroupStreams = async () => {
-    try {
-      const response = await loadSpecifiedGroupTransactionHistory(
-        user._id,
-        groupId
-      );
-      console.log(response)
-      if (!response || !response.data) return;
-      console.log(response)
-      // mapping data backend ke bentuk Stream[]
-      const mappedStreams: Stream[] = response.data.map((r: any, idx: number) => ({
-        id: r._id || `stream-${idx}`,
-        token: r.tokenSymbol || "Unknown",
-        tokenIcon: r.tokenIcon || "",
-        recipient: r.name || r.walletAddress || "Unknown",
-        totalAmount: r.totalAmount || 0,
-        totalSent: r.totalSent || 0,
-      }));
+    const fetchGroupStreams = async () => {
+      try {
+        const response = await loadSpecifiedGroupTransactionHistory(
+          user._id,
+          groupId,
+        );
+        console.log(response);
+        if (!response || !response.data) return;
+        console.log(response);
+        // mapping data backend ke bentuk Stream[]
+        const mappedStreams: Stream[] = response.data.map(
+          (r: any, idx: number) => ({
+            id: r._id || `stream-${idx}`,
+            token: r.tokenSymbol || "Unknown",
+            tokenIcon: r.tokenIcon || "",
+            recipient: r.name || r.walletAddress || "Unknown",
+            totalAmount: r.totalAmount || 0,
+            totalSent: r.totalSent || 0,
+          }),
+        );
 
-      setStreams(mappedStreams);
-      setHasFetched(true);
-    } catch (err) {
-      console.error("Failed to fetch specified group streams", err);
-    }
-  };
+        setStreams(mappedStreams);
+        setHasFetched(true);
+      } catch (err) {
+        console.error("Failed to fetch specified group streams", err);
+      }
+    };
 
-  fetchGroupStreams();
-}, [loading, user, hasFetched, groupId]);
+    fetchGroupStreams();
+  }, [loading, user, hasFetched, groupId]);
 
   // Filter streams
   const filteredStreams = streams.filter((s) => {
@@ -82,21 +87,21 @@ export default function SenderDashboard({
       filterType === "all"
         ? true
         : filterType === "pending"
-        ? s.totalSent < s.totalAmount
-        : filterType === "completed"
-        ? s.totalSent >= s.totalAmount
-        : true;
+          ? s.totalSent < s.totalAmount
+          : filterType === "completed"
+            ? s.totalSent >= s.totalAmount
+            : true;
 
     return matchesSearch && matchesFilter;
   });
 
-  const totalCommitted = streams.reduce(
-    (acc, s) => acc + s.totalAmount,
-    0
-  );
-  const completedCount = streams.filter((s) => s.totalSent >= s.totalAmount)
-    .length;
-  const pendingCount = streams.filter((s) => s.totalSent < s.totalAmount).length;
+  const totalCommitted = streams.reduce((acc, s) => acc + s.totalAmount, 0);
+  const completedCount = streams.filter(
+    (s) => s.totalSent >= s.totalAmount,
+  ).length;
+  const pendingCount = streams.filter(
+    (s) => s.totalSent < s.totalAmount,
+  ).length;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-black">
@@ -128,7 +133,9 @@ export default function SenderDashboard({
             <div className="flex items-center space-x-3">
               <Clock className="w-8 h-8 text-yellow-400" />
               <div>
-                <div className="text-2xl font-bold text-white">{pendingCount}</div>
+                <div className="text-2xl font-bold text-white">
+                  {pendingCount}
+                </div>
                 <div className="text-white/60 text-sm">Pending Streams</div>
               </div>
             </div>
@@ -138,7 +145,9 @@ export default function SenderDashboard({
             <div className="flex items-center space-x-3">
               <CheckCircle2 className="w-8 h-8 text-green-400" />
               <div>
-                <div className="text-2xl font-bold text-white">{completedCount}</div>
+                <div className="text-2xl font-bold text-white">
+                  {completedCount}
+                </div>
                 <div className="text-white/60 text-sm">Completed</div>
               </div>
             </div>
@@ -176,9 +185,7 @@ export default function SenderDashboard({
             <select
               value={filterType}
               onChange={(e) =>
-                setFilterType(
-                  e.target.value as "all" | "pending" | "completed"
-                )
+                setFilterType(e.target.value as "all" | "pending" | "completed")
               }
               className="bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
             >
