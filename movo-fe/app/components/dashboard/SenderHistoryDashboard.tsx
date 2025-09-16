@@ -14,7 +14,7 @@ import {
   loadSpecifiedGroup,
   loadSpecifiedGroupTransactionHistory,
 } from "@/app/api/api";
-import { GroupOfUser, ReceiverInGroup } from "@/types/receiverInGroupTemplate";
+import { randomBytes } from "crypto";
 
 interface Stream {
   id: string;
@@ -36,7 +36,7 @@ export default function SenderDashboard({
 }: SenderDashboardProps) {
   const { user, loading } = useAuth();
   const [searchTerm, setSearchTerm] = useState("");
-  // const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [streams, setStreams] = useState<Stream[]>([]);
   const [hasFetched, setHasFetched] = useState(false);
   const [filterType, setFilterType] = useState<"all" | "pending" | "completed">(
@@ -51,6 +51,7 @@ export default function SenderDashboard({
         const response = await loadSpecifiedGroupTransactionHistory(
           user._id,
           groupId,
+          randomBytes(20).toString("hex"),
         );
         console.log(response);
         if (!response || !response.data) return;
