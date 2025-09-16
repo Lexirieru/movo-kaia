@@ -3,12 +3,12 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/lib/userContext";
 import { useRouter } from "next/navigation";
-import { loadAllGroup } from "@/app/api/api";
+import { loadAllGroup, loadAllGroupTransactionHistory } from "@/app/api/api";
 import { GroupOfUser } from "@/types/receiverInGroupTemplate";
 import { ArrowLeft, Users, DollarSign, Calendar } from "lucide-react";
 import Image from "next/image";
 import PageHeader from "@/app/components/layout/PageHeader";
-import LoadingState from "@/app/components/shared/LoadingState"
+import LoadingState from "@/app/components/shared/LoadingState";
 import EmptyState from "@/app/components/shared/EmptyState";
 import GroupCard from "@/app/components/history/GroupCard";
 
@@ -23,7 +23,10 @@ export default function SenderHistoryPage() {
       if (!user?._id || !currentWalletAddress) return;
 
       try {
-        const groupData = await loadAllGroup(user._id, currentWalletAddress);
+        const groupData = await loadAllGroupTransactionHistory(
+          user._id,
+          currentWalletAddress,
+        );
         if (Array.isArray(groupData)) {
           setGroups(groupData);
         }
@@ -40,8 +43,8 @@ export default function SenderHistoryPage() {
     router.push(`/history/sender/${groupId}`);
   };
 
-  if(loading){
-    return <LoadingState message="Loading groups..." fullScreen/>
+  if (loading) {
+    return <LoadingState message="Loading groups..." fullScreen />;
   }
 
   return (
@@ -63,7 +66,7 @@ export default function SenderHistoryPage() {
             description="You haven't created any payment groups yet."
             action={{
               label: "Back to Dashboard",
-              onClick: () => router.push("/dashboard")
+              onClick: () => router.push("/dashboard"),
             }}
           />
         ) : (

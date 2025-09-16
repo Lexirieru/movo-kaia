@@ -20,14 +20,14 @@ export interface Token {
 
 export interface GroupOfUser {
   groupId: string;
-  nameOfGroup: string;
+  groupName: string;
   senderId: string;
   senderName: string;
   Receivers: ReceiverInGroup[];
-  totalRecipients?: number; // optional
+  totalReceiver?: number; // optional
   createdAt?: string; // dari timestamps mongoose
   updatedAt?: string; // dari timestamps mongoose
-  escrowId?: string
+  escrowId?: string;
 }
 
 export interface BankAccountInformation {
