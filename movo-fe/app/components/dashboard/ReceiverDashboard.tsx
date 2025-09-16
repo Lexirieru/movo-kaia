@@ -201,7 +201,7 @@ export default function ReceiverDashboard({
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
           <div>
             <h2 className="text-3xl font-bold text-white mb-2">
-              Incoming Payments
+              Available Withdrawals
             </h2>
             <p className="text-white/60">
               Manage your incoming transactions and claim available amounts.
