@@ -245,6 +245,8 @@ export default function CreateStreamModal({
           },
         );
 
+        // ini escrowIdnya harusnya ngambil dari BE
+
         if (!escrowResult.success) {
           throw new Error(
             escrowResult.error || "Failed to create escrow onchain",

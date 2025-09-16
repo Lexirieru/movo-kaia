@@ -53,6 +53,7 @@ export default function GroupList({
         if (!escrowData[group.groupId] && !escrowLoading[group.groupId]) {
           setEscrowLoading((prev) => ({ ...prev, [group.groupId]: true }));
           try {
+            if (!user) throw new Error("User not found");
             const data = await loadSpecifiedGroup(user._id, group.groupId);
             setEscrowData((prev) => ({ ...prev, [group.groupId]: data }));
           } catch (error) {
@@ -143,6 +144,7 @@ export default function GroupList({
     if (!confirmDelete) return; // user batal, langsung keluar
 
     try {
+      if (!user) throw new Error("User not found");
       const groupDeleted = await deleteGroup(user._id, groupId);
       console.log(groupDeleted);
       // Panggil callback setelah sukses delete
@@ -175,7 +177,7 @@ export default function GroupList({
                   </div>
                   <div>
                     <div className="text-white font-medium">
-                      {group.nameOfGroup}
+                      {group.groupName}
                     </div>
                     <div className="text-white/60 text-sm">
                       by {group.senderName}
@@ -276,7 +278,7 @@ export default function GroupList({
                         </div>
                         <div>
                           <div className="text-white font-medium">
-                            {group.nameOfGroup}
+                            {group.groupName}
                           </div>
                           <div className="text-white/60 text-sm">
                             by {group.senderName}

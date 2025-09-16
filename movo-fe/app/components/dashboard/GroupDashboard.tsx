@@ -51,7 +51,7 @@ export default function GroupDashboard({ onRoleChange }: GroupDashboardProps) {
 
   // --- LOGIKA FILTER & KALKULASI ---
   const filteredGroups = groups.filter((group) =>
-    (group.nameOfGroup ?? "").toLowerCase().includes(searchTerm.toLowerCase()),
+    (group.groupName ?? "").toLowerCase().includes(searchTerm.toLowerCase()),
   );
 
   // Reset hasFetched ketika currentWalletAddress berubah
@@ -94,11 +94,11 @@ export default function GroupDashboard({ onRoleChange }: GroupDashboardProps) {
       // Create new group object
       const newGroup: GroupOfUser = {
         groupId,
-        nameOfGroup: groupData.groupName,
+        groupName: groupData.groupName,
         senderId: user?._id || "",
         senderName: user?.fullname || "",
         Receivers: [],
-        totalRecipients: 0,
+        totalReceiver: 0,
         createdAt: new Date().toString(),
       };
       // Add to local state immediately for better UX

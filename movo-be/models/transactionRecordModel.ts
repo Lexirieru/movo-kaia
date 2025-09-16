@@ -117,10 +117,6 @@ const IncomingTransactionSchema = new Schema(
       type: String,
       required: true,
     },
-    totalAmount: {
-      type: String,
-      required: true,
-    },
     availableAmount: {
       type: String,
       required: true,

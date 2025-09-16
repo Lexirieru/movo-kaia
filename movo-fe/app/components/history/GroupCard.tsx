@@ -17,7 +17,7 @@ export default function GroupCard({ group, onClick }: GroupCardProps) {
       <div className="flex items-start justify-between mb-4">
         <div>
           <h3 className="text-lg font-semibold text-white mb-1">
-            {group.nameOfGroup}
+            {group.groupName}
           </h3>
           <p className="text-xs text-gray-400">
             ID: {group.groupId.slice(0, 8)}...
@@ -26,7 +26,7 @@ export default function GroupCard({ group, onClick }: GroupCardProps) {
         <div className="text-right">
           <div className="flex items-center space-x-1 text-green-400">
             <Users className="w-4 h-4" />
-            <span className="text-sm">{group.totalRecipients || 0}</span>
+            <span className="text-sm">{group.totalReceiver || 0}</span>
           </div>
         </div>
       </div>
@@ -34,7 +34,9 @@ export default function GroupCard({ group, onClick }: GroupCardProps) {
       <div className="space-y-2">
         <div className="flex items-center justify-between">
           <span className="text-gray-400 text-sm">Recipients:</span>
-          <span className="text-white text-sm">{group.Receivers?.length || 0}</span>
+          <span className="text-white text-sm">
+            {group.Receivers?.length || 0}
+          </span>
         </div>
       </div>
 
