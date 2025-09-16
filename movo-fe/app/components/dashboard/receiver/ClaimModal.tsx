@@ -28,7 +28,7 @@ export default function ClaimModal({
   const [bankForm, setBankForm] = useState({
     bankName: "",
     bankAccountNumber: "",
-    accountHolderName: "",
+    bankAccountName: "",
   });
 
   const [rate, setRate] = useState<number | null>(null);
@@ -45,6 +45,20 @@ export default function ClaimModal({
 
     fetchRate();
   }, []);
+
+  useEffect(() =>{
+    if(isOpen){
+      setStep("claim");
+      setClaimType('crypto')
+      setIsProcessing(false);
+      setCustomAmount(totalAmount.toString());
+      setBankForm({
+        bankName: "",
+        bankAccountNumber: "",
+        bankAccountName: "",
+      });
+    }
+  }, [isOpen, totalAmount])
 
   // Protocol fee and limits calculation
   const PROTOCOL_FEE_PERCENTAGE = 0.25; // 0.25%
@@ -99,12 +113,34 @@ export default function ClaimModal({
       bankDictionary[bankForm.bankName],
     );
     console.log("Account Number:", bankForm.bankAccountNumber);
-    console.log("Account Holder:", bankForm.accountHolderName);
+    console.log("Account Holder:", bankForm.bankAccountName);
     console.log("Claim Amount:", claimAmount);
     console.log("Protocol Fee:", protocolFee);
     console.log("Net Amount:", netAmount);
     handleClaim();
   };
+
+  const handleBankFormCancel = () =>{
+    setBankForm({
+      bankName: "",
+      bankAccountNumber: "",
+      bankAccountName: "",
+    })
+    onClose()
+  }
+
+  const handleModalClose = () =>{
+    setStep("claim")
+    setClaimType("crypto")
+    setIsProcessing(false);
+    setBankForm({
+      bankName: "",
+      bankAccountNumber: "",
+      bankAccountName: "",
+    })
+    setCustomAmount(totalAmount.toString());
+    onClose();
+  }
 
   if (!isOpen) return null;
 
@@ -120,7 +156,7 @@ export default function ClaimModal({
               : "Claim Tokens"}
         </h2>
         <button
-          onClick={onClose}
+          onClick={handleModalClose}
           className="text-gray-400 hover:text-white transition-colors"
         >
           <X className="w-6 h-6" />
@@ -138,7 +174,7 @@ export default function ClaimModal({
           <ClaimSuccess
             amount={netAmount}
             claimType={claimType}
-            onClose={onClose}
+            onClose={handleModalClose}
           />
         ) : (
           <div className="p-6">
@@ -324,6 +360,7 @@ export default function ClaimModal({
                   onChange={handleInputChange}
                   onSelectBank={() => setStep("selectBank")}
                   onConfirm={handleConfirmBank}
+                  onCancel={handleBankFormCancel}
                   isProcessing={isProcessing}
                   claimAmount={claimAmount}
                   netAmount={netAmount}

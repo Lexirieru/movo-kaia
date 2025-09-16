@@ -62,7 +62,7 @@ export default function HeroSection() {
 
         <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
           <button
-            onClick={() => router.push("/register")}
+            onClick={() => router.push("/dashboard")}
             className="group relative px-8 py-4 bg-gradient-to-r from-cyan-600 to-blue-600 rounded-full font-bold text-white text-lg transition-all duration-300 hover:scale-105 hover:shadow-2xl hover:shadow-cyan-500/50"
           >
             <div className="absolute inset-0 bg-gradient-to-r from-cyan-400 to-blue-400 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-300 blur-sm"></div>

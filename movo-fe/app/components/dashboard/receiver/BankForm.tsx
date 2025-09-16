@@ -14,6 +14,7 @@ import { bankDictionary } from "@/lib/dictionary";
 import FormInput from "@/app/register/components/FormInput";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/userContext";
+import { useRouter } from "next/navigation";
 import {
   addBankAccountToDatabase,
   changeBankAccount,
@@ -35,10 +36,18 @@ interface BankFormProps {
   onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onSelectBank: () => void;
   onConfirm: () => void;
+  onCancel?: () => void;
   isProcessing?: boolean;
   claimAmount?: number;
   netAmount?: number;
   protocolFee?: number;
+}
+
+interface SyntheticChangeEvent {
+  target: {
+    name: string
+    value: string
+  }
 }
 
 interface SavedBankAccount {
@@ -52,6 +61,7 @@ interface SavedBankAccount {
 export default function BankForm({
   bankForm,
   onChange,
+  onCancel,
   // onSelectBank,
   // onConfirm,
   isProcessing,
@@ -59,6 +69,7 @@ export default function BankForm({
   netAmount = 0,
   protocolFee = 0,
 }: BankFormProps) {
+  const router = useRouter()
   const [bankAccountData, setBankAccountData] =
     useState<BankAccountInformation>();
   const [originalData, setOriginalData] = useState<BankAccountInformation>();
@@ -97,6 +108,13 @@ export default function BankForm({
     claimAmount >= MIN_PAYOUT_AMOUNT &&
     claimAmount <= MAX_PAYOUT_AMOUNT;
   const estimatedTime = "1-3 business days";
+
+  const triggerChange = (name: string, value:string): void=>{
+    const syntheticEvent: SyntheticChangeEvent = {
+      target: {name, value}
+    }
+    onChange(syntheticEvent as React.ChangeEvent<HTMLInputElement>)
+  }
 
   // cek apakah ada perubahan
   const isChanged =
@@ -183,11 +201,17 @@ export default function BankForm({
     );
   }
 
-  const handleConfirmChanges = async () => {
+  const handleConfirmChanges = async (): Promise<void> => {
+    if (!user?.id)return
     try {
       setIsConfirming(true);
       console.log(bankForm);
       const bankCode = bankDictionary[bankForm.bankName];
+
+      if(!bankCode){
+        throw new Error("Invalid bank name")
+
+      }
       await changeBankAccount(user._id, bankForm.bankAccountNumber, bankCode);
 
       // // setelah sukses, ambil lagi data terbaru dari backend
@@ -229,19 +253,22 @@ export default function BankForm({
   const handleSaveBankAccount = async (newBankData: {
     bankName: string;
     bankAccountNumber: string;
-  }) => {
+  }): Promise<void> => {
+    if(!user?._id) return
     try {
       setIsConfirming(true);
       const bankCode = bankDictionary[newBankData.bankName];
-
+      if (!bankCode){
+        throw new Error("Invalid bank name")
+      }
       // harus changeBankAccount karena
       const addBankAccount = await addBankAccountToDatabase(
-        user?._id,
+        user._id,
         newBankData.bankAccountNumber,
         bankCode,
       );
       // setelah sukses, ambil lagi data terbaru dari backend
-      const refreshed = await getBankAccount(user?._id);
+      const refreshed = await getBankAccount(user._id);
       if (refreshed?.data) {
         const updated: BankAccountInformation = {
           bankId: refreshed.data.bankId,
@@ -255,18 +282,9 @@ export default function BankForm({
         setBankAccountData(updated);
 
         // isi lagi ke form utama dengan data terbaru
-        onChange({
-          target: { name: "bankName", value: updated.bankName },
-        } as any);
-        onChange({
-          target: {
-            name: "bankAccountNumber",
-            value: updated.bankAccountNumber,
-          },
-        } as any);
-        onChange({
-          target: { name: "bankAccountName", value: updated.bankAccountName },
-        } as any);
+        triggerChange("bankName", updated.bankName)
+        triggerChange("bankAccountNumber", updated.bankAccountNumber)
+        triggerChange("bankAccountName", updated.bankAccountName)
       }
 
       // 🔥 JANGAN tutup popup! Biarkan user close manual setelah liat account holder name
@@ -280,19 +298,28 @@ export default function BankForm({
 
   const handleSelectSavedBank = (savedBank: SavedBankAccount) => {
     setSelectedSavedBank(savedBank);
-    onChange({
-      target: { name: "bankName", value: savedBank.bankName },
-    } as any);
-    onChange({
-      target: { name: "bankAccountNumber", value: savedBank.bankAccountNumber },
-    } as any);
-    onChange({
-      target: { name: "bankAccountName", value: savedBank.bankAccountName },
-    } as any);
+    triggerChange("bankName", savedBank.bankName)
+    triggerChange("bankAccountNumber", savedBank.bankAccountNumber)
+    triggerChange("bankAccountName", savedBank.bankAccountName)
     setShowSavedBankDropdown(false);
   };
 
-  const handleWithdraw = async () => {
+  const handleCancel = () =>{
+    if(onCancel){
+      onCancel()
+    } else if (originalData){
+      triggerChange("bankName", originalData.bankName)
+      triggerChange("bankAccountNumber", originalData.bankAccountNumber)
+      triggerChange("bankAccountName", originalData.bankAccountName)
+    }
+  }
+
+  const handleWithdraw = async (): Promise<void> => {
+    if (!user?.depositWalletAddress || !user?.escowId){
+      console.error("User deposit wallet address or escrow ID is missing");
+      return
+    }
+
     try {
       setIsConfirming(true);
       const amountParsed = parseTokenAmount(claimAmount.toString(), 6);
@@ -574,7 +601,7 @@ export default function BankForm({
       {/* Action Buttons */}
       <div className="flex gap-3">
         <button
-          onClick={() => window.history.back()}
+          onClick={handleCancel}
           className="flex-1 bg-white/10 text-white py-3 rounded-xl hover:bg-white/20 transition-colors font-medium"
           disabled={isProcessing}
         >

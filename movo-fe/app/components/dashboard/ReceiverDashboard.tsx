@@ -5,9 +5,9 @@ import {
   Search,
   DollarSign,
   Wallet,
-  CheckCircle2,
+  SortDesc,
   Clock,
-  Filter,
+  SortAsc,
   Users,
 } from "lucide-react";
 import ClaimModal from "./receiver/ClaimModal";
@@ -18,6 +18,8 @@ import { IncomingTransaction } from "@/types/historyTemplate";
 interface ReceiverDashboardProps {
   onDropdownOpen?: () => void;
 }
+
+type SortOption = "newest" | "oldest" | "highest" | "lowest";
 
 export default function ReceiverDashboard({
   onDropdownOpen,
@@ -32,9 +34,7 @@ export default function ReceiverDashboard({
   const [incomingTransactions, setIncomingTransactions] = useState<
     IncomingTransaction[]
   >([]);
-  const [filterType, setFilterType] = useState<"all" | "available" | "claimed">(
-    "all",
-  );
+  const [sortOption, setSortOption] = useState<SortOption>("newest");
 
   useEffect(() => {
     if (loading || !user?._id || !currentWalletAddress || hasFetched) return;
@@ -54,8 +54,8 @@ export default function ReceiverDashboard({
         }
 
         // Map response sesuai interface IncomingTransaction
-        const mappedTransactions: IncomingTransaction[] = response.map(
-          (transaction: any) => ({
+        const mappedTransactions: IncomingTransaction[] = response
+          .map((transaction: any) => ({
             receiverWalletAddress:
               transaction.receiverWalletAddress || currentWalletAddress,
             receiverId: transaction.receiverId || user._id,
@@ -67,8 +67,8 @@ export default function ReceiverDashboard({
             createdAt: transaction.createdAt
               ? new Date(transaction.createdAt)
               : new Date(),
-          }),
-        );
+          }))
+          .filter((transaction) => parseFloat(transaction.availableAmount) > 0);
 
         setIncomingTransactions(mappedTransactions);
         setHasFetched(true);
@@ -89,34 +89,53 @@ export default function ReceiverDashboard({
   }, [currentWalletAddress]);
 
   // Filter transactions berdasarkan search dan filter type
-  const filteredTransactions = incomingTransactions.filter((transaction) => {
-    const matchesSearch =
-      transaction.senderName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      transaction.senderWalletAddress
-        .toLowerCase()
-        .includes(searchTerm.toLowerCase()) ||
-      transaction.originCurrency
-        .toLowerCase()
-        .includes(searchTerm.toLowerCase());
+  const sortTransactions = (
+    transactions: IncomingTransaction[],
+  ): IncomingTransaction[] => {
+    const sorted = [...transactions];
 
-    let matchesFilter = true;
-    if (filterType === "available") {
-      matchesFilter = parseFloat(transaction.availableAmount) > 0;
-    } else if (filterType === "claimed") {
-      matchesFilter = parseFloat(transaction.availableAmount) === 0;
+    switch (sortOption) {
+      case "newest":
+        return sorted.sort(
+          (a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
+        );
+      case "oldest":
+        return sorted.sort(
+          (a, b) => a.createdAt.getTime() - b.createdAt.getTime(),
+        );
+      case "highest":
+        return sorted.sort(
+          (a, b) =>
+            parseFloat(b.availableAmount) - parseFloat(a.availableAmount),
+        );
+      case "lowest":
+        return sorted.sort(
+          (a, b) =>
+            parseFloat(a.availableAmount) - parseFloat(b.availableAmount),
+        );
+      default:
+        return sorted;
     }
+  };
 
-    return matchesSearch && matchesFilter;
-  });
+  const filteredTransactions = sortTransactions(
+    incomingTransactions.filter((transaction) => {
+      const matchesSearch =
+        transaction.senderName
+          .toLowerCase()
+          .includes(searchTerm.toLowerCase()) ||
+        transaction.senderWalletAddress
+          .toLowerCase()
+          .includes(searchTerm.toLowerCase()) ||
+        transaction.originCurrency
+          .toLowerCase()
+          .includes(searchTerm.toLowerCase());
 
-  // Calculate stats dari incoming transactions
-  const availableTransactions = incomingTransactions.filter(
-    (t) => parseFloat(t.availableAmount) > 0,
+      return matchesSearch;
+    }),
   );
-  const claimedTransactions = incomingTransactions.filter(
-    (t) => parseFloat(t.availableAmount) === 0,
-  );
-  const totalAvailableAmount = availableTransactions.reduce(
+
+  const totalAvailableAmount = incomingTransactions.reduce(
     (sum, t) => sum + parseFloat(t.availableAmount),
     0,
   );
@@ -139,12 +158,9 @@ export default function ReceiverDashboard({
   };
 
   const handleSelectAll = () => {
-    const selectableTransactions = filteredTransactions
-      .map((_, index) => index.toString())
-      .filter(
-        (_, index) =>
-          parseFloat(filteredTransactions[index].availableAmount) > 0,
-      );
+    const selectableTransactions = filteredTransactions.map((_, index) =>
+      index.toString(),
+    );
 
     if (
       selectedTransactions.length === selectableTransactions.length &&
@@ -181,6 +197,37 @@ export default function ReceiverDashboard({
     if (selectedTransactions.length > 0) {
       setShowClaimModal(true);
     }
+  };
+
+  const handleClaimSuccess = () => {
+    const remainingTransactions = incomingTransactions.filter((_, index) => {
+      return !selectedTransactions.includes(index.toString());
+    });
+    setIncomingTransactions(remainingTransactions);
+    setSelectedTransactions([]);
+    setShowClaimModal(false);
+  };
+
+  const getSortOptionDisplay = (option: SortOption): string => {
+    switch (option) {
+      case "newest":
+        return "Newest";
+      case "oldest":
+        return "Oldest";
+      case "highest":
+        return "Highest Amount";
+      case "lowest":
+        return "Lowest Amount";
+      default:
+        return "Newest";
+    }
+  };
+
+  const getSortIcon = () => {
+    if (sortOption === "highest" || sortOption === "newest") {
+      return <SortDesc className="w-4 h-4 text-white/60" />;
+    }
+    return <SortAsc className="w-4 h-4 text-white/60" />;
   };
 
   if (loading || !hasFetched) {
@@ -223,37 +270,29 @@ export default function ReceiverDashboard({
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="bg-white/5 rounded-xl p-4 border border-white/10">
             <div className="flex items-center space-x-3">
-              <Clock className="w-8 h-8 text-yellow-400" />
-              <div>
-                <div className="text-2xl font-bold text-white">
-                  {availableTransactions.length}
-                </div>
-                <div className="text-white/60 text-sm">Available Claims</div>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white/5 rounded-xl p-4 border border-white/10">
-            <div className="flex items-center space-x-3">
-              <CheckCircle2 className="w-8 h-8 text-green-400" />
-              <div>
-                <div className="text-2xl font-bold text-white">
-                  {claimedTransactions.length}
-                </div>
-                <div className="text-white/60 text-sm">Completed</div>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white/5 rounded-xl p-4 border border-white/10">
-            <div className="flex items-center space-x-3">
               <Wallet className="w-8 h-8 text-cyan-400" />
               <div>
                 <div className="text-2xl font-bold text-white">
                   ${formattedAvailableAmount}
                 </div>
-                <div className="text-white/60 text-sm">Available USDC</div>
+                <div className="text-white/60 text-sm">Available to Claim</div>
               </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white/5 rounded-xl p-4 border border-white/10">
+          <div className="flex items-center space-x-3">
+            <Users className="w-8 h-8 text-purple-400" />
+            <div>
+              <div className="text-2xl font-bold text-white">
+                {
+                  new Set(
+                    incomingTransactions.map((t) => t.senderWalletAddress),
+                  ).size
+                }
+              </div>
+              <div className="text-white/60 text-sm">Unique Senders</div>
             </div>
           </div>
         </div>
@@ -273,17 +312,16 @@ export default function ReceiverDashboard({
           </div>
 
           <div className="flex items-center space-x-2">
-            <Filter className="w-5 h-5 text-white/60" />
+            {getSortIcon()}
             <select
-              value={filterType}
-              onChange={(e) =>
-                setFilterType(e.target.value as "all" | "available" | "claimed")
-              }
-              className="bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+              value={sortOption}
+              onChange={(e) => setSortOption(e.target.value as SortOption)}
+              className="bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50 appearance-none cursor-pointer min-w-[160px]"
             >
-              <option value="all">All Transactions</option>
-              <option value="available">Available to Claim</option>
-              <option value="claimed">Already Claimed</option>
+              <option value="newest">Newest</option>
+              <option value="oldest">Oldest</option>
+              <option value="highest">Highest Amount</option>
+              <option value="lowest">Lowest Amount</option>
             </select>
           </div>
         </div>
@@ -291,8 +329,6 @@ export default function ReceiverDashboard({
         {/* Mobile Cards View */}
         <div className="lg:hidden space-y-4">
           {filteredTransactions.map((transaction, index) => {
-            const hasAvailableAmount =
-              parseFloat(transaction.availableAmount) > 0;
             return (
               <div
                 key={`${transaction.senderWalletAddress}-${index}`}
@@ -300,16 +336,12 @@ export default function ReceiverDashboard({
               >
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center space-x-3">
-                    {hasAvailableAmount && (
-                      <input
-                        type="checkbox"
-                        checked={selectedTransactions.includes(
-                          index.toString(),
-                        )}
-                        onChange={() => handleSelectTransaction(index)}
-                        className="w-4 h-4"
-                      />
-                    )}
+                    <input
+                      type="checkbox"
+                      checked={selectedTransactions.includes(index.toString())}
+                      onChange={() => handleSelectTransaction(index)}
+                      className="w-4 h-4 text-green-600 bg-white/10 border-white/20 rounded focus:ring-green-500 focus:ring-2"
+                    />
                     <div className="w-8 h-8 bg-gradient-to-r from-green-400 to-emerald-500 rounded-full flex items-center justify-center">
                       <span className="text-white text-sm font-bold">
                         {transaction.originCurrency.charAt(0)}
@@ -327,15 +359,9 @@ export default function ReceiverDashboard({
                   </div>
 
                   <div className="flex items-center space-x-2">
-                    {hasAvailableAmount ? (
-                      <span className="bg-yellow-500/20 text-yellow-400 px-2 py-1 rounded-lg text-xs">
-                        Available
-                      </span>
-                    ) : (
-                      <span className="bg-green-500/20 text-green-400 px-2 py-1 rounded-lg text-xs">
-                        Claimed
-                      </span>
-                    )}
+                    <span className="bg-yellow-500/20 text-yellow-400 px-2 py-1 rounded-lg text-xs">
+                      Available
+                    </span>
                   </div>
                 </div>
 
@@ -346,7 +372,12 @@ export default function ReceiverDashboard({
                       {transaction.originCurrency}
                     </div>
                   </div>
-
+                  <div className="col-span-2">
+                    <div className="text-white/60">Date</div>
+                    <div className="text-white text-sm">
+                      {transaction.createdAt.toLocaleDateString()}
+                    </div>
+                  </div>
                   <div className="col-span-2">
                     <div className="text-white/60">Sender Address</div>
                     <div className="text-white font-mono text-xs">
@@ -354,25 +385,17 @@ export default function ReceiverDashboard({
                       {transaction.senderWalletAddress.slice(-8)}
                     </div>
                   </div>
-                  <div className="col-span-2">
-                    <div className="text-white/60">Date</div>
-                    <div className="text-white text-sm">
-                      {transaction.createdAt.toLocaleDateString()}
-                    </div>
-                  </div>
                 </div>
 
-                {hasAvailableAmount && (
-                  <button
-                    onClick={() => {
-                      setSelectedTransactions([index.toString()]);
-                      setShowClaimModal(true);
-                    }}
-                    className="w-full mt-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white py-2 rounded-lg text-sm font-medium hover:shadow-lg transition-all"
-                  >
-                    Claim ${parseFloat(transaction.availableAmount).toFixed(2)}
-                  </button>
-                )}
+                <button
+                  onClick={() => {
+                    setSelectedTransactions([index.toString()]);
+                    setShowClaimModal(true);
+                  }}
+                  className="w-full mt-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white py-2 rounded-lg text-sm font-medium hover:shadow-lg transition-all"
+                >
+                  Claim ${parseFloat(transaction.availableAmount).toFixed(2)}
+                </button>
               </div>
             );
           })}
@@ -388,12 +411,12 @@ export default function ReceiverDashboard({
                     <input
                       type="checkbox"
                       checked={
-                        availableTransactions.length > 0 &&
+                        filteredTransactions.length > 0 &&
                         selectedTransactions.length ===
-                          availableTransactions.length
+                          filteredTransactions.length
                       }
                       onChange={handleSelectAll}
-                      className="w-4 h-4"
+                      className="w-4 h-4 text-green-600 bg-white/10 border-white/20 rounded focus:ring-green-500 focus:ring-2"
                     />
                   </th>
                   <th className="text-left p-4 text-white/80 font-medium">
@@ -418,26 +441,20 @@ export default function ReceiverDashboard({
               </thead>
               <tbody>
                 {filteredTransactions.map((transaction, index) => {
-                  const hasAvailableAmount =
-                    parseFloat(transaction.availableAmount) > 0;
                   return (
                     <tr
                       key={`${transaction.senderWalletAddress}-${index}`}
                       className="border-b border-white/5 hover:bg-white/5 transition-colors"
                     >
                       <td className="p-4">
-                        {hasAvailableAmount ? (
-                          <input
-                            type="checkbox"
-                            checked={selectedTransactions.includes(
-                              index.toString(),
-                            )}
-                            onChange={() => handleSelectTransaction(index)}
-                            className="w-4 h-4"
-                          />
-                        ) : (
-                          <span className="text-white/40 text-sm">-</span>
-                        )}
+                        <input
+                          type="checkbox"
+                          checked={selectedTransactions.includes(
+                            index.toString(),
+                          )}
+                          onChange={() => handleSelectTransaction(index)}
+                          className="w-4 h-4 text-green-600 bg-white/10 border-white/20 rounded focus:ring-green-500 focus:ring-2"
+                        />
                       </td>
                       <td className="p-4">
                         <div className="flex items-center space-x-3">
@@ -477,36 +494,23 @@ export default function ReceiverDashboard({
                         </div>
                       </td>
                       <td className="p-4">
-                        {hasAvailableAmount ? (
-                          <div className="flex items-center space-x-2">
-                            <Clock className="w-4 h-4 text-yellow-400" />
-                            <span className="text-yellow-400 text-sm">
-                              Available
-                            </span>
-                          </div>
-                        ) : (
-                          <div className="flex items-center space-x-2">
-                            <CheckCircle2 className="w-4 h-4 text-green-400" />
-                            <span className="text-green-400 text-sm">
-                              Claimed
-                            </span>
-                          </div>
-                        )}
+                        <div className="flex items-center space-x-2">
+                          <Clock className="w-4 h-4 text-yellow-400" />
+                          <span className="text-yellow-400 text-sm">
+                            Available
+                          </span>
+                        </div>
                       </td>
                       <td className="p-4">
-                        {hasAvailableAmount ? (
-                          <button
-                            onClick={() => {
-                              setSelectedTransactions([index.toString()]);
-                              setShowClaimModal(true);
-                            }}
-                            className="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:shadow-lg transition-all hover:scale-105"
-                          >
-                            Claim
-                          </button>
-                        ) : (
-                          <span className="text-white/40 text-sm">Claimed</span>
-                        )}
+                        <button
+                          onClick={() => {
+                            setSelectedTransactions([index.toString()]);
+                            setShowClaimModal(true);
+                          }}
+                          className="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:shadow-lg transition-all hover:scale-105"
+                        >
+                          Claim
+                        </button>
                       </td>
                     </tr>
                   );
@@ -522,11 +526,17 @@ export default function ReceiverDashboard({
             <div className="w-16 h-16 bg-white/10 rounded-full flex items-center justify-center mx-auto mb-4">
               <DollarSign className="w-8 h-8 text-white/40" />
             </div>
-            <div className="text-white/60 mb-2">No transactions found</div>
+            <div className="text-white/60 mb-2">
+              {incomingTransactions.length === 0
+                ? "No pending transactions"
+                : "No transactions found"}
+            </div>
             <div className="text-white/40 text-sm">
               {searchTerm
                 ? `No results for "${searchTerm}"`
-                : "No incoming transactions available"}
+                : incomingTransactions.length === 0
+                  ? "You don't have any pending transactions to claim"
+                  : "Try adjusting your search or sort criteria"}
             </div>
           </div>
         )}
