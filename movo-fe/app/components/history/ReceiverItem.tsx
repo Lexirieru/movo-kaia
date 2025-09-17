@@ -16,15 +16,15 @@ export default function ReceiverItem({ receiver, onViewDetails }: ReceiverItemPr
       <div className="flex items-center space-x-3">
         <div className="w-10 h-10 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-full flex items-center justify-center">
           <span className="text-white font-semibold text-sm">
-            {receiver.fullname?.charAt(0) || receiver.depositWalletAddress?.slice(2, 4)}
+            {receiver.depositWalletAddress?.slice(2, 4) || '??'}
           </span>
         </div>
         <div>
           <p className="text-white font-medium">
-            {receiver.fullname || 'Unknown'}
+            {receiver.depositWalletAddress?.slice(0, 6)}...{receiver.depositWalletAddress?.slice(-4)}
           </p>
           <p className="text-gray-400 text-sm">
-            {receiver.depositWalletAddress?.slice(0, 6)}...{receiver.depositWalletAddress?.slice(-4)}
+            Wallet Address
           </p>
         </div>
       </div>

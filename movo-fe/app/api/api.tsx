@@ -168,12 +168,11 @@ export const getEscrowId = async (_id: string, groupId: string) => {
 export const saveEscrowToDatabase = async (escrowData: {
   groupId: string;
   escrowId: string;
-  originCurrency: "USDC" | "IDRX";
+  originCurrency: "USDC" | "USDT" | "IDRX";
   walletAddress: string;
   totalAmount: string;
   receivers: Array<{
     address: string;
-    fullname: string;
     amount: string;
   }>;
   transactionHash: string;
@@ -356,4 +355,136 @@ export const getUsdcIdrxRate = async () => {
 export const logout = async () => {
   const response = await api.post("/logout"); // backend akan hapus cookie
   return response.data.message;
+};
+
+// Goldsky Indexer API Integration
+const GOLDSKY_API_URL = "https://api.goldsky.com/api/public/project_cmfnod75l9o1r01xy81lz52hq/subgraphs/test-escrow-movo/1.0.0/gn";
+
+
+export const fetchEscrowsFromIndexer = async (userAddress: string) => {
+  try {
+    console.log("🔍 Fetching escrows for address:", userAddress);
+    
+    const query = `
+      query GetUserEscrows($userAddress: String!) {
+        escrowCreateds(where: { sender: $userAddress }) {
+          escrowId
+          sender
+          receivers
+          totalAmount
+          amounts
+        }
+      }
+    `;
+
+    console.log("📤 Sending GraphQL query to Goldsky...");
+    const response = await axios.post(GOLDSKY_API_URL, {
+      query,
+      variables: { userAddress }
+    });
+
+    console.log("📥 Goldsky API response:", response.data);
+
+    // Transform the data to match our expected format
+    const escrows = response.data.data.escrowCreateds || [];
+    console.log("📊 Raw escrows from indexer:", escrows);
+    
+    if (escrows.length === 0) {
+      console.log("⚠️ No escrows found for address:", userAddress);
+      return [];
+    }
+    
+    const transformedEscrows = escrows.map((escrow: any, index: number) => ({
+      id: `escrow-${index}`, // Generate ID since not available in indexer
+      escrowId: escrow.escrowId,
+      sender: escrow.sender,
+      totalAmount: escrow.totalAmount || "0",
+      createdAt: Math.floor(Date.now() / 1000).toString(), // Current timestamp as fallback
+      receivers: escrow.receivers ? escrow.receivers.split(',').map((addr: string) => addr.trim()) : [],
+      amounts: escrow.amounts ? escrow.amounts.split(',').map((amount: string) => amount.trim()) : [],
+      tokenAddress: "0xf9D5a610fe990bfCdF7dd9FD64bdfe89D6D1eb4c" // Default to USDC for now
+    }));
+    
+    console.log("✅ Transformed escrows:", transformedEscrows);
+    return transformedEscrows;
+  } catch (error) {
+    console.error("❌ Error fetching escrows from indexer:", error);
+    return [];
+  }
+};
+
+export const fetchReceiverEscrowsFromIndexer = async (receiverAddress: string) => {
+  try {
+    const query = `
+      query GetReceiverEscrows($receiverAddress: String!) {
+        escrowCreateds(where: { receivers_contains: [$receiverAddress] }) {
+          escrowId
+          sender
+          receivers
+          totalAmount
+          amounts
+        }
+      }
+    `;
+
+    const response = await axios.post(GOLDSKY_API_URL, {
+      query,
+      variables: { receiverAddress }
+    });
+
+    // Transform the data to match our expected format
+    const escrows = response.data.data.escrowCreateds || [];
+    return escrows.map((escrow: any, index: number) => ({
+      id: `escrow-${index}`, // Generate ID since not available in indexer
+      escrowId: escrow.escrowId,
+      sender: escrow.sender,
+      totalAmount: escrow.totalAmount || "0",
+      createdAt: Math.floor(Date.now() / 1000).toString(), // Current timestamp as fallback
+      receivers: escrow.receivers ? escrow.receivers.split(',').map((addr: string) => addr.trim()) : [],
+      amounts: escrow.amounts ? escrow.amounts.split(',').map((amount: string) => amount.trim()) : [],
+      tokenAddress: "0xf9D5a610fe990bfCdF7dd9FD64bdfe89D6D1eb4c" // Default to USDC for now
+    }));
+  } catch (error) {
+    console.error("Error fetching receiver escrows from indexer:", error);
+    return [];
+  }
+};
+
+export const fetchEscrowDetailsFromIndexer = async (escrowId: string) => {
+  try {
+    const query = `
+      query GetEscrowDetails($escrowId: String!) {
+        escrowCreateds(where: { escrowId: $escrowId }) {
+          escrowId
+          sender
+          receivers
+          totalAmount
+          amounts
+        }
+      }
+    `;
+
+    const response = await axios.post(GOLDSKY_API_URL, {
+      query,
+      variables: { escrowId }
+    });
+
+    const escrow = response.data.data.escrowCreateds[0];
+    if (!escrow) return null;
+
+    // Transform the data to match our expected format
+    return {
+      id: `escrow-${escrowId}`, // Generate ID since not available in indexer
+      escrowId: escrow.escrowId,
+      sender: escrow.sender,
+      totalAmount: escrow.totalAmount || "0",
+      createdAt: Math.floor(Date.now() / 1000).toString(), // Current timestamp as fallback
+      receivers: escrow.receivers ? escrow.receivers.split(',').map((addr: string) => addr.trim()) : [],
+      amounts: escrow.amounts ? escrow.amounts.split(',').map((amount: string) => amount.trim()) : [],
+      tokenAddress: "0xf9D5a610fe990bfCdF7dd9FD64bdfe89D6D1eb4c" // Default to USDC for now
+    };
+  } catch (error) {
+    console.error("Error fetching escrow details from indexer:", error);
+    return null;
+  }
 };

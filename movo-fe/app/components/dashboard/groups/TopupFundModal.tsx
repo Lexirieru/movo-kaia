@@ -95,12 +95,12 @@ export default function TopupFundModal({
       );
 
       setTokenBalance(
-        formatTokenAmount(balance, groupData.originCurrency === "USDC" ? 6 : 2),
+        formatTokenAmount(balance, groupData.originCurrency === "USDC" || groupData.originCurrency === "USDT" ? 6 : 2),
       );
       setTokenAllowance(
         formatTokenAmount(
           allowance,
-          groupData.originCurrency === "USDC" ? 6 : 2,
+          groupData.originCurrency === "USDC" || groupData.originCurrency === "USDT" ? 6 : 2,
         ),
       );
     } catch (error) {
@@ -153,7 +153,7 @@ export default function TopupFundModal({
     try {
       const parsedAmount = parseTokenAmount(
         topupAmount,
-        groupData.originCurrency === "USDC" ? 6 : 2,
+        groupData.originCurrency === "USDC" || groupData.originCurrency === "USDT" ? 6 : 2,
       );
 
       // Check if user has enough balance
@@ -163,7 +163,7 @@ export default function TopupFundModal({
       );
       if (userBalance < parsedAmount) {
         throw new Error(
-          `Insufficient balance. You have ${formatTokenAmount(userBalance, groupData.originCurrency === "USDC" ? 6 : 2)} ${groupData.originCurrency}`,
+          `Insufficient balance. You have ${formatTokenAmount(userBalance, groupData.originCurrency === "USDC" || groupData.originCurrency === "USDT" ? 6 : 2)} ${groupData.originCurrency}`,
         );
       }
       console.log(groupData.escrowId);

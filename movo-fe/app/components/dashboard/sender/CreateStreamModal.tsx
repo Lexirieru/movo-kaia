@@ -19,20 +19,22 @@ interface CreateStreamModalProps {
   //If there is already escrow
   existingEscrow?: {
     escrowId: string;
-    tokenType: "USDC" | "IDRX";
+    tokenType: "USDC" | "USDT" | "IDRX";
   };
 }
 
 interface ReceiverData {
   id: string;
   address: string;
-  fullname: string;
   amount: string;
 }
 
 interface FormData {
-  token: "USDC" | "IDRX" | null;
+  token: "USDC" | "USDT" | "IDRX" | null;
   receivers: ReceiverData[];
+  vestingEnabled: boolean;
+  vestingDuration: number; // duration value
+  vestingUnit: "days" | "weeks"; // unit of duration
 }
 
 // Available tokens for escrow
@@ -42,7 +44,14 @@ const AVAILABLE_TOKENS = [
     name: "USD Coin (Base)",
     icon: "💵",
     description: "USDC on Base Network",
-    escrowType: "EscrowUSDC",
+    escrowType: "Escrow",
+  },
+  {
+    symbol: "USDT",
+    name: "Tether USD (Base)",
+    icon: "💰",
+    description: "USDT on Base Network",
+    escrowType: "Escrow",
   },
   {
     symbol: "IDRX",
@@ -67,11 +76,17 @@ export default function CreateStreamModal({
   const initialFormData: FormData = existingEscrow
     ? {
         token: existingEscrow.tokenType,
-        receivers: [{ id: "1", address: "", fullname: "", amount: "" }],
+        receivers: [{ id: "1", address: "", amount: "" }],
+        vestingEnabled: false,
+        vestingDuration: 0,
+        vestingUnit: "days",
       }
     : {
         token: null,
-        receivers: [{ id: "1", address: "", fullname: "", amount: "" }],
+        receivers: [{ id: "1", address: "", amount: "" }],
+        vestingEnabled: false,
+        vestingDuration: 0,
+        vestingUnit: "days",
       };
 
   const [formData, setFormData] = useState<FormData>(initialFormData);
@@ -104,7 +119,7 @@ export default function CreateStreamModal({
       ...formData,
       receivers: [
         ...formData.receivers,
-        { id: newId, address: "", fullname: "", amount: "" },
+        { id: newId, address: "", amount: "" },
       ],
     });
   };
@@ -145,7 +160,6 @@ export default function CreateStreamModal({
     const isValid = formData.receivers.every(
       (r) =>
         r.address.trim() &&
-        r.fullname.trim() &&
         r.amount.trim() &&
         parseFloat(r.amount) > 0,
     );
@@ -171,7 +185,7 @@ export default function CreateStreamModal({
         const receiver = formData.receivers[0];
         const parsedAmount = parseTokenAmount(
           receiver.amount,
-          formData.token == "USDC" ? 6 : 2,
+          formData.token === "USDC" || formData.token === "USDT" ? 6 : 2,
         );
 
         const escrowIdBytes = `0x${existingEscrow.escrowId}` as `0x${string}`;
@@ -195,7 +209,6 @@ export default function CreateStreamModal({
           _id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
           groupId,
           originCurrency: formData.token,
-          fullname: receiver.fullname,
           tokenIcon: formData.token === "USDC" ? "💵" : "🔗",
           depositWalletAddress: receiver.address,
           amount: parseFloat(receiver.amount),
@@ -211,7 +224,7 @@ export default function CreateStreamModal({
           (r) => r.address as `0x${string}`,
         );
         const amounts = formData.receivers.map((r) =>
-          parseTokenAmount(r.amount, formData.token === "USDC" ? 6 : 2),
+          parseTokenAmount(r.amount, formData.token === "USDC" || formData.token === "USDT" ? 6 : 2),
         );
         const totalAmount = amounts.reduce(
           (acc, amount) => acc + amount,
@@ -234,6 +247,10 @@ export default function CreateStreamModal({
             receivers,
             amounts,
             totalAmount,
+            vestingEnabled: formData.vestingEnabled,
+            vestingDuration: formData.vestingEnabled 
+              ? (formData.vestingUnit === "weeks" ? formData.vestingDuration * 7 : formData.vestingDuration)
+              : 0,
           },
         );
 
@@ -259,7 +276,6 @@ export default function CreateStreamModal({
           totalAmount: totalAmount.toString(),
           receivers: formData.receivers.map((r) => ({
             address: r.address,
-            fullname: r.fullname,
             amount: r.amount,
           })),
           transactionHash: escrowResult.transactionHash ?? "",
@@ -278,7 +294,6 @@ export default function CreateStreamModal({
               Date.now().toString() + Math.random().toString(36).substr(2, 9),
             groupId,
             originCurrency: formData.token,
-            fullname: receiver.fullname,
             tokenIcon: formData.token === "USDC" ? "💵" : "🔗",
             depositWalletAddress: receiver.address,
             amount: parseFloat(receiver.amount),
@@ -316,7 +331,10 @@ export default function CreateStreamModal({
   const resetForm = () => {
     setFormData({
       token: null,
-      receivers: [{ id: "1", address: "", fullname: "", amount: "" }],
+      receivers: [{ id: "1", address: "", amount: "" }],
+      vestingEnabled: false,
+      vestingDuration: 0,
+      vestingUnit: "days",
     });
     setMessage(null);
   };
@@ -399,6 +417,79 @@ export default function CreateStreamModal({
               </div>
             )}
 
+            {/* Vesting Options */}
+            {!isAddReceiverMode && (
+              <div className="space-y-4">
+                <div className="flex items-center space-x-3">
+                  <input
+                    type="checkbox"
+                    id="vestingEnabled"
+                    checked={formData.vestingEnabled}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        vestingEnabled: e.target.checked,
+                        vestingDuration: e.target.checked ? formData.vestingDuration : 0,
+                      })
+                    }
+                    className="w-4 h-4 text-cyan-600 bg-white/10 border-white/20 rounded focus:ring-cyan-500 focus:ring-2"
+                  />
+                  <label htmlFor="vestingEnabled" className="text-white/80 text-sm font-medium">
+                    Enable Vesting (Optional)
+                  </label>
+                </div>
+
+                {formData.vestingEnabled && (
+                  <div className="p-4 bg-purple-500/10 border border-purple-500/20 rounded-lg">
+                    <label className="block text-white/80 text-sm font-medium mb-3">
+                      Vesting Duration
+                    </label>
+                    <div className="flex items-center space-x-3">
+                      <input
+                        type="number"
+                        id="vestingDuration"
+                        min="1"
+                        max={formData.vestingUnit === "days" ? "3650" : "520"}
+                        value={formData.vestingDuration}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            vestingDuration: parseInt(e.target.value) || 0,
+                          })
+                        }
+                        placeholder={`Enter ${formData.vestingUnit} (1-${formData.vestingUnit === "days" ? "3650" : "520"})`}
+                        className="flex-1 p-2 bg-white/5 border border-white/10 rounded-lg text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-purple-400/50 focus:border-purple-400/50 text-sm"
+                      />
+                      <select
+                        value={formData.vestingUnit}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            vestingUnit: e.target.value as "days" | "weeks",
+                            vestingDuration: 0, // Reset duration when changing unit
+                          })
+                        }
+                        className="px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-purple-400/50 focus:border-purple-400/50 text-sm"
+                      >
+                        <option value="days" className="bg-gray-800 text-white">Days</option>
+                        <option value="weeks" className="bg-gray-800 text-white">Weeks</option>
+                      </select>
+                    </div>
+                    <p className="text-purple-300/80 text-xs mt-2">
+                      Tokens will be gradually released over the specified duration. 
+                      Receivers can claim their proportional share at any time during the vesting period.
+                      {formData.vestingDuration > 0 && (
+                        <span className="block mt-1 font-medium">
+                          Total duration: {formData.vestingDuration} {formData.vestingUnit} 
+                          ({formData.vestingUnit === "weeks" ? formData.vestingDuration * 7 : formData.vestingDuration} days)
+                        </span>
+                      )}
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Receivers */}
             <div>
               <div className="flex justify-between items-center mb-3">
@@ -423,20 +514,7 @@ export default function CreateStreamModal({
                     key={receiver.id}
                     className="flex items-center space-x-3 p-3 bg-white/5 border border-white/10 rounded-lg"
                   >
-                    <div className="flex-1 grid grid-cols-1 md:grid-cols-3 gap-3">
-                      <input
-                        type="text"
-                        value={receiver.fullname}
-                        onChange={(e) =>
-                          updateReceiver(
-                            receiver.id,
-                            "fullname",
-                            e.target.value,
-                          )
-                        }
-                        placeholder="Full Name"
-                        className="w-full p-2 bg-white/5 border border-white/10 rounded-lg text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-cyan-400/50 focus:border-cyan-400/50 text-sm"
-                      />
+                    <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-3">
                       <input
                         type="text"
                         value={receiver.address}

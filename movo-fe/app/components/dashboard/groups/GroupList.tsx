@@ -86,7 +86,7 @@ export default function GroupList({
     if (escrow && escrow.totalAmount && escrow.tokenType) {
       // Convert from wei/smallest unit to human readable
       const amount = parseFloat(escrow.totalAmount);
-      const decimals = escrow.tokenType === "USDC" ? 6 : 2;
+      const decimals = escrow.tokenType === "USDC" || escrow.tokenType === "USDT" ? 6 : 2;
       const humanAmount = amount / Math.pow(10, decimals);
       return `${humanAmount.toFixed(decimals === 6 ? 2 : 0)} ${escrow.tokenType}`;
     }

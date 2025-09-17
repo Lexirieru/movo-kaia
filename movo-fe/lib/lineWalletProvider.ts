@@ -7,7 +7,7 @@ const LINE_WALLET_CONFIG = {
   clientSecret: process.env.NEXT_PUBLIC_LINE_CLIENT_SECRET || 'c4cb2500-b336-4594-931d-21bf0434005d',
   dappId: process.env.NEXT_PUBLIC_LINE_DAPP_ID || 'N68c224f636f5a3565ea5cf82',
   dappName: process.env.NEXT_PUBLIC_LINE_DAPP_NAME || 'movo',
-  chainId: process.env.NEXT_PUBLIC_LINE_CHAIN_ID || '1001', // Testnet - change to '8217' for mainnet
+  chainId: process.env.NEXT_PUBLIC_LINE_CHAIN_ID || '84532', // Base Sepolia - change to '8453' for mainnet
 };
 
 class LineWalletProvider {
@@ -114,6 +114,25 @@ class LineWalletProvider {
     }
   }
 
+  async getChainId() {
+    if (!this.isInitialized) {
+      await this.init();
+    }
+
+    try {
+      const chainId = await this.walletProvider.request({
+        method: 'kaia_chainId'
+      });
+      
+      console.log('LINE Wallet Chain ID:', chainId);
+      return chainId;
+    } catch (error) {
+      console.error('Failed to get chain ID:', error);
+      // Fallback to configured chain ID
+      return LINE_WALLET_CONFIG.chainId;
+    }
+  }
+
   async signMessage(message: string, account: string) {
     if (!this.isInitialized) {
       await this.init();
@@ -155,6 +174,7 @@ class LineWalletProvider {
     to: string;
     value: string;
     gas: string;
+    data?: string;
   }) {
     if (!this.isInitialized) {
       await this.init();

@@ -78,7 +78,7 @@ export default function EscrowInfoDisplay({
             tokenType,
           );
           setWithdrawableAmount(
-            formatTokenAmount(withdrawable, tokenType === "USDC" ? 6 : 2),
+            formatTokenAmount(withdrawable, tokenType === "USDC" || tokenType === "USDT" ? 6 : 2),
           );
         }
       }
@@ -239,7 +239,7 @@ export default function EscrowInfoDisplay({
               <p className="text-white font-semibold">
                 {formatTokenAmount(
                   balanceSummary.totalAllocated,
-                  tokenType === "USDC" ? 6 : 2,
+                  tokenType === "USDC" || tokenType === "USDT" ? 6 : 2,
                 )}{" "}
                 {tokenType}
               </p>
@@ -250,7 +250,7 @@ export default function EscrowInfoDisplay({
               <p className="text-green-400 font-semibold">
                 {formatTokenAmount(
                   balanceSummary.availableBalance,
-                  tokenType === "USDC" ? 6 : 2,
+                  tokenType === "USDC" || tokenType === "USDT" ? 6 : 2,
                 )}{" "}
                 {tokenType}
               </p>
@@ -261,7 +261,7 @@ export default function EscrowInfoDisplay({
               <p className="text-white font-semibold">
                 {formatTokenAmount(
                   balanceSummary.totalDeposited,
-                  tokenType === "USDC" ? 6 : 2,
+                  tokenType === "USDC" || tokenType === "USDT" ? 6 : 2,
                 )}{" "}
                 {tokenType}
               </p>
@@ -272,7 +272,7 @@ export default function EscrowInfoDisplay({
               <p className="text-white font-semibold">
                 {formatTokenAmount(
                   balanceSummary.totalWithdrawn,
-                  tokenType === "USDC" ? 6 : 2,
+                  tokenType === "USDC" || tokenType === "USDT" ? 6 : 2,
                 )}{" "}
                 {tokenType}
               </p>
@@ -305,7 +305,7 @@ export default function EscrowInfoDisplay({
                     <p className="text-white/60 text-sm">
                       {formatTokenAmount(
                         receiver.currentAllocation,
-                        tokenType === "USDC" ? 6 : 2,
+                        tokenType === "USDC" || tokenType === "USDT" ? 6 : 2,
                       )}{" "}
                       {tokenType}
                     </p>
@@ -317,7 +317,7 @@ export default function EscrowInfoDisplay({
                   <p className="text-white font-medium">
                     {formatTokenAmount(
                       receiver.withdrawnAmount,
-                      tokenType === "USDC" ? 6 : 2,
+                      tokenType === "USDC" || tokenType === "USDT" ? 6 : 2,
                     )}{" "}
                     {tokenType}
                   </p>
