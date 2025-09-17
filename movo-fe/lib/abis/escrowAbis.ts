@@ -1,4 +1,4 @@
-export const escrowUsdcAbi = [
+[
   { inputs: [], stateMutability: "nonpayable", type: "constructor" },
   { inputs: [], name: "EnforcedPause", type: "error" },
   { inputs: [], name: "ExpectedPause", type: "error" },
@@ -13,6 +13,31 @@ export const escrowUsdcAbi = [
     type: "error",
   },
   { inputs: [], name: "ReentrancyGuardReentrantCall", type: "error" },
+  {
+    anonymous: false,
+    inputs: [
+      {
+        indexed: true,
+        internalType: "bytes32",
+        name: "escrowId",
+        type: "bytes32",
+      },
+      {
+        indexed: true,
+        internalType: "address",
+        name: "sender",
+        type: "address",
+      },
+      {
+        indexed: false,
+        internalType: "uint256",
+        name: "closedAt",
+        type: "uint256",
+      },
+    ],
+    name: "EscrowClosed",
+    type: "event",
+  },
   {
     anonymous: false,
     inputs: [
@@ -65,45 +90,15 @@ export const escrowUsdcAbi = [
         name: "escrowId",
         type: "bytes32",
       },
-      {
-        indexed: true,
-        internalType: "address",
-        name: "sender",
-        type: "address",
-      },
+      { indexed: false, internalType: "bool", name: "isActive", type: "bool" },
       {
         indexed: false,
         internalType: "uint256",
-        name: "remainingBalance",
+        name: "changedAt",
         type: "uint256",
       },
     ],
-    name: "EscrowPaused",
-    type: "event",
-  },
-  {
-    anonymous: false,
-    inputs: [
-      {
-        indexed: true,
-        internalType: "bytes32",
-        name: "escrowId",
-        type: "bytes32",
-      },
-      {
-        indexed: true,
-        internalType: "address",
-        name: "sender",
-        type: "address",
-      },
-      {
-        indexed: false,
-        internalType: "uint256",
-        name: "cycleBalance",
-        type: "uint256",
-      },
-    ],
-    name: "EscrowResumed",
+    name: "EscrowStatusChanged",
     type: "event",
   },
   {
@@ -278,7 +273,7 @@ export const escrowUsdcAbi = [
         type: "address",
       },
     ],
-    name: "USDCWithdrawn",
+    name: "TokenWithdrawn",
     type: "event",
   },
   {
@@ -309,7 +304,7 @@ export const escrowUsdcAbi = [
         type: "address",
       },
     ],
-    name: "USDCWithdrawnToFiat",
+    name: "TokenWithdrawnToFiat",
     type: "event",
   },
   {
@@ -326,11 +321,97 @@ export const escrowUsdcAbi = [
     type: "event",
   },
   {
-    inputs: [],
-    name: "USDC_ADDRESS",
-    outputs: [{ internalType: "address", name: "", type: "address" }],
-    stateMutability: "view",
-    type: "function",
+    anonymous: false,
+    inputs: [
+      {
+        indexed: true,
+        internalType: "bytes32",
+        name: "escrowId",
+        type: "bytes32",
+      },
+      {
+        indexed: true,
+        internalType: "address",
+        name: "receiver",
+        type: "address",
+      },
+      {
+        indexed: false,
+        internalType: "uint256",
+        name: "claimedAmount",
+        type: "uint256",
+      },
+      {
+        indexed: false,
+        internalType: "uint256",
+        name: "remainingVestedAmount",
+        type: "uint256",
+      },
+    ],
+    name: "VestingClaimed",
+    type: "event",
+  },
+  {
+    anonymous: false,
+    inputs: [
+      {
+        indexed: true,
+        internalType: "bytes32",
+        name: "escrowId",
+        type: "bytes32",
+      },
+      {
+        indexed: true,
+        internalType: "address",
+        name: "receiver",
+        type: "address",
+      },
+      {
+        indexed: false,
+        internalType: "uint256",
+        name: "totalVestedAmount",
+        type: "uint256",
+      },
+      {
+        indexed: false,
+        internalType: "uint256",
+        name: "completedAt",
+        type: "uint256",
+      },
+    ],
+    name: "VestingCompleted",
+    type: "event",
+  },
+  {
+    anonymous: false,
+    inputs: [
+      {
+        indexed: true,
+        internalType: "bytes32",
+        name: "escrowId",
+        type: "bytes32",
+      },
+      {
+        indexed: false,
+        internalType: "uint256",
+        name: "vestingStartTime",
+        type: "uint256",
+      },
+      {
+        indexed: false,
+        internalType: "uint256",
+        name: "vestingDuration",
+        type: "uint256",
+      },
+      {
+        indexed: false,
+        internalType: "bool",
+        name: "isVestingEnabled",
+        type: "bool",
+      },
+    ],
+    name: "VestingConfigured",
+    type: "event",
   },
   {
     inputs: [
@@ -344,6 +425,19 @@ export const escrowUsdcAbi = [
     type: "function",
   },
   {
+    inputs: [
+      { internalType: "bytes32", name: "_escrowId", type: "bytes32" },
+      { internalType: "address", name: "_receiver", type: "address" },
+    ],
+    name: "calculateVestedAmount",
+    outputs: [
+      { internalType: "uint256", name: "vestedAmount", type: "uint256" },
+      { internalType: "uint256", name: "totalVestedAmount", type: "uint256" },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
     inputs: [{ internalType: "bytes32", name: "_escrowId", type: "bytes32" }],
     name: "closeEscrow",
     outputs: [],
@@ -352,8 +446,11 @@ export const escrowUsdcAbi = [
   },
   {
     inputs: [
+      { internalType: "address", name: "_tokenAddress", type: "address" },
       { internalType: "address[]", name: "_receivers", type: "address[]" },
       { internalType: "uint256[]", name: "_amounts", type: "uint256[]" },
+      { internalType: "uint256", name: "_vestingStartTime", type: "uint256" },
+      { internalType: "uint256", name: "_vestingDuration", type: "uint256" },
     ],
     name: "createEscrow",
     outputs: [{ internalType: "bytes32", name: "", type: "bytes32" }],
@@ -365,6 +462,7 @@ export const escrowUsdcAbi = [
     name: "escrowRooms",
     outputs: [
       { internalType: "address", name: "sender", type: "address" },
+      { internalType: "address", name: "tokenAddress", type: "address" },
       {
         internalType: "uint256",
         name: "totalAllocatedAmount",
@@ -381,10 +479,14 @@ export const escrowUsdcAbi = [
         type: "uint256",
       },
       { internalType: "uint256", name: "availableBalance", type: "uint256" },
-      { internalType: "bool", name: "isActive", type: "bool" },
+      { internalType: "uint256", name: "cycleBalance", type: "uint256" },
       { internalType: "uint256", name: "createdAt", type: "uint256" },
       { internalType: "uint256", name: "lastTopUpAt", type: "uint256" },
       { internalType: "uint256", name: "activeReceiverCount", type: "uint256" },
+      { internalType: "bool", name: "isActive", type: "bool" },
+      { internalType: "uint256", name: "vestingStartTime", type: "uint256" },
+      { internalType: "uint256", name: "vestingDuration", type: "uint256" },
+      { internalType: "bool", name: "isVestingEnabled", type: "bool" },
     ],
     stateMutability: "view",
     type: "function",
@@ -397,14 +499,23 @@ export const escrowUsdcAbi = [
     type: "function",
   },
   {
+    inputs: [{ internalType: "address", name: "_receiver", type: "address" }],
+    name: "getActiveEscrowsForReceiver",
+    outputs: [{ internalType: "bytes32[]", name: "", type: "bytes32[]" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [{ internalType: "address", name: "_sender", type: "address" }],
+    name: "getActiveEscrowsForSender",
+    outputs: [{ internalType: "bytes32[]", name: "", type: "bytes32[]" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
     inputs: [{ internalType: "bytes32", name: "_escrowId", type: "bytes32" }],
-    name: "getEscrowBalance",
-    outputs: [
-      { internalType: "uint256", name: "totalAllocated", type: "uint256" },
-      { internalType: "uint256", name: "availableBalance", type: "uint256" },
-      { internalType: "uint256", name: "totalDeposited", type: "uint256" },
-      { internalType: "uint256", name: "totalWithdrawn", type: "uint256" },
-    ],
+    name: "getCycleBalance",
+    outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
     stateMutability: "view",
     type: "function",
   },
@@ -413,6 +524,7 @@ export const escrowUsdcAbi = [
     name: "getEscrowDetails",
     outputs: [
       { internalType: "address", name: "sender", type: "address" },
+      { internalType: "address", name: "tokenAddress", type: "address" },
       {
         internalType: "uint256",
         name: "totalAllocatedAmount",
@@ -429,7 +541,6 @@ export const escrowUsdcAbi = [
         type: "uint256",
       },
       { internalType: "uint256", name: "availableBalance", type: "uint256" },
-      { internalType: "bool", name: "isActive", type: "bool" },
       { internalType: "uint256", name: "createdAt", type: "uint256" },
       { internalType: "uint256", name: "lastTopUpAt", type: "uint256" },
       { internalType: "uint256", name: "receiverCount", type: "uint256" },
@@ -476,10 +587,38 @@ export const escrowUsdcAbi = [
     type: "function",
   },
   {
+    inputs: [
+      { internalType: "bytes32", name: "_escrowId", type: "bytes32" },
+      { internalType: "address", name: "_receiver", type: "address" },
+    ],
+    name: "getReceiverVestingInfo",
+    outputs: [
+      { internalType: "uint256", name: "vestedAmount", type: "uint256" },
+      { internalType: "uint256", name: "totalVestedAmount", type: "uint256" },
+      { internalType: "uint256", name: "availableToClaim", type: "uint256" },
+      { internalType: "uint256", name: "vestingProgress", type: "uint256" },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
     inputs: [{ internalType: "address", name: "_user", type: "address" }],
     name: "getUserEscrows",
     outputs: [
       { internalType: "bytes32[]", name: "escrowIds", type: "bytes32[]" },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [{ internalType: "bytes32", name: "_escrowId", type: "bytes32" }],
+    name: "getVestingInfo",
+    outputs: [
+      { internalType: "bool", name: "isVestingEnabled", type: "bool" },
+      { internalType: "uint256", name: "vestingStartTime", type: "uint256" },
+      { internalType: "uint256", name: "vestingDuration", type: "uint256" },
+      { internalType: "uint256", name: "vestingEndTime", type: "uint256" },
+      { internalType: "uint256", name: "currentTime", type: "uint256" },
     ],
     stateMutability: "view",
     type: "function",
@@ -497,16 +636,9 @@ export const escrowUsdcAbi = [
     type: "function",
   },
   {
-    inputs: [],
-    name: "maxEscrowAmount",
-    outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
-    stateMutability: "view",
-    type: "function",
-  },
-  {
-    inputs: [],
-    name: "minEscrowAmount",
-    outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
+    inputs: [{ internalType: "bytes32", name: "_escrowId", type: "bytes32" }],
+    name: "isEscrowActive",
+    outputs: [{ internalType: "bool", name: "", type: "bool" }],
     stateMutability: "view",
     type: "function",
   },
@@ -515,13 +647,6 @@ export const escrowUsdcAbi = [
     name: "owner",
     outputs: [{ internalType: "address", name: "", type: "address" }],
     stateMutability: "view",
-    type: "function",
-  },
-  {
-    inputs: [{ internalType: "bytes32", name: "_escrowId", type: "bytes32" }],
-    name: "pauseEscrow",
-    outputs: [],
-    stateMutability: "nonpayable",
     type: "function",
   },
   {
@@ -566,8 +691,11 @@ export const escrowUsdcAbi = [
     type: "function",
   },
   {
-    inputs: [{ internalType: "bytes32", name: "_escrowId", type: "bytes32" }],
-    name: "resumeEscrow",
+    inputs: [
+      { internalType: "bytes32", name: "_escrowId", type: "bytes32" },
+      { internalType: "uint256", name: "_amount", type: "uint256" },
+    ],
+    name: "topUpFunds",
     outputs: [],
     stateMutability: "nonpayable",
     type: "function",
@@ -576,8 +704,19 @@ export const escrowUsdcAbi = [
     inputs: [
       { internalType: "bytes32", name: "_escrowId", type: "bytes32" },
       { internalType: "uint256", name: "_amount", type: "uint256" },
+      {
+        internalType: "uint256",
+        name: "_newVestingStartTime",
+        type: "uint256",
+      },
+      { internalType: "uint256", name: "_newVestingDuration", type: "uint256" },
+      {
+        internalType: "uint256[]",
+        name: "_receiverAmounts",
+        type: "uint256[]",
+      },
     ],
-    name: "topUpFunds",
+    name: "topUpWithNewVesting",
     outputs: [],
     stateMutability: "nonpayable",
     type: "function",
@@ -615,7 +754,7 @@ export const escrowUsdcAbi = [
       { internalType: "bytes32", name: "_escrowId", type: "bytes32" },
       { internalType: "uint256", name: "_amount", type: "uint256" },
     ],
-    name: "withdrawUSDCToCrypto",
+    name: "withdrawTokenToCrypto",
     outputs: [],
     stateMutability: "nonpayable",
     type: "function",
@@ -626,7 +765,7 @@ export const escrowUsdcAbi = [
       { internalType: "uint256", name: "_amount", type: "uint256" },
       { internalType: "address", name: "_depositWallet", type: "address" },
     ],
-    name: "withdrawUSDCTofiat",
+    name: "withdrawTokenToFiat",
     outputs: [],
     stateMutability: "nonpayable",
     type: "function",

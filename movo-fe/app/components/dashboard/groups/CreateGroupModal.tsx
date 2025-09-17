@@ -143,21 +143,7 @@ export default function CreateGroupModal({
               )}
             </button>
           </div>
-        </div>
-
-        {/* Generated ID Preview (for development) */}
-        {nameOfGroup.trim() && (
-          <div className="px-6 pb-6">
-            <div className="bg-white/5 rounded-xl p-3 border border-white/10">
-              <div className="text-white/60 text-xs mb-1">
-                Generated Group ID Preview:
-              </div>
-              <div className="text-white/40 text-xs font-mono">
-                group_{Date.now()}_xxxxxxxxx
-              </div>
-            </div>
-          </div>
-        )}
+        </div>        
       </div>
     </div>
   );
