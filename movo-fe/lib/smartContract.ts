@@ -5,7 +5,7 @@ import {
   getContract,
   defineChain,
 } from "viem";
-import { escrowUsdcAbi } from "./abis/escrowUsdcAbi";
+import { escrowUsdcAbi } from "./abis/escrowAbis";
 import { escrowIdrxAbi } from "./abis/escrowIdrxAbi";
 import { usdcAbi } from "./abis/usdcAbi";
 import { idrxAbi } from "./abis/idrxAbi";

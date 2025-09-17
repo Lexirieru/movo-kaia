@@ -67,34 +67,10 @@ const TransactionHistorySchema = new Schema({
     type: Number,
     required: true,
   },
-  // blockNumber :  {
-  //   type : String,
-  //   required : true,
-  // },
-  // blockHash :  {
-  //   type : String,
-  //   required : true,
-  // },
-  // from :  {
-  //   type : String,
-  //   required : true,
-  // },
-  // to :  {
-  //   type : String,
-  //   required : true,
-  // },
-  // status :  {
-  //   type : String,
-  //   required : true,
-  // },
-  // gasUsed :  {
-  //   type : String,
-  //   required : true,
-  // },
-  // gasPrice :  {
-  //   type : String,
-  //   required : true,
-  // },
+  blockNumber: {
+    type: String,
+    required: true,
+  },
   // timestamp dari transaksi blockchain
   timestamp: {
     type: String,

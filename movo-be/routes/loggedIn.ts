@@ -32,6 +32,7 @@ import {
 } from "../controllers/userReceiverController";
 import {
   goldskyEscrowCreatedWebhook,
+  goldskyEscrowReceiverAddedWebhook,
   // goldskyEscrowReceiverAddedWebhook,
 } from "../controllers/thirdPartyController";
 
@@ -192,11 +193,11 @@ const routes: RouteDefinition[] = [
     path: "/webhook/goldsky-escrow-created",
     action: goldskyEscrowCreatedWebhook,
   },
-  // {
-  //   method: "post",
-  //   path: "/webhook/goldsky-escrow-receiver-added",
-  //   action: goldskyEscrowReceiverAddedWebhook,
-  // },
+  {
+    method: "post",
+    path: "/webhook/goldsky-escrow-receiver-added",
+    action: goldskyEscrowReceiverAddedWebhook,
+  },
 ];
 
 routes.forEach((route) => {
