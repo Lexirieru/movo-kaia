@@ -30,7 +30,7 @@ contract MockIDRX is ERC20, Ownable {
     
     // ============ CONSTRUCTOR ============
     
-    constructor() ERC20("Mock IDRX", "mIDRX") Ownable(msg.sender) {
+    constructor() ERC20("Mock IDRX", "IDRX") Ownable(msg.sender) {
         // Mint initial supply to deployer for testing
         _mint(msg.sender, 1000000 * 10**2); // 10M IDRX (2 decimals)
     }

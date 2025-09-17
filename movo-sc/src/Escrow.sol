@@ -5,7 +5,6 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/Pausable.sol";
-import "./interfaces/IIDRX.sol";
 
 /*
 ███╗░░░███╗░█████╗░██╗░░░██║░█████╗░
@@ -17,8 +16,8 @@ import "./interfaces/IIDRX.sol";
 */
 
 /**
- * @title EscrowIDRX
- * @dev Smart contract for IDRX escrow system designed for long-term usage
+ * @title Escrow
+ * @dev Smart contract for token escrow system designed for long-term usage (USDC, USDT, etc.)
  * 
  * FEATURES:
  * - Long-term escrow that can be reused for recurring payments
@@ -29,12 +28,12 @@ import "./interfaces/IIDRX.sol";
  * - Crypto and fiat withdrawal options
  * 
  * USE CASE EXAMPLE:
- * - January: 5 receivers, 200 IDRX each, total 1000 IDRX
- * - February: Same 5 receivers, same amounts, top-up 1000 IDRX
- * - March: Increase each receiver by 100 IDRX (300 IDRX each), top-up 1500 IDRX
+ * - January: 5 receivers, 200 USDC each, total 1000 USDC
+ * - February: Same 5 receivers, same amounts, top-up 1000 USDC
+ * - March: Increase each receiver by 100 USDC (300 USDC each), top-up 1500 USDC
  * - Receiver can withdraw anytime according to allocation (no cycle restrictions)
  */
-contract EscrowIDRX is ReentrancyGuard, Ownable, Pausable {
+contract Escrow is ReentrancyGuard, Ownable, Pausable {
     
     // ============ STRUCTS ============
     
@@ -76,7 +75,7 @@ contract EscrowIDRX is ReentrancyGuard, Ownable, Pausable {
     uint256 public platformFeeBps = 25; // 0.25%
     address public feeRecipient = 0x63470E56eFeB1759F3560500fB2d2FD43A86F179;
     
-    // Minimum and maximum amounts (2 decimals for IDRX)
+    // Minimum and maximum amounts (6 decimals)
     
     // ============ EVENTS ============
     
@@ -117,19 +116,18 @@ contract EscrowIDRX is ReentrancyGuard, Ownable, Pausable {
     
 
     
-    event IDRXWithdrawn(
+    event TokenWithdrawn(
         bytes32 indexed escrowId,
         address indexed receiver,
         uint256 amount,
         address depositWallet
     );
     
-    event IDRXWithdrawnToFiat(
+    event TokenWithdrawnToFiat(
         bytes32 indexed escrowId,
         address indexed receiver,
-        uint256 netAmount,
-        string hashedAccountNumber,
-        bytes32 transactionHash
+        uint256 amount,
+        address depositWallet
     );
     
     
@@ -546,10 +544,10 @@ contract EscrowIDRX is ReentrancyGuard, Ownable, Pausable {
      * @dev Add new receiver to existing escrow
      * @param _escrowId ID of escrow room
      * @param _receiver Address of new receiver
-     * @param _amount Amount for new receiver (30,000-1,000,000,000 IDRX)
+     * @param _amount Amount for new receiver
      * 
      * VALIDATION: Can only add receiver if:
-     * - Available balance is less than 1 token (1 * 10^2 for IDRX), OR
+     * - Available balance is less than 1 token (1 * 10^6), OR
      * - All tokens have been claimed (totalWithdrawnAmount = totalDepositedAmount), OR
      * - No vesting enabled, OR
      * - Vesting has completed
@@ -572,8 +570,8 @@ contract EscrowIDRX is ReentrancyGuard, Ownable, Pausable {
         // 4. Vesting has completed
         bool canAddReceiver = false;
         
-        // Check if available balance is less than 1 token (1 * 10^2 for IDRX)
-        if (room.availableBalance < 1 * 10**2) {
+        // Check if available balance is less than 1 token (1 * 10^6 for USDC/USDT)
+        if (room.availableBalance < 1 * 10**6) {
             canAddReceiver = true;
         }
         // Check if all tokens have been claimed
@@ -657,7 +655,7 @@ contract EscrowIDRX is ReentrancyGuard, Ownable, Pausable {
      * @dev Update amount for existing receiver - freely change amount without balance requirement
      * @param _escrowId ID of escrow room
      * @param _receiver Address of receiver
-     * @param _newAmount New amount for receiver (30,000-1,000,000,000 IDRX)
+     * @param _newAmount New amount for receiver (2-5000 USDC)
      */
     function updateReceiverAmount(
         bytes32 _escrowId,
@@ -682,11 +680,11 @@ contract EscrowIDRX is ReentrancyGuard, Ownable, Pausable {
     }
     
     /**
-     * @dev Withdraw IDRX to crypto wallet (receiver's own wallet)
+     * @dev Withdraw token to crypto wallet (receiver's own wallet)
      * @param _escrowId ID of escrow room
-     * @param _amount Amount of IDRX to withdraw
+     * @param _amount Amount of token to withdraw
      */
-    function withdrawIDRXToCrypto(
+    function withdrawTokenToCrypto(
         bytes32 _escrowId,
         uint256 _amount
     ) external nonReentrant whenNotPaused escrowExists(_escrowId) {
@@ -696,7 +694,7 @@ contract EscrowIDRX is ReentrancyGuard, Ownable, Pausable {
         if (receiver.receiverAddress != msg.sender) revert("Not authorized receiver");
         if (!receiver.isActive) revert("Receiver is not active");
         if (_amount == 0) revert("Amount must be greater than 0");
-        if (_amount < 30000 * 10**2) revert("Minimum withdrawal amount is 30,000 IDRX");
+        if (_amount < 3 * 10**6) revert("Minimum withdrawal amount is 3 USDT");
         
         // Check vesting - VESTING IS MANDATORY
         (uint256 vestedAmount,) = calculateVestedAmount(_escrowId, msg.sender);
@@ -734,50 +732,29 @@ contract EscrowIDRX is ReentrancyGuard, Ownable, Pausable {
             }
         }
         
-        emit IDRXWithdrawn(_escrowId, msg.sender, _amount, msg.sender);
+        emit TokenWithdrawn(_escrowId, msg.sender, _amount, msg.sender);
     }
     
     /**
-     * @dev Withdraw IDRX to fiat (smart contract burns IDRX, frontend handles redeem)
-     * 
-     * IMPORTANT: This function burns IDRX tokens using hashedAccountNumber from backend.
-     * The actual fiat withdrawal must be handled by the frontend calling IDRX API after this transaction.
-     * 
-     * FLOW:
-     * 1. Backend generates hashedAccountNumber from bank account details
-     * 2. This function burns IDRX via burnWithAccountNumber(amount, hashedAccountNumber)
-     * 3. Frontend gets transaction hash from burning
-     * 4. Frontend calls IDRX API: POST /api/transaction/redeem-request
-     * 5. IDRX.co processes fiat withdrawal to bank account
-     * 
-     * PARAMETERS for IDRX.burnWithAccountNumber():
-     * - amount: _amount (IDRX amount to burn)
-     * - accountNumber: _hashedAccountNumber (hash dari backend)
-     * 
-     * Note: User address (_user) is automatically determined by IDRX contract
-     * 
+     * @dev Withdraw token to fiat (send to deposit wallet provided by frontend)
      * @param _escrowId ID of escrow room
-     * @param _amount Total amount of IDRX to withdraw to fiat (fee will be deducted from this amount)
-     * @param _hashedAccountNumber Hashed bank account number generated by backend
-     * @return transactionHash Hash of the burn transaction for API call
+     * @param _amount Amount of token to withdraw to fiat
+     * @param _depositWallet Deposit wallet address provided by frontend
      */
-    function withdrawIDRXToFiat(
+    function withdrawTokenToFiat(
         bytes32 _escrowId,
         uint256 _amount,
-        string memory _hashedAccountNumber
-    ) external nonReentrant whenNotPaused escrowExists(_escrowId) returns (bytes32) {
+        address _depositWallet
+    ) external nonReentrant whenNotPaused escrowExists(_escrowId) {
+        if (_depositWallet == address(0)) revert("Invalid deposit wallet address");
+        
         EscrowRoom storage room = escrowRooms[_escrowId];
         Receiver storage receiver = room.receivers[msg.sender];
         
         if (receiver.receiverAddress != msg.sender) revert("Not authorized receiver");
         if (!receiver.isActive) revert("Receiver is not active");
         if (_amount == 0) revert("Amount must be greater than 0");
-        
-        // IDRX amount validation (IDRX has 2 decimals)
-        // Minimum: 30,000 IDRX = 30,000 * 10^2 = 3,000,000
-        // Maximum: 1,000,000,000 IDRX = 1,000,000,000 * 10^2 = 100,000,000,000
-        if (_amount < 30000 * 10**2) revert("Minimum amount is 30,000 IDRX");
-        if (_amount > 1000000000 * 10**2) revert("Maximum amount is 1,000,000,000 IDRX");
+        if (_amount < 3 * 10**6) revert("Minimum withdrawal amount is 3 USDT");
         
         // Check vesting - VESTING IS MANDATORY
         (uint256 vestedAmount,) = calculateVestedAmount(_escrowId, msg.sender);
@@ -787,10 +764,7 @@ contract EscrowIDRX is ReentrancyGuard, Ownable, Pausable {
         // Check if escrow has enough available balance
         if (_amount > room.availableBalance) revert("Insufficient escrow balance");
         
-        // Calculate fee from the total amount
         uint256 fee = (_amount * platformFeeBps) / 10000;
-        
-        // Calculate net amount (after fee deduction)
         uint256 netAmount = _amount - fee;
         
         receiver.withdrawnAmount += _amount;
@@ -798,35 +772,14 @@ contract EscrowIDRX is ReentrancyGuard, Ownable, Pausable {
         room.availableBalance -= _amount;
         room.cycleBalance -= _amount;
         
-        // STEP 1: Smart contract burns IDRX using IIDRX interface
-        // This destroys the tokens and makes them available for fiat conversion
-        // Backend provides hashedAccountNumber for IDRX.co processing
-        IIDRX token = IIDRX(room.tokenAddress);
+        IERC20 token = IERC20(room.tokenAddress);
         
-        // Error handling for burn transaction
-        try token.burnWithAccountNumber(
-            netAmount,               // Burn net amount (after fee deduction)
-            _hashedAccountNumber     // Hash from backend
-        ) {
-            // Burn successful
-        } catch Error(string memory reason) {
-            revert(string(abi.encodePacked("Burn failed: ", reason)));
-        } catch {
-            revert("Burn failed: Unknown error");
-        }
+        // Transfer token to deposit wallet for fiat processing
+        if (!token.transfer(_depositWallet, netAmount)) revert("Transfer to fiat deposit wallet failed");
         
-        // STEP 2: Frontend must now call IDRX API to complete fiat withdrawal
-        // API endpoint: POST /api/transaction/redeem-request
-        // Required params: txHash (from this transaction), amount, bank details
-        // Note: IDRX.burnWithAccountNumber() called with net amount:
-        // - amount: netAmount (amount after fee deduction)
-        // - accountNumber: _hashedAccountNumber (hash from backend)
-        // User address (_user) is automatically determined by IDRX contract
-        
-        // Transfer fee to platform (feeRecipient)
+        // Transfer fee to platform
         if (fee > 0) {
-            IERC20 tokenERC20 = IERC20(room.tokenAddress);
-            if (!tokenERC20.transfer(feeRecipient, fee)) revert("Fee transfer failed");
+            if (!token.transfer(feeRecipient, fee)) revert("Fee transfer failed");
         }
         
         // Check if vesting is completed for this receiver
@@ -839,32 +792,7 @@ contract EscrowIDRX is ReentrancyGuard, Ownable, Pausable {
             }
         }
         
-        // Generate transaction hash for API call
-        // Note: In Solidity, we can't access tx.hash directly
-        // Frontend should get the transaction hash from the transaction receipt
-        bytes32 transactionHash = keccak256(
-            abi.encodePacked(
-                _escrowId,
-                msg.sender,
-                netAmount,
-                _hashedAccountNumber,
-                block.timestamp,
-                block.number
-            )
-        );
-        
-        // Emit event for frontend tracking
-        emit IDRXWithdrawnToFiat(
-            _escrowId,
-            msg.sender,
-            netAmount,
-            _hashedAccountNumber,
-            transactionHash
-        );
-        
-        // Return transaction hash for API call
-        // Note: Frontend should use the actual transaction hash from the transaction receipt
-        return transactionHash;
+        emit TokenWithdrawnToFiat(_escrowId, msg.sender, _amount, _depositWallet);
     }
     
     

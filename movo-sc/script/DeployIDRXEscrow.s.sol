@@ -39,8 +39,6 @@ contract DeployIDRXEscrow is Script {
         
         // Log contract details
         console.log("Platform fee:", escrowIDRX.platformFeeBps(), "basis points (0.25%)");
-        console.log("Min escrow amount:", escrowIDRX.minEscrowAmount(), "IDRX (2 decimals)");
-        console.log("Max escrow amount:", escrowIDRX.maxEscrowAmount(), "IDRX (2 decimals)");
-        console.log("IDRX contract address:", escrowIDRX.IDRX_ADDRESS());
+        console.log("Note: IDRX escrow contract - supports IDRX token with fiat conversion");
     }
 }

@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 import "forge-std/Script.sol";
-import "../src/EscrowUSDC.sol";
+import "../src/Escrow.sol";
 
 /*
 ███╗░░░███╗░█████╗░██╗░░░██╗░█████╗░
@@ -14,10 +14,10 @@ import "../src/EscrowUSDC.sol";
 */
 
 /**
- * @title DeployUSDCEscrow
- * @dev Script to deploy the EscrowUSDC contract
+ * @title DeployEscrow
+ * @dev Script to deploy the Escrow contract
  */
-contract DeployUSDCEscrow is Script {
+contract DeployEscrow is Script {
     
     function run() external {
         // Get deployer private key from environment
@@ -26,20 +26,19 @@ contract DeployUSDCEscrow is Script {
         // Start broadcasting transactions
         vm.startBroadcast(deployerPrivateKey);
         
-        // Deploy EscrowUSDC contract
+        // Deploy Escrow contract
         // Fee recipient is already set to 0x63470E56eFeB1759F3560500fB2d2FD43A86F179
-        EscrowUSDC escrowUSDC = new EscrowUSDC();
+        Escrow escrow = new Escrow();
         
         vm.stopBroadcast();
         
         // Log deployment information
-        console.log("EscrowUSDC deployed at:", address(escrowUSDC));
+        console.log("Escrow deployed at:", address(escrow));
         console.log("Fee recipient set to: 0x63470E56eFeB1759F3560500fB2d2FD43A86F179");
         console.log("Deployer address:", vm.addr(deployerPrivateKey));
         
         // Log contract details
-        console.log("Platform fee:", escrowUSDC.platformFeeBps(), "basis points (0.25%)");
-        console.log("Min escrow amount:", escrowUSDC.minEscrowAmount(), "USDC (6 decimals)");
-        console.log("Max escrow amount:", escrowUSDC.maxEscrowAmount(), "USDC (6 decimals)");
+        console.log("Platform fee:", escrow.platformFeeBps(), "basis points (0.25%)");
+        console.log("Note: Generic escrow contract - supports USDC, USDT, and other ERC20 tokens");
     }
 }
