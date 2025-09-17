@@ -245,6 +245,34 @@ export const generateEscrowId = (sender: string, timestamp: number): string => {
   return `escrow_${sender}_${timestamp}`;
 };
 
+// Validate and normalize Ethereum address
+export const validateAddress = (address: string): string => {
+  if (!address) {
+    throw new Error("Address is required");
+  }
+  
+  // Remove any whitespace
+  const cleanAddress = address.trim();
+  
+  // Check if it starts with 0x
+  if (!cleanAddress.startsWith('0x')) {
+    throw new Error(`Invalid address format: ${cleanAddress}. Address must start with '0x'`);
+  }
+  
+  // Check length (should be 42 characters including 0x)
+  if (cleanAddress.length !== 42) {
+    throw new Error(`Invalid address length: ${cleanAddress}. Expected 42 characters, got ${cleanAddress.length}`);
+  }
+  
+  // Check if it's a valid hex string
+  const hexPart = cleanAddress.slice(2);
+  if (!/^[0-9a-fA-F]+$/.test(hexPart)) {
+    throw new Error(`Invalid address format: ${cleanAddress}. Must contain only valid hex characters`);
+  }
+  
+  return cleanAddress.toLowerCase() as `0x${string}`;
+};
+
 export const parseTokenAmount = (
   amount: string,
   decimals: number = 6,
@@ -429,6 +457,11 @@ export const createEscrowOnchain = async (
       amounts: escrowData.amounts.map((a) => a.toString()),
       sender: walletClient.account.address,
     });
+    
+    // Validate contract address
+    if (!contract.address || !contract.address.startsWith('0x') || contract.address.length !== 42) {
+      throw new Error(`Invalid contract address: ${contract.address}`);
+    }
 
     // Verify contract has the function
     try {
@@ -448,7 +481,14 @@ export const createEscrowOnchain = async (
       );
     }
 
-    const tokenAddress = getTokenAddress(tokenType) as `0x${string}`;
+    const tokenAddress = validateAddress(getTokenAddress(tokenType));
+    
+    // Log token address for debugging
+    console.log("🔍 Token address validation:", {
+      tokenType,
+      tokenAddress,
+      isValidFormat: true, // Already validated by validateAddress
+    });
     
     // Calculate vesting parameters
     const vestingStartTime = escrowData.vestingEnabled 
@@ -458,10 +498,21 @@ export const createEscrowOnchain = async (
       ? BigInt(escrowData.vestingDuration * 24 * 60 * 60) // Convert days to seconds
       : BigInt(0);
 
+    // Validate and normalize receiver addresses
+    const validatedReceivers = escrowData.receivers.map((receiver, index) => {
+      try {
+        return validateAddress(receiver);
+      } catch (error) {
+        throw new Error(`Invalid receiver address at index ${index}: ${receiver}. ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
+    });
+    
     // Log the exact parameters being sent to the contract
     console.log("📋 Contract call parameters:", {
       function: "createEscrow",
-      receivers: escrowData.receivers,
+      contractAddress: contract.address,
+      tokenAddress,
+      receivers: validatedReceivers,
       amounts: escrowData.amounts.map((a) => a.toString()),
       sender: walletClient.account.address,
       vestingEnabled: escrowData.vestingEnabled,
@@ -470,9 +521,32 @@ export const createEscrowOnchain = async (
       vestingDurationSeconds: vestingDuration.toString(),
       vestingDurationFormatted: `${vestingDuration.toString()} seconds (${(Number(vestingDuration) / (24 * 60 * 60)).toFixed(2)} days)`,
     });
+    
+    // Additional debugging for address validation
+    console.log("🔍 Address validation details:", {
+      contractAddress: {
+        value: contract.address,
+        length: contract.address?.length,
+        startsWith0x: contract.address?.startsWith('0x'),
+        isValid: contract.address?.startsWith('0x') && contract.address?.length === 42
+      },
+      tokenAddress: {
+        value: tokenAddress,
+        length: tokenAddress?.length,
+        startsWith0x: tokenAddress?.startsWith('0x'),
+        isValid: tokenAddress?.startsWith('0x') && tokenAddress?.length === 42
+      },
+      receivers: validatedReceivers.map((addr, index) => ({
+        index,
+        address: addr,
+        length: addr?.length,
+        startsWith0x: addr?.startsWith('0x'),
+        isValid: addr?.startsWith('0x') && addr?.length === 42
+      }))
+    });
 
     const { request } = await contract.simulate.createEscrow(
-      [tokenAddress, escrowData.receivers, escrowData.amounts, vestingStartTime, vestingDuration],
+      [tokenAddress as `0x${string}`, validatedReceivers as `0x${string}`[], escrowData.amounts, vestingStartTime, vestingDuration],
       {
         account: walletClient.account.address,
       },
