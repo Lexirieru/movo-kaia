@@ -2,6 +2,7 @@ import { ethers } from "ethers";
 import payrollAbi from "../abi/payrollABI.json";
 import dotenv from "dotenv";
 import {
+  IncomingTransactionModel,
   TransactionHistoryModel,
   WithdrawHistoryModel,
 } from "../models/transactionRecordModel";
@@ -50,7 +51,10 @@ export const senderListener = async () => {
       console.log("Block:", event.blockNumber);
 
       // cari user sender
-      const userData = await UserModel.findOne({ walletAddress: sender });
+      const userData = await UserModel.findOne({
+        "WalletAddresses.walletAddress": sender,
+      });
+
       if (!userData) {
         console.log("User data not found!");
         return;
@@ -83,14 +87,14 @@ export const senderListener = async () => {
           continue;
         }
 
-        const addWithdrawHistoryToReceiver = new WithdrawHistoryModel({
+        const addIncomingTransactionModel = new IncomingTransactionModel({
           receiverId: receiverData._id,
-          amount: amount.toString(),
+          availableAmount: amount.toString(),
           originCurrency: "USDC",
           escrowId: escrowId, // optional: simpan escrowId biar traceable
         });
 
-        await addWithdrawHistoryToReceiver.save();
+        await addIncomingTransactionModel.save();
         console.log(
           `Withdraw history ditambahkan utk receiver ${receiverAddress}, amount: ${amount.toString()}`
         );

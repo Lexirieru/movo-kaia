@@ -138,6 +138,10 @@ const IncomingTransactionSchema = new Schema(
       required: true,
       default: Date.now,
     },
+    escrowId: {
+      type: String,
+      required: true,
+    },
   },
   {
     timestamps: true,

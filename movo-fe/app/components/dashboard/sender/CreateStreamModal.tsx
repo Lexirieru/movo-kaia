@@ -3,7 +3,11 @@ import { useState } from "react";
 import { X, Plus, Trash2, Wallet } from "lucide-react";
 import { ReceiverInGroup } from "@/types/receiverInGroupTemplate";
 import { useAuth } from "@/lib/userContext";
-import { addReceiverToGroup, saveEscrowToDatabase } from "@/app/api/api";
+import {
+  addReceiverToGroup,
+  getEscrowId,
+  saveEscrowToDatabase,
+} from "@/app/api/api";
 import { useParams } from "next/navigation";
 import { useWalletClientHook } from "@/lib/useWalletClient";
 import {
@@ -11,6 +15,7 @@ import {
   parseTokenAmount,
   addReceiver,
 } from "@/lib/smartContract";
+import { group } from "console";
 
 interface CreateStreamModalProps {
   isOpen: boolean;
@@ -252,8 +257,13 @@ export default function CreateStreamModal({
             escrowResult.error || "Failed to create escrow onchain",
           );
         }
-        const escrowIdBytes = `0x${escrowResult.escrowId}` as `0x${string}`;
+        if (!user) throw new Error("User not found");
+
+        const escrowId = await getEscrowId(user?._id, groupId);
+
         console.log(escrowResult);
+        console.log("escrowId", escrowId);
+        const escrowIdBytes = `0x${escrowId}` as `0x${string}`;
 
         const escrowData = {
           groupId: groupId,

@@ -228,10 +228,13 @@ export async function getEscrowId(req: Request, res: Response) {
       groupId,
     });
 
+    console.log(loadAllGroup);
+
     res.status(201).json({
       message: "Group successfully fetched",
       data: loadAllGroup?.escrowId,
     });
+
     return;
   } catch (err: any) {
     res.status(500).json({
