@@ -52,6 +52,12 @@ export const useWalletClientHook = () => {
         transport: custom(ethereum),
       });
       
+      console.log("🔍 Created viem wallet client:", {
+        account: walletClient.account,
+        chain: walletClient.chain,
+        hasTransport: !!walletClient.transport
+      });
+      
       // Create public client for simulation
       const publicClient = createPublicClient({
         chain: baseSepolia,

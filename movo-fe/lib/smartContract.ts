@@ -458,6 +458,17 @@ export const createEscrowOnchain = async (
       sender: walletClient.account.address,
     });
     
+    // Validate wallet client account
+    if (!walletClient.account || !walletClient.account.address) {
+      throw new Error("Wallet client account is not available. Please reconnect your wallet.");
+    }
+    
+    console.log("🔍 Wallet client validation:", {
+      hasAccount: !!walletClient.account,
+      accountAddress: walletClient.account.address,
+      accountType: walletClient.account.type,
+    });
+    
     // Validate contract address
     if (!contract.address || !contract.address.startsWith('0x') || contract.address.length !== 42) {
       throw new Error(`Invalid contract address: ${contract.address}`);
@@ -608,6 +619,18 @@ export const createEscrowOnchain = async (
     );
 
     console.log("✅ Simulation successful, executing transaction...");
+    
+    // Use the request directly from simulation, but ensure account is correct
+    console.log("🔍 Request details before execution:", {
+      address: request.address,
+      abi: request.abi ? "present" : "missing",
+      functionName: request.functionName,
+      args: request.args,
+      account: request.account,
+      value: request.value,
+    });
+    
+    // Execute the transaction using the simulated request
     const hash = await walletClient.writeContract(request);
     console.log("📝 Transaction submitted:", hash);
 
