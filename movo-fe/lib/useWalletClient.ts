@@ -1,20 +1,109 @@
 import { useWallet } from "./walletContext";
 import lineWalletProvider from "./lineWalletProvider";
+import { createWalletClient, custom, http, createPublicClient } from "viem";
+import { baseSepolia, kaiaTestnet } from "./smartContract";
 
 export const useWalletClientHook = () => {
   const { isConnected, address } = useWallet();
 
-  // Return a wallet client compatible with LINE Mini Dapp
+  // Detect which wallet is actually being used
+  const detectActualWallet = () => {
+    if (typeof window === 'undefined') return 'unknown';
+    
+    // Check for OKX wallet
+    if ((window as any).okxwallet) {
+      return 'okx';
+    }
+    
+    // Check for standard Ethereum wallets
+    if ((window as any).ethereum) {
+      const ethereum = (window as any).ethereum;
+      if (ethereum.isOKXWallet || ethereum.isOkxWallet) {
+        return 'okx';
+      }
+      if (ethereum.isMetaMask) {
+        return 'metamask';
+      }
+      return 'ethereum'; // Generic Ethereum wallet
+    }
+    
+    // Check for LINE wallet
+    if ((window as any).lineWallet) {
+      return 'line';
+    }
+    
+    return 'unknown';
+  };
+
+  // Return appropriate wallet client based on actual wallet
   if (isConnected && address) {
+    const actualWallet = detectActualWallet();
+    console.log("🔍 Detected actual wallet:", actualWallet);
+    
+    // For OKX, MetaMask, or other Ethereum wallets - return proper viem client
+    if (['okx', 'metamask', 'ethereum'].includes(actualWallet)) {
+      console.log("✅ Using proper viem wallet client for Ethereum wallet");
+      
+      // Create proper viem wallet client
+      const ethereum = (window as any).ethereum;
+      const walletClient = createWalletClient({
+        account: address as `0x${string}`,
+        chain: baseSepolia,
+        transport: custom(ethereum),
+      });
+      
+      // Create public client for simulation
+      const publicClient = createPublicClient({
+        chain: baseSepolia,
+        transport: http(),
+      });
+      
+      return {
+        _isEthereumWallet: true,
+        account: { address: address as `0x${string}` },
+        getChainId: async () => {
+          try {
+            const chainId = await walletClient.getChainId();
+            console.log('Ethereum wallet chain ID:', chainId);
+            return chainId;
+          } catch (error) {
+            console.error('Failed to get chain ID from Ethereum wallet:', error);
+            throw error;
+          }
+        },
+        writeContract: async (request: any) => {
+          console.log("🔍 Ethereum wallet writeContract called with request:", request);
+          try {
+            return await walletClient.writeContract(request);
+          } catch (error) {
+            console.error("❌ Error in writeContract:", error);
+            throw error;
+          }
+        },
+        simulateContract: async (request: any) => {
+          console.log("🔍 Ethereum wallet simulateContract called with request:", request);
+          try {
+            return await publicClient.simulateContract(request);
+          } catch (error) {
+            console.error("❌ Error in simulateContract:", error);
+            throw error;
+          }
+        },
+      };
+    }
+    
+    // For LINE wallet - return LINE-specific client
+    console.log("✅ Using LINE wallet client");
     return {
+      _isLineWallet: true, // Identifier for LINE wallet
       account: { address: address as `0x${string}` },
       getChainId: async () => {
         try {
           const chainId = await lineWalletProvider.getChainId();
-          console.log('Wallet client getChainId result:', chainId);
+          console.log('LINE wallet chain ID:', chainId);
           return chainId;
         } catch (error) {
-          console.error('Failed to get chain ID from wallet client:', error);
+          console.error('Failed to get chain ID from LINE wallet:', error);
           throw error;
         }
       },

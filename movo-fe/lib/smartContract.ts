@@ -111,16 +111,28 @@ export const detectWalletType = (walletClient: any): "OKX" | "LINE" | "UNKNOWN" 
     }
     
     // PRIORITY 3: Check for LINE wallet (custom implementation)
+    if (walletClient && walletClient._isLineWallet) {
+      console.log("✅ Detected LINE wallet via _isLineWallet");
+      return "LINE";
+    }
+    
+    // PRIORITY 4: Check for Ethereum wallet (OKX, MetaMask, etc.)
+    if (walletClient && walletClient._isEthereumWallet) {
+      console.log("✅ Detected Ethereum wallet via _isEthereumWallet");
+      return "OKX";
+    }
+    
+    // PRIORITY 5: Check for LINE wallet by method signature
     if (walletClient && typeof walletClient.getChainId === 'function') {
       // Check if it's our custom LINE wallet client by looking for specific LINE properties
       if (walletClient.account && walletClient.writeContract && 
           (walletClient.simulateContract || walletClient._isLineWallet)) {
-        console.log("✅ Detected LINE wallet");
+        console.log("✅ Detected LINE wallet via method signature");
         return "LINE";
       }
     }
     
-    // PRIORITY 4: Check for LINE wallet via window object
+    // PRIORITY 6: Check for LINE wallet via window object
     if (typeof window !== 'undefined' && (window as any).lineWallet) {
       console.log("✅ Detected LINE wallet via window.lineWallet");
       return "LINE";

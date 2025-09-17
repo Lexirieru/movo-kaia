@@ -56,6 +56,18 @@ NEXT_PUBLIC_APP_OG_IMAGE=
 # Redis config
 REDIS_URL=
 REDIS_TOKEN=
+
+# LINE Mini Dapp Configuration
+NEXT_PUBLIC_LINE_CLIENT_ID=your_line_client_id
+NEXT_PUBLIC_LINE_CLIENT_SECRET=your_line_client_secret
+NEXT_PUBLIC_LINE_DAPP_ID=your_line_dapp_id
+NEXT_PUBLIC_LINE_DAPP_NAME=your_dapp_name
+NEXT_PUBLIC_LINE_CHAIN_ID=84532
+NEXT_PUBLIC_LINE_RPC_ENDPOINT=https://sepolia.base.org
+
+# For production (Base Mainnet), use:
+# NEXT_PUBLIC_LINE_CHAIN_ID=8453
+# NEXT_PUBLIC_LINE_RPC_ENDPOINT=https://mainnet.base.org
 ```
 
 3. Start the development server:

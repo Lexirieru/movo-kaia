@@ -8,6 +8,7 @@ const LINE_WALLET_CONFIG = {
   dappId: process.env.NEXT_PUBLIC_LINE_DAPP_ID || 'N68c224f636f5a3565ea5cf82',
   dappName: process.env.NEXT_PUBLIC_LINE_DAPP_NAME || 'movo',
   chainId: process.env.NEXT_PUBLIC_LINE_CHAIN_ID || '84532', // Base Sepolia - change to '8453' for mainnet
+  chainNodeRpcEndpoint: process.env.NEXT_PUBLIC_LINE_RPC_ENDPOINT || 'https://sepolia.base.org', // Base Sepolia RPC
 };
 
 class LineWalletProvider {
@@ -36,6 +37,7 @@ class LineWalletProvider {
       this.sdk = await DappPortalSDK.init({
         clientId: LINE_WALLET_CONFIG.clientId,
         chainId: LINE_WALLET_CONFIG.chainId,
+        chainNodeRpcEndpoint: LINE_WALLET_CONFIG.chainNodeRpcEndpoint,
       });
       
       this.walletProvider = this.sdk.getWalletProvider();
