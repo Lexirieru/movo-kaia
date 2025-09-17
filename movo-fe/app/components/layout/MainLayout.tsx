@@ -12,20 +12,24 @@ interface MainLayoutProps {
   className?: string;
 }
 
-export default function MainLayout({ 
-  children, 
-  showNavbar = true, 
+export default function MainLayout({
+  children,
+  showNavbar = true,
   showBottomNav = true,
   showRoleBadge = true,
-  className = ""
+  className = "",
 }: MainLayoutProps) {
   return (
-    <div className={`min-h-screen bg-gradient-to-br from-black via-gray-900 to-black ${className}`}>
+    <div
+      className={`min-h-screen bg-gradient-to-br from-black via-gray-900 to-black ${className}`}
+    >
       {/* Top Navbar */}
       {showNavbar && <Navbar showRoleBadge={showRoleBadge} />}
-      
+
       {/* Main Content */}
-      <main className={`${showNavbar ? 'pt-16' : ''} ${showBottomNav ? 'pb-20' : ''}`}>
+      <main
+        className={`${showNavbar ? "pt-16" : ""} ${showBottomNav ? "pb-20" : ""}`}
+      >
         {children}
       </main>
 

@@ -172,7 +172,7 @@ export default function DashboardPage() {
                 <span>Determining role...</span>
               </div>
             </div>
-          ) : (viewParam === "receiver" || userRole === "receiver") ? (
+          ) : viewParam === "receiver" || userRole === "receiver" ? (
             <ReceiverDashboard />
           ) : (
             <>
@@ -182,8 +182,8 @@ export default function DashboardPage() {
                     Welcome to Movo
                   </h2>
                   <p className="text-gray-400 mb-8">
-                    Get started by creating a payment group or wait to
-                    receive payments from others
+                    Get started by creating a payment group or wait to receive
+                    payments from others
                   </p>
                 </div>
               )}

@@ -70,12 +70,12 @@ export default function BottomNavbar() {
                   : "text-gray-400 hover:text-white hover:bg-gray-800/50"
               }`}
             >
-              <IconComponent 
+              <IconComponent
                 className={`w-6 h-6 mb-1 ${
                   item.isActive ? "text-cyan-400" : "text-current"
-                }`} 
+                }`}
               />
-              <span 
+              <span
                 className={`text-xs font-medium ${
                   item.isActive ? "text-cyan-400" : "text-current"
                 }`}
