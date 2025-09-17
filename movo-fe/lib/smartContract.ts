@@ -490,6 +490,24 @@ export const createEscrowOnchain = async (
       isValidFormat: true, // Already validated by validateAddress
     });
     
+    // Check if token contract exists on the network
+    try {
+      const tokenCode = await publicClient.getBytecode({
+        address: tokenAddress as `0x${string}`,
+      });
+      if (!tokenCode || tokenCode === "0x") {
+        throw new Error(
+          `Token contract not found at address ${tokenAddress}. Please check if the ${tokenType} token is deployed on Base Sepolia.`
+        );
+      }
+      console.log(`✅ ${tokenType} token contract found at address:`, tokenAddress);
+    } catch (error) {
+      console.error(`❌ Error checking ${tokenType} token contract:`, error);
+      throw new Error(
+        `Token contract not found at address ${tokenAddress}. Please check if the ${tokenType} token is deployed on Base Sepolia.`
+      );
+    }
+    
     // Calculate vesting parameters
     const vestingStartTime = escrowData.vestingEnabled 
       ? BigInt(Math.floor(Date.now() / 1000)) // Current timestamp
@@ -520,6 +538,43 @@ export const createEscrowOnchain = async (
       vestingStartTime: vestingStartTime.toString(),
       vestingDurationSeconds: vestingDuration.toString(),
       vestingDurationFormatted: `${vestingDuration.toString()} seconds (${(Number(vestingDuration) / (24 * 60 * 60)).toFixed(2)} days)`,
+    });
+    
+    // Log the exact arguments array that will be sent to the contract
+    const contractArgs = [tokenAddress as `0x${string}`, validatedReceivers as `0x${string}`[], escrowData.amounts, vestingStartTime, vestingDuration];
+    console.log("🔍 Contract arguments array:", {
+      args: contractArgs,
+      argsLength: contractArgs.length,
+      argTypes: contractArgs.map((arg, index) => ({
+        index,
+        type: typeof arg,
+        isArray: Array.isArray(arg),
+        value: Array.isArray(arg) ? arg : arg.toString()
+      }))
+    });
+    
+    // Detailed logging for each argument
+    console.log("🔍 Detailed argument analysis:", {
+      tokenAddress: {
+        value: tokenAddress,
+        length: tokenAddress.length,
+        startsWith0x: tokenAddress.startsWith('0x'),
+        isLowerCase: tokenAddress === tokenAddress.toLowerCase(),
+        hasInvalidChars: !/^0x[0-9a-f]+$/.test(tokenAddress)
+      },
+      receivers: validatedReceivers.map((addr, index) => ({
+        index,
+        address: addr,
+        length: addr.length,
+        startsWith0x: addr.startsWith('0x'),
+        isLowerCase: addr === addr.toLowerCase(),
+        hasInvalidChars: !/^0x[0-9a-f]+$/.test(addr)
+      })),
+      amounts: escrowData.amounts.map((amount, index) => ({
+        index,
+        value: amount.toString(),
+        isBigInt: typeof amount === 'bigint'
+      }))
     });
     
     // Additional debugging for address validation
