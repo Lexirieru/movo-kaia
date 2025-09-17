@@ -1,6 +1,5 @@
 "use client";
 
-import { useMiniKit } from "@coinbase/onchainkit/minikit";
 import { useEffect, useState } from "react";
 import Header from "./components/landing/Header";
 import HeroSection from "./components/landing/HeroSection";
@@ -8,17 +7,6 @@ import HowItWorks from "./components/landing/HowItWorks";
 import Footer from "./components/landing/Footer";
 
 export default function App() {
-  // =========================================================================
-  // BAGIAN INTI MINI APP - JANGAN DIHAPUS
-  // Kode ini penting untuk komunikasi dengan aplikasi Coinbase
-  // =========================================================================
-  const { setFrameReady, isFrameReady } = useMiniKit();
-  useEffect(() => {
-    if (!isFrameReady) {
-      setFrameReady();
-    }
-  }, [setFrameReady, isFrameReady]);
-
   const [isLoaded, setIsLoaded] = useState(false);
 
   useEffect(() => {

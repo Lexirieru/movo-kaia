@@ -8,9 +8,8 @@ import {
   useState,
   ReactNode,
 } from "react";
-import { useAccount, useDisconnect, useConnect } from "wagmi";
-import { injected } from "wagmi/connectors";
 import { useRouter } from "next/navigation";
+import lineWalletProvider from "./lineWalletProvider";
 
 interface WalletContextType {
   isConnected: boolean;
@@ -28,32 +27,45 @@ interface WalletContextType {
 const WalletContext = createContext<WalletContextType | undefined>(undefined);
 
 export function WalletProvider({ children }: { children: ReactNode }) {
-  const { address, isConnected, isConnecting } = useAccount();
-  const { disconnect } = useDisconnect();
-  const { connect } = useConnect();
+  const [address, setAddress] = useState<string | undefined>(undefined);
+  const [isConnected, setIsConnected] = useState(false);
+  const [isConnecting, setIsConnecting] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isWalletSyncing, setIsWalletSyncing] = useState(false);
   const [prevAddress, setPrevAddress] = useState<string | undefined>(undefined);
   const [refreshUserCallback, setRefreshUserCallback] = useState<
     (() => Promise<void>) | null
   >(null);
-  const [isInitialized, setIsInitialized] = useState(false); // NEW: Track jika sudah initialized
+  const [isInitialized, setIsInitialized] = useState(false);
   const [processedAddresses, setProcessedAddresses] = useState<Set<string>>(
     new Set(),
-  ); // NEW: Track processed addresses
+  );
   const router = useRouter();
 
   useEffect(() => {
-    // Check for existing connection on mount
+    // Initialize LINE Mini Dapp and check for existing connection
     const checkConnection = async () => {
-      if (typeof window.ethereum !== "undefined") {
-        try {
-          const accounts = await window.ethereum.request({
-            method: "eth_accounts",
-          });
-        } catch (error) {
-          console.error("Error checking accounts:", error);
+      try {
+        // Only initialize in browser environment
+        if (typeof window !== 'undefined') {
+          // Initialize LINE Mini Dapp SDK
+          await lineWalletProvider.init();
+          
+          // Check if browser is supported
+          if (!lineWalletProvider.isSupportedBrowser()) {
+            console.warn("Browser not supported by LINE Mini Dapp");
+          }
+
+          // Check for existing wallet connection
+          const currentAccount = await lineWalletProvider.getAccount();
+          if (currentAccount) {
+            setAddress(currentAccount);
+            setIsConnected(true);
+            console.log("Existing wallet connection found:", currentAccount);
+          }
         }
+      } catch (error) {
+        console.error("Error initializing LINE Mini Dapp:", error);
       }
 
       // Reduce loading time
@@ -174,61 +186,57 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const connectWallet = async (): Promise<void> => {
     try {
       console.log("🔌 Attempting to connect wallet...");
-
-      if (typeof window.ethereum !== "undefined") {
-        // Use wagmi connect function with injected connector (MetaMask)
-        connect({ connector: injected() });
-        // Note: Auto-login akan terjadi di useEffect di atas setelah connect berhasil
+      setIsConnecting(true);
+      
+      // Only connect in browser environment
+      if (typeof window === 'undefined') {
+        throw new Error("Wallet connection is only available in browser environment");
+      }
+      
+      const connectedAddress = await lineWalletProvider.connectWallet();
+      
+      if (connectedAddress) {
+        setAddress(connectedAddress);
+        setIsConnected(true);
+        console.log("Wallet connected successfully:", connectedAddress);
       } else {
-        throw new Error("Please install MetaMask to connect your wallet");
+        throw new Error("Failed to connect wallet");
       }
     } catch (error: any) {
       console.error("❌ Error connecting wallet:", error);
+      setIsConnected(false);
+      setAddress(undefined);
       throw error;
+    } finally {
+      setIsConnecting(false);
     }
   };
 
-  // Listen for account changes in MetaMask
-  useEffect(() => {
-    if (typeof window.ethereum !== "undefined") {
-      const handleAccountsChanged = async (accounts: string[]) => {
-        if (accounts.length === 0) {
-          try {
-            // logout dari backend sebelum disconnect
-            await logout();
-            console.log("✅ Logout API called successfully");
-          } catch (error) {
-            console.error("❌ Error during logout:", error);
-          }
-          // Always disconnect wagmi regardless of logout success/failure
-          disconnect();
-          setPrevAddress(undefined);
-          setProcessedAddresses(new Set()); // Clear processed addresses
-          setIsWalletSyncing(false);
-        } else if (accounts[0] !== prevAddress && isInitialized) {
-          // Account switched - clear processed addresses untuk allow new account login
-          console.log("🔄 Account switched to:", accounts[0]);
-          setProcessedAddresses(new Set());
-          // Don't set prevAddress here, let the main useEffect handle it
-        }
-      };
-
-      const handleChainChanged = (chainId: string) => {
-        console.log("⛓️ Chain changed:", chainId);
-      };
-
-      window.ethereum.on("accountsChanged", handleAccountsChanged);
-      window.ethereum.on("chainChanged", handleChainChanged);
-
-      return () => {
-        window.ethereum.removeListener(
-          "accountsChanged",
-          handleAccountsChanged,
-        );
-        window.ethereum.removeListener("chainChanged", handleChainChanged);
-      };
+  // Disconnect function for LINE Mini Dapp
+  const disconnect = async () => {
+    try {
+      // Only disconnect in browser environment
+      if (typeof window !== 'undefined') {
+        await lineWalletProvider.disconnectWallet();
+      }
+      await logout();
+      console.log("✅ Logout API called successfully");
+      
+      setAddress(undefined);
+      setIsConnected(false);
+      setPrevAddress(undefined);
+      setProcessedAddresses(new Set());
+      setIsWalletSyncing(false);
+    } catch (error) {
+      console.error("❌ Error during disconnect:", error);
+      // Still reset state even if logout fails
+      setAddress(undefined);
+      setIsConnected(false);
+      setPrevAddress(undefined);
+      setProcessedAddresses(new Set());
+      setIsWalletSyncing(false);
     }
-  }, [disconnect, prevAddress, isInitialized]);
+  };
 
   const value: WalletContextType = {
     isConnected,

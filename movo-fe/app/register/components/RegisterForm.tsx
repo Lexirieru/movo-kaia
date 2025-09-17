@@ -64,7 +64,7 @@ export default function RegisterForm() {
         formData.email,
         formData.name,
         formData.password,
-        address, // Use address from wagmi
+        address, // Use address from wallet context
       );
 
       console.log(response);
