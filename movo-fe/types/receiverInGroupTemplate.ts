@@ -20,7 +20,7 @@ export interface Token {
 
 export interface GroupOfUser {
   groupId: string;
-  groupName: string;
+  nameOfGroup: string;
   senderId: string;
   senderName: string;
   Receivers: ReceiverInGroup[];

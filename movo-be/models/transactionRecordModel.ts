@@ -29,7 +29,7 @@ const TransactionHistorySchema = new Schema({
     type: String,
     required: true,
   },
-  groupName: {
+  nameOfGroup: {
     type: String,
     required: true,
   },

@@ -6,26 +6,26 @@ import { X, Users, Plus } from "lucide-react";
 interface CreateGroupModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onCreateGroup: (groupData: { groupName: string }) => void;
+  onCreateGroup: (groupData: { nameOfGroup: string }) => void;
 }
 
-export default function CreateGroupModal({ 
-  isOpen, 
-  onClose, 
-  onCreateGroup 
+export default function CreateGroupModal({
+  isOpen,
+  onClose,
+  onCreateGroup,
 }: CreateGroupModalProps) {
-  const [groupName, setGroupName] = useState("");
+  const [nameOfGroup, setNameOfGroup] = useState("");
   const [isCreating, setIsCreating] = useState(false);
 
   const handleSubmit = async () => {
-    if (!groupName.trim()) return;
-    
+    if (!nameOfGroup.trim()) return;
+
     setIsCreating(true);
-    
+
     try {
-      await onCreateGroup({ groupName: groupName.trim() });
+      await onCreateGroup({ nameOfGroup: nameOfGroup.trim() });
       // Reset form
-      setGroupName("");
+      setNameOfGroup("");
     } catch (err) {
       console.error("Failed to create group", err);
     } finally {
@@ -35,7 +35,7 @@ export default function CreateGroupModal({
 
   const handleClose = () => {
     if (!isCreating) {
-      setGroupName("");
+      setNameOfGroup("");
       onClose();
     }
   };
@@ -45,11 +45,11 @@ export default function CreateGroupModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       {/* Backdrop */}
-      <div 
+      <div
         className="absolute inset-0 bg-black/60 backdrop-blur-sm"
         onClick={handleClose}
       />
-      
+
       {/* Modal */}
       <div className="relative bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 rounded-2xl border border-white/10 shadow-2xl w-full max-w-md mx-4 overflow-hidden">
         {/* Header */}
@@ -63,7 +63,7 @@ export default function CreateGroupModal({
               <p className="text-white/60 text-sm">Start a new payment group</p>
             </div>
           </div>
-          
+
           <button
             onClick={handleClose}
             disabled={isCreating}
@@ -82,8 +82,8 @@ export default function CreateGroupModal({
               </label>
               <input
                 type="text"
-                value={groupName}
-                onChange={(e) => setGroupName(e.target.value)}
+                value={nameOfGroup}
+                onChange={(e) => setNameOfGroup(e.target.value)}
                 placeholder="Enter group name (e.g., Marketing Team Bonus)"
                 className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 focus:border-cyan-500/50 transition-all"
                 disabled={isCreating}
@@ -91,7 +91,7 @@ export default function CreateGroupModal({
                 required
               />
               <p className="text-white/40 text-xs mt-1">
-                {groupName.length}/100 characters
+                {nameOfGroup.length}/100 characters
               </p>
             </div>
 
@@ -102,9 +102,12 @@ export default function CreateGroupModal({
                   <Users className="w-3 h-3 text-cyan-400" />
                 </div>
                 <div>
-                  <h3 className="text-cyan-400 text-sm font-medium mb-1">Next Steps</h3>
+                  <h3 className="text-cyan-400 text-sm font-medium mb-1">
+                    Next Steps
+                  </h3>
                   <p className="text-white/60 text-xs leading-relaxed">
-                    After creating the group, you'll be able to add recipients and configure payment details.
+                    After creating the group, you'll be able to add recipients
+                    and configure payment details.
                   </p>
                 </div>
               </div>
@@ -121,10 +124,10 @@ export default function CreateGroupModal({
             >
               Cancel
             </button>
-            
+
             <button
               onClick={handleSubmit}
-              disabled={!groupName.trim() || isCreating}
+              disabled={!nameOfGroup.trim() || isCreating}
               className="flex-1 bg-gradient-to-r from-cyan-500 to-blue-600 text-white px-4 py-3 rounded-xl font-medium hover:shadow-lg hover:shadow-cyan-500/25 transition-all disabled:opacity-50 disabled:hover:shadow-none flex items-center justify-center space-x-2 hover:scale-105"
             >
               {isCreating ? (
@@ -143,10 +146,12 @@ export default function CreateGroupModal({
         </div>
 
         {/* Generated ID Preview (for development) */}
-        {groupName.trim() && (
+        {nameOfGroup.trim() && (
           <div className="px-6 pb-6">
             <div className="bg-white/5 rounded-xl p-3 border border-white/10">
-              <div className="text-white/60 text-xs mb-1">Generated Group ID Preview:</div>
+              <div className="text-white/60 text-xs mb-1">
+                Generated Group ID Preview:
+              </div>
               <div className="text-white/40 text-xs font-mono">
                 group_{Date.now()}_xxxxxxxxx
               </div>

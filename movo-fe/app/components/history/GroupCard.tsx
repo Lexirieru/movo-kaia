@@ -17,7 +17,7 @@ export default function GroupCard({ group, onClick }: GroupCardProps) {
       <div className="flex items-start justify-between mb-4">
         <div>
           <h3 className="text-lg font-semibold text-white mb-1">
-            {group.groupName}
+            {group.nameOfGroup}
           </h3>
           <p className="text-xs text-gray-400">
             ID: {group.groupId.slice(0, 8)}...

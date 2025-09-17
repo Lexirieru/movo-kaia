@@ -29,7 +29,7 @@ export default function GroupDetailPage({ params }: PageProps) {
   useEffect(() => {
     const fetchGroupDetail = async () => {
       if (!user?._id || !currentWalletAddress) return;
-      
+
       try {
         const groupData = await loadSpecifiedGroup(user._id, params.groupId);
         if (groupData) {
@@ -69,7 +69,7 @@ export default function GroupDetailPage({ params }: PageProps) {
             description="The requested group could not be found."
             action={{
               label: "Back to Groups",
-              onClick: () => router.push("/history/sender")
+              onClick: () => router.push("/history/sender"),
             }}
           />
         </div>
@@ -77,7 +77,11 @@ export default function GroupDetailPage({ params }: PageProps) {
     );
   }
 
-  const totalAmount = group.Receivers?.reduce((sum, receiver) => sum + ((receiver.amount) || 0), 0) || 0;
+  const totalAmount =
+    group.Receivers?.reduce(
+      (sum, receiver) => sum + (receiver.amount || 0),
+      0,
+    ) || 0;
   const recipientCount = group.Receivers?.length || 0;
 
   const statsData = [
@@ -85,13 +89,13 @@ export default function GroupDetailPage({ params }: PageProps) {
       icon: <DollarSign className="w-5 h-5 text-blue-400" />,
       value: `$${totalAmount.toFixed(2)}`,
       label: "Total Amount",
-      iconBgColor: "bg-blue-500/20"
+      iconBgColor: "bg-blue-500/20",
     },
     {
       icon: <Users className="w-5 h-5 text-green-400" />,
       value: recipientCount,
       label: "Recipients",
-      iconBgColor: "bg-green-500/20"
+      iconBgColor: "bg-green-500/20",
     },
   ];
   return (
@@ -112,7 +116,7 @@ export default function GroupDetailPage({ params }: PageProps) {
         {/* Recipients List */}
         <div className="bg-gray-800/50 backdrop-blur-sm border border-gray-700/50 rounded-xl p-6">
           <h2 className="text-xl font-semibold text-white mb-4">Recipients</h2>
-          
+
           {group.Receivers && group.Receivers.length > 0 ? (
             <div className="space-y-3">
               {group.Receivers.map((receiver, index) => (
@@ -138,7 +142,7 @@ export default function GroupDetailPage({ params }: PageProps) {
         isOpen={showReceiverModal}
         onClose={() => setShowReceiverModal(false)}
         receiver={selectedReceiver}
-        groupName={group.nameOfGroup}
+        nameOfGroup={group.nameOfGroup}
       />
     </div>
   );

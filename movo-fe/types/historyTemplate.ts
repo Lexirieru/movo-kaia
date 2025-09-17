@@ -23,7 +23,7 @@ export interface TransactionHistory {
   senderName: string;
   receiverName: string;
   groupId: string;
-  groupName: string;
+  nameOfGroup: string;
   totalAmount: string;
   Receiver: ReceiverInGroup[];
   totalReceiver: string;

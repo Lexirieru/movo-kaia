@@ -177,7 +177,7 @@ export default function GroupList({
                   </div>
                   <div>
                     <div className="text-white font-medium">
-                      {group.groupName}
+                      {group.nameOfGroup}
                     </div>
                     <div className="text-white/60 text-sm">
                       by {group.senderName}
@@ -278,7 +278,7 @@ export default function GroupList({
                         </div>
                         <div>
                           <div className="text-white font-medium">
-                            {group.groupName}
+                            {group.nameOfGroup}
                           </div>
                           <div className="text-white/60 text-sm">
                             by {group.senderName}

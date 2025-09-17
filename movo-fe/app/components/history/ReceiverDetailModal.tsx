@@ -1,13 +1,18 @@
 "use client";
-import {X} from "lucide-react";
+import { X } from "lucide-react";
 interface ReceiverDetailModalProps {
   isOpen: boolean;
   onClose: () => void;
   receiver: any;
-  groupName: string;
+  nameOfGroup: string;
 }
 
-export default function ReceiverDetailModal({ isOpen, onClose, receiver, groupName }: ReceiverDetailModalProps) {
+export default function ReceiverDetailModal({
+  isOpen,
+  onClose,
+  receiver,
+  nameOfGroup,
+}: ReceiverDetailModalProps) {
   if (!isOpen || !receiver) return null;
 
   return (
@@ -26,39 +31,47 @@ export default function ReceiverDetailModal({ isOpen, onClose, receiver, groupNa
         <div className="space-y-4">
           <div>
             <label className="text-gray-400 text-sm">Group</label>
-            <p className="text-white font-medium">{groupName}</p>
+            <p className="text-white font-medium">{nameOfGroup}</p>
           </div>
 
           <div>
             <label className="text-gray-400 text-sm">Name</label>
-            <p className="text-white font-medium">{receiver.fullname || 'None'}</p>
+            <p className="text-white font-medium">
+              {receiver.fullname || "None"}
+            </p>
           </div>
 
           <div>
             <label className="text-gray-400 text-sm">Wallet Address</label>
-            <p className="text-white font-mono text-sm break-all">{receiver.walletAddress}</p>
+            <p className="text-white font-mono text-sm break-all">
+              {receiver.walletAddress}
+            </p>
           </div>
 
           <div>
             <label className="text-gray-400 text-sm">Amount</label>
             <p className="text-green-400 font-semibold text-lg">
-              ${parseFloat(receiver.amount || '0').toFixed(2)}
+              ${parseFloat(receiver.amount || "0").toFixed(2)}
             </p>
           </div>
 
           <div>
             <label className="text-gray-400 text-sm">Currency</label>
-            <p className="text-white">{receiver.originCurrency || 'USDC'}</p>
+            <p className="text-white">{receiver.originCurrency || "USDC"}</p>
           </div>
 
           {receiver.status && (
             <div>
               <label className="text-gray-400 text-sm">Status</label>
-              <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${
-                receiver.status === 'completed' ? 'bg-green-500/20 text-green-300' :
-                receiver.status === 'pending' ? 'bg-yellow-500/20 text-yellow-300' :
-                'bg-gray-500/20 text-gray-300'
-              }`}>
+              <span
+                className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${
+                  receiver.status === "completed"
+                    ? "bg-green-500/20 text-green-300"
+                    : receiver.status === "pending"
+                      ? "bg-yellow-500/20 text-yellow-300"
+                      : "bg-gray-500/20 text-gray-300"
+                }`}
+              >
                 {receiver.status}
               </span>
             </div>

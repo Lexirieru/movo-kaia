@@ -51,7 +51,7 @@ export default function GroupDashboard({ onRoleChange }: GroupDashboardProps) {
 
   // --- LOGIKA FILTER & KALKULASI ---
   const filteredGroups = groups.filter((group) =>
-    (group.groupName ?? "").toLowerCase().includes(searchTerm.toLowerCase()),
+    (group.nameOfGroup ?? "").toLowerCase().includes(searchTerm.toLowerCase()),
   );
 
   // Reset hasFetched ketika currentWalletAddress berubah
@@ -74,7 +74,7 @@ export default function GroupDashboard({ onRoleChange }: GroupDashboardProps) {
     router.push(`/dashboard/sender/${groupId}`);
   };
 
-  const handleCreateGroup = async (groupData: { groupName: string }) => {
+  const handleCreateGroup = async (groupData: { nameOfGroup: string }) => {
     try {
       // Tunggu user siap
       if (loading || !user?._id || !user?.email) {
@@ -94,7 +94,7 @@ export default function GroupDashboard({ onRoleChange }: GroupDashboardProps) {
       // Create new group object
       const newGroup: GroupOfUser = {
         groupId,
-        groupName: groupData.groupName,
+        nameOfGroup: groupData.nameOfGroup,
         senderId: user?._id || "",
         senderName: user?.fullname || "",
         Receivers: [],
@@ -108,7 +108,7 @@ export default function GroupDashboard({ onRoleChange }: GroupDashboardProps) {
         user._id,
         user.email,
         groupId,
-        groupData.groupName,
+        groupData.nameOfGroup,
         currentWalletAddress,
       );
 
