@@ -106,9 +106,14 @@ const UserDataSchema = new Schema(
 );
 
 export const UserModel = mongoose.model("UserData", UserDataSchema);
+
 const GroupOfUserSchema = new Schema(
   {
     escrowId: {
+      type: String,
+      required: false,
+    },
+    blockNumber: {
       type: String,
       required: false,
     },
@@ -157,62 +162,37 @@ const GroupOfUserSchema = new Schema(
           type: mongoose.Schema.Types.ObjectId,
           required: true,
         },
-        email: {
+        walletAddress: {
           type: String,
-          required: true,
+          required: false,
         },
         fullname: {
           type: String,
-          required: true,
+          required: false,
         },
         apiKey: {
           type: String,
-          required: true,
+          required: false,
         },
         secretKey: {
           type: String,
-          required: true,
+          required: false,
         },
-
         // dari fe
         originCurrency: {
           type: String,
-          required: true,
+          required: false,
         },
         tokenIcon: {
           type: String,
-          required: true,
-        },
-        walletAddress: {
-          type: String,
-          required: true,
+          required: false,
         },
         depositWalletAddress: {
           type: String,
-          required: true,
+          required: false,
         },
         amount: {
           type: Number,
-          required: false,
-        },
-        bankId: {
-          type: String,
-          required: false,
-        },
-        bankName: {
-          type: String,
-          required: false,
-        },
-        bankCode: {
-          type: String,
-          required: false,
-        },
-        bankAccountNumber: {
-          type: String,
-          required: false,
-        },
-        bankAccountName: {
-          type: String,
           required: false,
         },
       },

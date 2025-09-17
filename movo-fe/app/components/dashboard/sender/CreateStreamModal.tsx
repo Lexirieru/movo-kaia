@@ -3,11 +3,7 @@ import { useState } from "react";
 import { X, Plus, Trash2, Wallet } from "lucide-react";
 import { ReceiverInGroup } from "@/types/receiverInGroupTemplate";
 import { useAuth } from "@/lib/userContext";
-import {
-  addReceiverToGroup,
-  getEscrowId,
-  saveEscrowToDatabase,
-} from "@/app/api/api";
+import { getEscrowId, saveEscrowToDatabase } from "@/app/api/api";
 import { useParams } from "next/navigation";
 import { useWalletClientHook } from "@/lib/useWalletClient";
 import {
@@ -15,7 +11,6 @@ import {
   parseTokenAmount,
   addReceiver,
 } from "@/lib/smartContract";
-import { group } from "console";
 
 interface CreateStreamModalProps {
   isOpen: boolean;
@@ -195,14 +190,6 @@ export default function CreateStreamModal({
           );
         }
         if (!user) return;
-        await addReceiverToGroup(
-          user._id,
-          formData.token,
-          formData.token === "USDC" ? "💵" : "🔗",
-          groupId,
-          receiver.address,
-          receiver.amount,
-        );
 
         const newStream: ReceiverInGroup = {
           _id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
@@ -261,7 +248,6 @@ export default function CreateStreamModal({
 
         const escrowId = await getEscrowId(user?._id, groupId);
 
-        console.log(escrowResult);
         console.log("escrowId", escrowId);
         const escrowIdBytes = `0x${escrowId}` as `0x${string}`;
 
@@ -287,15 +273,6 @@ export default function CreateStreamModal({
         if (!user) return;
         // If escrow created successfully onchain, save to backend
         for (const receiver of formData.receivers) {
-          await addReceiverToGroup(
-            user._id,
-            formData.token,
-            formData.token === "USDC" ? "💵" : "🔗",
-            groupId,
-            receiver.address,
-            receiver.amount,
-          );
-
           const newStream: ReceiverInGroup = {
             _id:
               Date.now().toString() + Math.random().toString(36).substr(2, 9),

@@ -23,7 +23,6 @@ import {
   loadSpecifiedGroup,
   removeReceiverDataFromGroup,
   loadSpecifiedGroupTransactionHistory,
-  addReceiverToGroup,
 } from "../controllers/userSenderController";
 import {
   loadAllIncomingTransaction,
@@ -31,6 +30,10 @@ import {
   loadAllWithdrawHistory,
   loadSpecificGroupInformation,
 } from "../controllers/userReceiverController";
+import {
+  goldskyEscrowCreatedWebhook,
+  // goldskyEscrowReceiverAddedWebhook,
+} from "../controllers/thirdPartyController";
 
 const router = express.Router();
 
@@ -111,12 +114,6 @@ const routes: RouteDefinition[] = [
   },
   {
     method: "post",
-    path: "/addReceiverToGroup",
-    action: addReceiverToGroup,
-  },
-
-  {
-    method: "post",
     path: "/editReceiverAmountInGroup",
     action: editReceiverAmountInGroup,
   },
@@ -189,6 +186,17 @@ const routes: RouteDefinition[] = [
     path: "/loadSpecifiedGroupForReceiver",
     action: loadSpecificGroupInformation,
   },
+
+  {
+    method: "post",
+    path: "/webhook/goldsky-escrow-created",
+    action: goldskyEscrowCreatedWebhook,
+  },
+  // {
+  //   method: "post",
+  //   path: "/webhook/goldsky-escrow-receiver-added",
+  //   action: goldskyEscrowReceiverAddedWebhook,
+  // },
 ];
 
 routes.forEach((route) => {

@@ -155,29 +155,6 @@ export const addBankAccountToDatabase = async (
   }
 };
 
-export const addReceiverToGroup = async (
-  senderId: string,
-  originCurrency: string,
-  tokenIcon: string,
-  groupId: string,
-  walletAddress: string,
-  amount: string,
-) => {
-  try {
-    const response = await api.post("/addReceiverToGroup", {
-      senderId,
-      originCurrency,
-      tokenIcon,
-      groupId,
-      walletAddress,
-      amount,
-    });
-    return response.data;
-  } catch (err) {
-    console.log(err);
-  }
-};
-
 export const getEscrowId = async (_id: string, groupId: string) => {
   try {
     const response = await api.post("/getEscrowId", { _id, groupId });

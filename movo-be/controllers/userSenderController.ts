@@ -70,9 +70,11 @@ export async function saveEscrowToDatabase(req: Request, res: Response) {
     groupId,
     escrowId,
     originCurrency,
+    // wallet Addressnya sender
     walletAddress,
     totalAmount,
-    receivers,
+    // receivers itu array of object yang isinya address, fullname, amount
+    // receivers,
     transactionHash,
     status,
     createdAt,
@@ -90,15 +92,15 @@ export async function saveEscrowToDatabase(req: Request, res: Response) {
           transactionHash,
           status,
           // Update receivers dengan bank account info jika ada
-          Receivers: receivers.map((receiver: any) => ({
-            ...receiver,
-            // Keep existing bank account info if available
-            bankId: receiver.bankId,
-            bankName: receiver.bankName,
-            bankCode: receiver.bankCode,
-            bankAccountNumber: receiver.bankAccountNumber,
-            bankAccountName: receiver.bankAccountName,
-          })),
+          // Receivers: receivers.map((receiver: any) => ({
+          //   ...receiver,
+          //   // Keep existing bank account info if available
+          //   bankId: receiver.bankId,
+          //   bankName: receiver.bankName,
+          //   bankCode: receiver.bankCode,
+          //   bankAccountNumber: receiver.bankAccountNumber,
+          //   bankAccountName: receiver.bankAccountName,
+          // })),
         },
       },
       { new: true }
@@ -120,8 +122,6 @@ export async function saveEscrowToDatabase(req: Request, res: Response) {
     });
   }
 }
-// belum digarap
-export async function addReceiverToGroup(req: Request, res: Response) {}
 
 export async function editReceiverAmountInGroup(req: Request, res: Response) {
   const { senderId, groupId, receiverId, amount } = req.body;
