@@ -3,17 +3,18 @@
 import { type ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { WagmiProvider, createConfig, http } from "wagmi";
-import { baseSepolia, arbitrumSepolia } from "wagmi/chains";
+import { baseSepolia, base, kaia } from "wagmi/chains";
 import { injected } from "wagmi/connectors";
 import { WalletProvider } from "@/lib/walletContext";
 
 // Create wagmi config for network switching only
 const wagmiConfig = createConfig({
-  chains: [baseSepolia, arbitrumSepolia],
+  chains: [baseSepolia, base, kaia],
   connectors: [injected()],
   transports: {
     [baseSepolia.id]: http(),
-    [arbitrumSepolia.id]: http(),
+    [base.id]: http(),
+    [kaia.id]: http(),
   },
 });
 

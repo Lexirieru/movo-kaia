@@ -14,6 +14,7 @@ import ClaimModal from "./receiver/ClaimModal";
 import { useAuth } from "@/lib/userContext";
 import { loadAllIncomingTransaction } from "@/app/api/api";
 import { IncomingTransaction } from "@/types/historyTemplate";
+import MainLayout from "../layout/MainLayout";
 
 interface ReceiverDashboardProps {
   onDropdownOpen?: () => void;
@@ -242,8 +243,8 @@ export default function ReceiverDashboard({
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-black">
-      <div className="container mx-auto p-6 space-y-6">
+    <MainLayout>
+      <div className="container mx-auto p-6 space-y-6 pb-20">
         {/* Header */}
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
           <div>
@@ -565,20 +566,20 @@ export default function ReceiverDashboard({
             </div>
           </div>
         )}
-      </div>
 
-      {/* Claim Modal */}
-      {showClaimModal && (
-        <ClaimModal
-          isOpen={showClaimModal}
-          onClose={() => {
-            setShowClaimModal(false);
-            setSelectedTransactions([]);
-          }}
-          selectedStreams={selectedTransactionsData}
-          totalAmount={totalSelectedAmount}
-        />
-      )}
-    </div>
+        {/* Claim Modal */}
+        {showClaimModal && (
+          <ClaimModal
+            isOpen={showClaimModal}
+            onClose={() => {
+              setShowClaimModal(false);
+              setSelectedTransactions([]);
+            }}
+            selectedStreams={selectedTransactionsData}
+            totalAmount={totalSelectedAmount}
+          />
+        )}
+      </div>
+    </MainLayout>
   );
 }

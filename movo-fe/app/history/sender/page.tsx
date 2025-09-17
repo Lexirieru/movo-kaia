@@ -11,6 +11,8 @@ import PageHeader from "@/app/components/layout/PageHeader";
 import LoadingState from "@/app/components/shared/LoadingState";
 import EmptyState from "@/app/components/shared/EmptyState";
 import GroupCard from "@/app/components/history/GroupCard";
+import MainLayout from "@/app/components/layout/MainLayout";
+import BottomNavbar from "@/app/components/shared/BottomNavbar";
 
 export default function SenderHistoryPage() {
   const { user, currentWalletAddress } = useAuth();
@@ -48,7 +50,7 @@ export default function SenderHistoryPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-black">
+    <MainLayout>
       {/* Header */}
       <PageHeader
         title="Group History"
@@ -58,7 +60,7 @@ export default function SenderHistoryPage() {
       />
 
       {/* Content */}
-      <div className="container mx-auto p-6">
+      <div className="container mx-auto p-6 pb-6">
         {groups.length === 0 ? (
           <EmptyState
             icon={<Users className="w-8 h-8 text-gray-500" />}
@@ -81,6 +83,6 @@ export default function SenderHistoryPage() {
           </div>
         )}
       </div>
-    </div>
+    </MainLayout>
   );
 }

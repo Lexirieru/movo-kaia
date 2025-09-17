@@ -2,21 +2,30 @@
 
 import { useState } from "react";
 import { useSwitchChain, useChainId } from "wagmi";
-import { baseSepolia, arbitrumSepolia } from "wagmi/chains";
-import { ChevronDown, Check, AlertCircle } from "lucide-react";
+import { baseSepolia, base, kaia } from "wagmi/chains";
+import { ChevronDown, Check, AlertCircle, Circle, Star } from "lucide-react";
 
 const SUPPORTED_CHAINS = [
   {
     id: baseSepolia.id,
     name: "Base Sepolia",
     shortName: "Base",
-    icon: "🔵",
+    icon: Circle,
+    iconColor: "text-blue-400",
   },
   {
-    id: arbitrumSepolia.id,
-    name: "Arbitrum Sepolia", 
-    shortName: "Arbitrum",
-    icon: "🔴",
+    id: base.id,
+    name: "Base Mainnet",
+    shortName: "Base",
+    icon: Circle,
+    iconColor: "text-blue-500",
+  },
+  {
+    id: kaia.id,
+    name: "Kaia Mainnet",
+    shortName: "Kaia",
+    icon: Star,
+    iconColor: "text-green-400",
   },
 ];
 
@@ -25,8 +34,8 @@ export default function NetworkSwitch() {
   const chainId = useChainId();
   const { switchChain, isPending } = useSwitchChain();
 
-  const currentChain = SUPPORTED_CHAINS.find(chain => chain.id === chainId);
-  
+  const currentChain = SUPPORTED_CHAINS.find((chain) => chain.id === chainId);
+
   // Don't render if no chain ID is available
   if (!chainId) {
     return null;
@@ -52,8 +61,12 @@ export default function NetworkSwitch() {
           <div className="w-4 h-4 border-2 border-gray-400 border-t-white rounded-full animate-spin"></div>
         ) : currentChain ? (
           <>
-            <span className="text-lg">{currentChain.icon}</span>
-            <span className="text-sm font-medium">{currentChain.shortName}</span>
+            <currentChain.icon
+              className={`w-4 h-4 ${currentChain.iconColor}`}
+            />
+            <span className="text-sm font-medium">
+              {currentChain.shortName}
+            </span>
           </>
         ) : (
           <>
@@ -61,7 +74,9 @@ export default function NetworkSwitch() {
             <span className="text-sm font-medium">Unsupported</span>
           </>
         )}
-        <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
+        <ChevronDown
+          className={`w-4 h-4 transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}
+        />
       </button>
 
       {isOpen && (
@@ -75,10 +90,14 @@ export default function NetworkSwitch() {
                 className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-gray-700 disabled:bg-gray-800/50 disabled:cursor-not-allowed transition-colors duration-200"
               >
                 <div className="flex items-center space-x-3">
-                  <span className="text-lg">{chain.icon}</span>
+                  <chain.icon className={`w-4 h-4 ${chain.iconColor}`} />
                   <div>
-                    <div className="text-sm font-medium text-white">{chain.name}</div>
-                    <div className="text-xs text-gray-400">Chain ID: {chain.id}</div>
+                    <div className="text-sm font-medium text-white">
+                      {chain.name}
+                    </div>
+                    <div className="text-xs text-gray-400">
+                      Chain ID: {chain.id}
+                    </div>
                   </div>
                 </div>
                 {chain.id === chainId && (

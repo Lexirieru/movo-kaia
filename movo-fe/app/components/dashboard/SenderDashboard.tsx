@@ -18,6 +18,7 @@ import {
 import { GroupOfUser, ReceiverInGroup } from "@/types/receiverInGroupTemplate";
 import CreateStreamModal from "./sender/CreateStreamModal";
 import { Trash2, Edit, RotateCcw, X } from "lucide-react";
+import MainLayout from "../layout/MainLayout";
 
 interface Stream {
   _id: string;
@@ -193,8 +194,8 @@ export default function SenderDashboard({
   ).length;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-black">
-      <div className="container mx-auto p-6 space-y-6">
+    <MainLayout>
+      <div className="container mx-auto p-6 space-y-6 pb-20">
         {/* Header */}
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
           <div>
@@ -503,6 +504,6 @@ export default function SenderDashboard({
           setStreams((prev) => [mapped, ...prev]);
         }}
       />
-    </div>
+    </MainLayout>
   );
 }
