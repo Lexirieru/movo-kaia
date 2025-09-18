@@ -107,110 +107,110 @@ const UserDataSchema = new Schema(
 
 export const UserModel = mongoose.model("UserData", UserDataSchema);
 
-const GroupOfUserSchema = new Schema(
-  {
-    escrowId: {
-      type: String,
-      required: false,
-    },
-    blockNumber: {
-      type: String,
-      required: false,
-    },
-    groupId: {
-      type: String,
-      required: true,
-    },
-    nameOfGroup: {
-      type: String,
-      required: true,
-    },
-    senderWalletAddress: {
-      type: String,
-      required: true,
-    },
-    senderId: {
-      type: String,
-      required: true,
-    },
-    senderName: {
-      type: String,
-      required: true,
-    },
-    // 🔥 Tambahan fields untuk escrow transaction
-    originCurrency: {
-      type: String,
-      enum: ["USDC", "IDRX"],
-      required: false,
-    },
-    totalAmount: {
-      type: String,
-      required: false,
-    },
-    transactionHash: {
-      type: String,
-      required: false,
-    },
-    status: {
-      type: String,
-      required: false,
-    },
-    Receivers: [
-      {
-        // dari be
-        _id: {
-          type: mongoose.Schema.Types.ObjectId,
-          required: true,
-        },
-        walletAddress: {
-          type: String,
-          required: false,
-        },
-        fullname: {
-          type: String,
-          required: false,
-        },
-        apiKey: {
-          type: String,
-          required: false,
-        },
-        secretKey: {
-          type: String,
-          required: false,
-        },
-        // dari fe
-        originCurrency: {
-          type: String,
-          required: false,
-        },
-        tokenIcon: {
-          type: String,
-          required: false,
-        },
-        depositWalletAddress: {
-          type: String,
-          required: false,
-        },
-        amount: {
-          type: Number,
-          required: false,
-        },
-      },
-    ],
-    totalRecipients: {
-      type: Number,
-      required: false,
-    },
-  },
-  {
-    timestamps: true, // createdAt, updatedAt
-  }
-);
+// const GroupOfUserSchema = new Schema(
+//   {
+//     escrowId: {
+//       type: String,
+//       required: false,
+//     },
+//     blockNumber: {
+//       type: String,
+//       required: false,
+//     },
+//     groupId: {
+//       type: String,
+//       required: true,
+//     },
+//     nameOfGroup: {
+//       type: String,
+//       required: true,
+//     },
+//     senderWalletAddress: {
+//       type: String,
+//       required: true,
+//     },
+//     senderId: {
+//       type: String,
+//       required: true,
+//     },
+//     senderName: {
+//       type: String,
+//       required: true,
+//     },
+//     // 🔥 Tambahan fields untuk escrow transaction
+//     originCurrency: {
+//       type: String,
+//       enum: ["USDC", "IDRX"],
+//       required: false,
+//     },
+//     totalAmount: {
+//       type: String,
+//       required: false,
+//     },
+//     transactionHash: {
+//       type: String,
+//       required: false,
+//     },
+//     status: {
+//       type: String,
+//       required: false,
+//     },
+//     Receivers: [
+//       {
+//         // dari be
+//         _id: {
+//           type: mongoose.Schema.Types.ObjectId,
+//           required: true,
+//         },
+//         walletAddress: {
+//           type: String,
+//           required: false,
+//         },
+//         fullname: {
+//           type: String,
+//           required: false,
+//         },
+//         apiKey: {
+//           type: String,
+//           required: false,
+//         },
+//         secretKey: {
+//           type: String,
+//           required: false,
+//         },
+//         // dari fe
+//         originCurrency: {
+//           type: String,
+//           required: false,
+//         },
+//         tokenIcon: {
+//           type: String,
+//           required: false,
+//         },
+//         depositWalletAddress: {
+//           type: String,
+//           required: false,
+//         },
+//         amount: {
+//           type: Number,
+//           required: false,
+//         },
+//       },
+//     ],
+//     totalRecipients: {
+//       type: Number,
+//       required: false,
+//     },
+//   },
+//   {
+//     timestamps: true, // createdAt, updatedAt
+//   }
+// );
 
-export const GroupOfUserModel = mongoose.model(
-  "GroupOfUserData",
-  GroupOfUserSchema
-);
+// export const GroupOfUserModel = mongoose.model(
+//   "GroupOfUserData",
+//   GroupOfUserSchema
+// );
 
 const LoginSessionTokenSchema = new Schema({
   userId: {

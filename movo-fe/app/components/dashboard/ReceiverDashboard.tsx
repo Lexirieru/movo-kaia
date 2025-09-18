@@ -12,9 +12,13 @@ import {
 } from "lucide-react";
 import ClaimModal from "./receiver/ClaimModal";
 import { useAuth } from "@/lib/userContext";
-import { loadAllIncomingTransaction } from "@/app/api/api";
 import { IncomingTransaction } from "@/types/historyTemplate";
 import MainLayout from "../layout/MainLayout";
+import {
+  fetchReceiverDashboardData,
+  getReceiverTransactionStats,
+  fetchOnchainReceiverDashboardData,
+} from "@/app/api/api";
 
 interface ReceiverDashboardProps {
   onDropdownOpen?: () => void;
@@ -36,45 +40,71 @@ export default function ReceiverDashboard({
     IncomingTransaction[]
   >([]);
   const [sortOption, setSortOption] = useState<SortOption>("newest");
+  const [receiverStats, setReceiverStats] = useState<any>(null);
+  const [isLoadingStats, setIsLoadingStats] = useState(false);
 
   useEffect(() => {
     if (loading || !user?._id || !currentWalletAddress || hasFetched) return;
 
     const fetchIncomingTransactions = async () => {
       try {
-        const response = await loadAllIncomingTransaction(
-          user._id,
+        console.log(
+          "🔄 Fetching receiver dashboard data for:",
           currentWalletAddress,
         );
 
-        if (!response || !Array.isArray(response)) {
-          console.warn("Incoming transactions not found or not an array.");
+        const dashboardData = await fetchReceiverDashboardData(
+          "0x95fa3a2376e47025e58133a5e2bf112d1bbbbc70",
+        );
+        console.log(dashboardData);
+        if (!dashboardData) {
+          console.warn("Receiver dashboard data not found.");
           setIncomingTransactions([]);
           setHasFetched(true);
           return;
         }
 
-        // Map response sesuai interface IncomingTransaction
-        const mappedTransactions: IncomingTransaction[] = response
-          .map((transaction: any) => ({
-            receiverWalletAddress:
-              transaction.receiverWalletAddress || currentWalletAddress,
-            receiverId: transaction.receiverId || user._id,
-            totalAmount: transaction.totalAmount?.toString() || "0",
-            availableAmount: transaction.availableAmount?.toString() || "0",
-            originCurrency: transaction.originCurrency || "USDC",
-            senderWalletAddress: transaction.senderWalletAddress || "",
-            senderName: transaction.senderName || "Unknown Sender",
-            createdAt: transaction.createdAt
-              ? new Date(transaction.createdAt)
-              : new Date(),
+        // Use availableWithdrawals from onchain data as the main source
+        const withdrawals = dashboardData.availableWithdrawals || [];
+
+        // Map onchain data to IncomingTransaction interface
+        const mappedTransactions: IncomingTransaction[] = withdrawals
+          .map((withdrawal: any) => ({
+            receiverWalletAddress: currentWalletAddress,
+            receiverId: user._id,
+            totalAmount: withdrawal.totalAmount?.toString() || "0",
+            availableAmount: withdrawal.availableAmount?.toString() || "0",
+            originCurrency: withdrawal.originCurrency || "USDC",
+            senderWalletAddress: withdrawal.senderWalletAddress || "",
+            senderName: withdrawal.senderName || "Unknown Sender",
+            createdAt: withdrawal.createdAt || new Date(),
+            // Additional onchain metadata
+            escrowId: withdrawal.escrowId,
+            transactionHash: withdrawal.transactionHash,
+            blockNumber: withdrawal.blockNumber,
+            allocatedAmount: withdrawal.allocatedAmount,
+            withdrawnAmount: withdrawal.withdrawnAmount,
+            hasWithdrawn: withdrawal.hasWithdrawn || false,
           }))
           .filter((transaction) => parseFloat(transaction.availableAmount) > 0);
 
+        console.log("✅ Mapped incoming transactions:", mappedTransactions);
         setIncomingTransactions(mappedTransactions);
+
+        // Fetch additional statistics
+        setIsLoadingStats(true);
+        try {
+          const stats = await getReceiverTransactionStats(currentWalletAddress);
+          setReceiverStats(stats);
+        } catch (statsErr) {
+          console.error("❌ Failed to fetch receiver stats:", statsErr);
+        } finally {
+          setIsLoadingStats(false);
+        }
+
         setHasFetched(true);
       } catch (err) {
-        console.error("Failed to fetch incoming transactions", err);
+        console.error("❌ Failed to fetch receiver dashboard data:", err);
         setIncomingTransactions([]);
         setHasFetched(true);
       }
@@ -267,8 +297,9 @@ export default function ReceiverDashboard({
           )}
         </div>
 
-        {/* Stats Cards */}
+        {/* Enhanced Onchain Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          {/* Available to Claim */}
           <div className="bg-white/5 rounded-xl p-4 border border-white/10">
             <div className="flex items-center space-x-3">
               <Wallet className="w-8 h-8 text-cyan-400" />
@@ -277,23 +308,76 @@ export default function ReceiverDashboard({
                   ${formattedAvailableAmount}
                 </div>
                 <div className="text-white/60 text-sm">Available to Claim</div>
+                {isLoadingStats && (
+                  <div className="text-xs text-cyan-400 animate-pulse">
+                    Loading onchain data...
+                  </div>
+                )}
               </div>
             </div>
           </div>
-        </div>
 
-        <div className="bg-white/5 rounded-xl p-4 border border-white/10">
-          <div className="flex items-center space-x-3">
-            <Users className="w-8 h-8 text-purple-400" />
-            <div>
-              <div className="text-2xl font-bold text-white">
-                {
-                  new Set(
-                    incomingTransactions.map((t) => t.senderWalletAddress),
-                  ).size
-                }
+          {/* Total Allocated */}
+          <div className="bg-white/5 rounded-xl p-4 border border-white/10">
+            <div className="flex items-center space-x-3">
+              <DollarSign className="w-8 h-8 text-green-400" />
+              <div>
+                <div className="text-2xl font-bold text-white">
+                  $
+                  {receiverStats
+                    ? receiverStats.totalAllocated.toFixed(2)
+                    : "0.00"}
+                </div>
+                <div className="text-white/60 text-sm">Total Allocated</div>
+                {receiverStats && (
+                  <div className="text-xs text-green-400">
+                    From {receiverStats.totalEscrows} escrows
+                  </div>
+                )}
               </div>
-              <div className="text-white/60 text-sm">Unique Senders</div>
+            </div>
+          </div>
+
+          {/* Total Withdrawn */}
+          <div className="bg-white/5 rounded-xl p-4 border border-white/10">
+            <div className="flex items-center space-x-3">
+              <Clock className="w-8 h-8 text-orange-400" />
+              <div>
+                <div className="text-2xl font-bold text-white">
+                  $
+                  {receiverStats
+                    ? receiverStats.totalWithdrawn.toFixed(2)
+                    : "0.00"}
+                </div>
+                <div className="text-white/60 text-sm">Total Withdrawn</div>
+                {receiverStats && (
+                  <div className="text-xs text-orange-400">
+                    {receiverStats.withdrawalHistory.length} transactions
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Unique Senders */}
+          <div className="bg-white/5 rounded-xl p-4 border border-white/10">
+            <div className="flex items-center space-x-3">
+              <Users className="w-8 h-8 text-purple-400" />
+              <div>
+                <div className="text-2xl font-bold text-white">
+                  {receiverStats
+                    ? receiverStats.uniqueSenders
+                    : new Set(
+                        incomingTransactions.map((t) => t.senderWalletAddress),
+                      ).size}
+                </div>
+                <div className="text-white/60 text-sm">Unique Senders</div>
+                {receiverStats && (
+                  <div className="text-xs text-purple-400">
+                    Onchain verified
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>

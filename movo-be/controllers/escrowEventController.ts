@@ -28,7 +28,7 @@ interface EscrowEventData {
   blockTimestamp?: string;
 }
 
-// Controller utama untuk save escrow event
+// Controller utama untuk save escrow event (untuk history)
 export async function saveEscrowEvent(req: Request, res: Response) {
   const eventPayload: EscrowEventData = req.body;
 
@@ -180,424 +180,205 @@ export async function getEscrowEventHistory(req: Request, res: Response) {
   }
 }
 
-// Controller untuk get user's all escrow events (optimized dengan authentication)
-export async function getUserEscrowEvents(req: Request, res: Response) {
-  const user = (req as any).user; // From JWT middleware
-  const { timeRange, eventType, tokenType, limit = 50, page = 1 } = req.body;
-
-  try {
-    console.log(
-      `📋 Getting user escrow events for user: ${user._id}, wallet: ${user.walletAddress}`
-    );
-
-    // Log JWT content for debugging
-    console.log(`🔍 JWT user object:`, JSON.stringify(user, null, 2));
-
-    // STRICT FILTERING: Only events where initiatorWalletAddress matches the authenticated user's wallet
-    // This prevents cross-wallet data leakage
-    let filter: any = {
-      initiatorWalletAddress: new RegExp(`^${user.walletAddress}$`, "i"),
-    };
-
-    console.log(
-      `🔍 Strict filter (wallet-only):`,
-      JSON.stringify(filter, null, 2)
-    );
-
-    // Add time range filter
-    if (timeRange) {
-      const now = new Date();
-      let startDate = new Date();
-
-      switch (timeRange) {
-        case "24h":
-          startDate.setHours(now.getHours() - 24);
-          break;
-        case "7d":
-          startDate.setDate(now.getDate() - 7);
-          break;
-        case "30d":
-          startDate.setDate(now.getDate() - 30);
-          break;
-        case "90d":
-          startDate.setDate(now.getDate() - 90);
-          break;
-        default:
-          startDate = new Date("2020-01-01"); // All time
-      }
-
-      filter.createdAt = { $gte: startDate };
-    }
-
-    // Add event type filter
-    if (eventType) {
-      filter.eventType = eventType;
-    }
-
-    // Add token type filter
-    if (tokenType) {
-      filter.tokenType = tokenType;
-    }
-
-    console.log(`🔍 Filter query:`, JSON.stringify(filter, null, 2));
-
-    // Calculate pagination
-    const skip = (page - 1) * limit;
-
-    // Get events with pagination and sorting
-    const events = await EscrowEventModel.find(filter)
-      .sort({ createdAt: -1, blockTimestamp: -1 })
-      .skip(skip)
-      .limit(limit)
-      .lean();
-
-    // Get total count for pagination
-    const totalEvents = await EscrowEventModel.countDocuments(filter);
-
-    // Group events by escrow for better organization
-    const groupedEvents = events.reduce((acc: any, event) => {
-      if (!acc[event.escrowId]) {
-        acc[event.escrowId] = [];
-      }
-      acc[event.escrowId].push(event);
-      return acc;
-    }, {});
-
-    // Get unique escrows count
-    const uniqueEscrows = new Set(events.map((event) => event.escrowId));
-
-    console.log(
-      `📊 Found ${events.length} events across ${uniqueEscrows.size} escrows`
-    );
-
-    res.status(200).json({
-      message: "User escrow events retrieved successfully",
-      statusCode: 200,
-      data: {
-        user: {
-          _id: user._id,
-          walletAddress: user.walletAddress,
-        },
-        filters: {
-          timeRange: timeRange || "all",
-          eventType: eventType || "all",
-          tokenType: tokenType || "all",
-        },
-        pagination: {
-          currentPage: page,
-          totalPages: Math.ceil(totalEvents / limit),
-          totalEvents,
-          eventsPerPage: limit,
-          hasNextPage: skip + events.length < totalEvents,
-          hasPrevPage: page > 1,
-        },
-        summary: {
-          totalEvents: events.length,
-          totalEscrows: uniqueEscrows.size,
-          eventTypes: [...new Set(events.map((e) => e.eventType))],
-          tokenTypes: [...new Set(events.map((e) => e.tokenType))],
-        },
-        eventsByEscrow: groupedEvents,
-        allEvents: events,
-      },
-    });
-    return;
-  } catch (err: any) {
-    console.error("❌ Error getting user escrow events:", err);
-    res.status(500).json({
-      message: "Error getting user escrow events",
-      statusCode: 500,
-      error: err.message,
-    });
-    return;
-  }
-}
-
 // Controller untuk get event statistics (optimized dengan authentication)
-export async function getEscrowEventStatistics(req: Request, res: Response) {
-  const user = (req as any).user; // From JWT middleware
-  const { timeRange } = req.body;
+// export async function getEscrowEventStatistics(req: Request, res: Response) {
+//   const user = (req as any).user; // From JWT middleware
+//   const { timeRange } = req.body;
 
-  try {
-    console.log(
-      `📊 Getting escrow event statistics for user: ${user._id}, wallet: ${user.walletAddress}`
-    );
+//   try {
+//     console.log(
+//       `📊 Getting escrow event statistics for user: ${user._id}, wallet: ${user.walletAddress}`
+//     );
 
-    // Calculate date range
-    let dateFilter = {};
-    if (timeRange) {
-      const now = new Date();
-      let startDate = new Date();
+//     // Calculate date range
+//     let dateFilter = {};
+//     if (timeRange) {
+//       const now = new Date();
+//       let startDate = new Date();
 
-      switch (timeRange) {
-        case "24h":
-          startDate.setHours(now.getHours() - 24);
-          break;
-        case "7d":
-          startDate.setDate(now.getDate() - 7);
-          break;
-        case "30d":
-          startDate.setDate(now.getDate() - 30);
-          break;
-        case "90d":
-          startDate.setDate(now.getDate() - 90);
-          break;
-        default:
-          startDate = new Date("2020-01-01"); // All time
-      }
+//       switch (timeRange) {
+//         case "24h":
+//           startDate.setHours(now.getHours() - 24);
+//           break;
+//         case "7d":
+//           startDate.setDate(now.getDate() - 7);
+//           break;
+//         case "30d":
+//           startDate.setDate(now.getDate() - 30);
+//           break;
+//         case "90d":
+//           startDate.setDate(now.getDate() - 90);
+//           break;
+//         default:
+//           startDate = new Date("2020-01-01"); // All time
+//       }
 
-      dateFilter = { createdAt: { $gte: startDate } };
-    }
+//       dateFilter = { createdAt: { $gte: startDate } };
+//     }
 
-    // STRICT FILTERING: Base match filter for user's events (wallet-only)
-    const baseMatch = {
-      initiatorWalletAddress: new RegExp(`^${user.walletAddress}$`, "i"),
-      ...dateFilter,
-    };
+//     // STRICT FILTERING: Base match filter for user's events (wallet-only)
+//     const baseMatch = {
+//       initiatorWalletAddress: new RegExp(`^${user.walletAddress}$`, "i"),
+//       ...dateFilter,
+//     };
 
-    console.log(
-      `🔍 Statistics base match filter:`,
-      JSON.stringify(baseMatch, null, 2)
-    );
+//     console.log(
+//       `🔍 Statistics base match filter:`,
+//       JSON.stringify(baseMatch, null, 2)
+//     );
 
-    // Aggregation pipeline for detailed statistics
-    const pipeline = [
-      { $match: baseMatch },
-      {
-        $group: {
-          _id: {
-            eventType: "$eventType",
-            tokenType: "$tokenType",
-          },
-          count: { $sum: 1 },
-          lastEvent: { $max: "$createdAt" },
-          firstEvent: { $min: "$createdAt" },
-        },
-      },
-      {
-        $group: {
-          _id: "$_id.eventType",
-          count: { $sum: "$count" },
-          lastEvent: { $max: "$lastEvent" },
-          firstEvent: { $min: "$firstEvent" },
-          tokenBreakdown: {
-            $push: {
-              tokenType: "$_id.tokenType",
-              count: "$count",
-            },
-          },
-        },
-      },
-      { $sort: { count: -1 as -1 } },
-    ];
+//     // Aggregation pipeline for detailed statistics
+//     const pipeline = [
+//       { $match: baseMatch },
+//       {
+//         $group: {
+//           _id: {
+//             eventType: "$eventType",
+//             tokenType: "$tokenType",
+//           },
+//           count: { $sum: 1 },
+//           lastEvent: { $max: "$createdAt" },
+//           firstEvent: { $min: "$createdAt" },
+//         },
+//       },
+//       {
+//         $group: {
+//           _id: "$_id.eventType",
+//           count: { $sum: "$count" },
+//           lastEvent: { $max: "$lastEvent" },
+//           firstEvent: { $min: "$firstEvent" },
+//           tokenBreakdown: {
+//             $push: {
+//               tokenType: "$_id.tokenType",
+//               count: "$count",
+//             },
+//           },
+//         },
+//       },
+//       { $sort: { count: -1 as -1 } },
+//     ];
 
-    const statistics = await EscrowEventModel.aggregate(pipeline);
+//     const statistics = await EscrowEventModel.aggregate(pipeline);
 
-    // Get total events count
-    const totalEvents = await EscrowEventModel.countDocuments(baseMatch);
+//     // Get total events count
+//     const totalEvents = await EscrowEventModel.countDocuments(baseMatch);
 
-    // Get unique escrows count
-    const uniqueEscrowsPipeline = [
-      { $match: baseMatch },
-      { $group: { _id: "$escrowId", count: { $sum: 1 } } },
-      { $group: { _id: null, totalEscrows: { $sum: 1 } } },
-    ];
+//     // Get unique escrows count
+//     const uniqueEscrowsPipeline = [
+//       { $match: baseMatch },
+//       { $group: { _id: "$escrowId", count: { $sum: 1 } } },
+//       { $group: { _id: null, totalEscrows: { $sum: 1 } } },
+//     ];
 
-    const uniqueEscrowsResult = await EscrowEventModel.aggregate(
-      uniqueEscrowsPipeline
-    );
-    const uniqueEscrows = uniqueEscrowsResult[0]?.totalEscrows || 0;
+//     const uniqueEscrowsResult = await EscrowEventModel.aggregate(
+//       uniqueEscrowsPipeline
+//     );
+//     const uniqueEscrows = uniqueEscrowsResult[0]?.totalEscrows || 0;
 
-    // Get token type statistics
-    const tokenStatsPipeline = [
-      { $match: baseMatch },
-      {
-        $group: {
-          _id: "$tokenType",
-          count: { $sum: 1 },
-          lastActivity: { $max: "$createdAt" },
-        },
-      },
-      { $sort: { count: -1 as -1 } },
-    ];
+//     // Get token type statistics
+//     const tokenStatsPipeline = [
+//       { $match: baseMatch },
+//       {
+//         $group: {
+//           _id: "$tokenType",
+//           count: { $sum: 1 },
+//           lastActivity: { $max: "$createdAt" },
+//         },
+//       },
+//       { $sort: { count: -1 as -1 } },
+//     ];
 
-    const tokenStats = await EscrowEventModel.aggregate(tokenStatsPipeline);
+//     const tokenStats = await EscrowEventModel.aggregate(tokenStatsPipeline);
 
-    // Calculate activity trends (last 30 days if timeRange is not specified)
-    const trendTimeRange = timeRange === "all" ? "30d" : timeRange;
-    let trendStartDate = new Date();
-    switch (trendTimeRange) {
-      case "24h":
-        trendStartDate.setHours(trendStartDate.getHours() - 24);
-        break;
-      case "7d":
-        trendStartDate.setDate(trendStartDate.getDate() - 7);
-        break;
-      default:
-        trendStartDate.setDate(trendStartDate.getDate() - 30);
-    }
+//     // Calculate activity trends (last 30 days if timeRange is not specified)
+//     const trendTimeRange = timeRange === "all" ? "30d" : timeRange;
+//     let trendStartDate = new Date();
+//     switch (trendTimeRange) {
+//       case "24h":
+//         trendStartDate.setHours(trendStartDate.getHours() - 24);
+//         break;
+//       case "7d":
+//         trendStartDate.setDate(trendStartDate.getDate() - 7);
+//         break;
+//       default:
+//         trendStartDate.setDate(trendStartDate.getDate() - 30);
+//     }
 
-    const trendPipeline = [
-      {
-        $match: {
-          ...baseMatch,
-          createdAt: { $gte: trendStartDate },
-        },
-      },
-      {
-        $group: {
-          _id: {
-            $dateToString: {
-              format: "%Y-%m-%d",
-              date: "$createdAt",
-            },
-          },
-          count: { $sum: 1 },
-        },
-      },
-      { $sort: { _id: 1 as 1 } },
-    ];
+//     const trendPipeline = [
+//       {
+//         $match: {
+//           ...baseMatch,
+//           createdAt: { $gte: trendStartDate },
+//         },
+//       },
+//       {
+//         $group: {
+//           _id: {
+//             $dateToString: {
+//               format: "%Y-%m-%d",
+//               date: "$createdAt",
+//             },
+//           },
+//           count: { $sum: 1 },
+//         },
+//       },
+//       { $sort: { _id: 1 as 1 } },
+//     ];
 
-    const activityTrend = await EscrowEventModel.aggregate(trendPipeline);
+//     const activityTrend = await EscrowEventModel.aggregate(trendPipeline);
 
-    console.log(
-      `📈 Statistics calculated: ${totalEvents} total events, ${uniqueEscrows} unique escrows`
-    );
+//     console.log(
+//       `📈 Statistics calculated: ${totalEvents} total events, ${uniqueEscrows} unique escrows`
+//     );
 
-    res.status(200).json({
-      message: "Escrow event statistics retrieved successfully",
-      statusCode: 200,
-      data: {
-        user: {
-          _id: user._id,
-          walletAddress: user.walletAddress,
-        },
-        timeRange: timeRange || "all",
-        summary: {
-          totalEvents,
-          totalEscrows: uniqueEscrows,
-          averageEventsPerEscrow:
-            uniqueEscrows > 0 ? (totalEvents / uniqueEscrows).toFixed(2) : "0",
-          escrowsCreated:
-            statistics.find((s) => s._id === "ESCROW_CREATED")?.count || 0,
-          topups: statistics.find((s) => s._id === "TOPUP_FUNDS")?.count || 0,
-          recipientChanges:
-            (statistics.find((s) => s._id === "ADD_RECIPIENTS")?.count || 0) +
-            (statistics.find((s) => s._id === "REMOVE_RECIPIENTS")?.count ||
-              0) +
-            (statistics.find((s) => s._id === "UPDATE_RECIPIENTS_AMOUNT")
-              ?.count || 0),
-          withdrawals:
-            statistics.find((s) => s._id === "WITHDRAW_FUNDS")?.count || 0,
-          completions:
-            statistics.find((s) => s._id === "ESCROW_COMPLETED")?.count || 0,
-        },
-        eventsByType: statistics,
-        tokenBreakdown: tokenStats,
-        activityTrend: activityTrend,
-        performance: {
-          queryExecutionTime: new Date().toISOString(),
-          dataFreshness: "real-time",
-        },
-      },
-    });
-    return;
-  } catch (err: any) {
-    console.error("❌ Error getting escrow event statistics:", err);
-    res.status(500).json({
-      message: "Error getting escrow event statistics",
-      statusCode: 500,
-      error: err.message,
-    });
-    return;
-  }
-}
-
-// Helper function untuk create specific event types
-export const createEscrowCreatedEvent = (data: {
-  escrowId: string;
-  groupId: string;
-  transactionHash: string;
-  blockNumber?: string;
-  initiatorWalletAddress: string;
-  tokenType: "USDC" | "USDT" | "IDRX";
-  totalAmount: string;
-  recipients: Array<{
-    walletAddress: string;
-    amount: string;
-    fullname: string;
-  }>;
-  metadata?: any;
-  blockTimestamp?: string;
-}) => ({
-  eventType: "ESCROW_CREATED" as const,
-  escrowId: data.escrowId,
-  groupId: data.groupId,
-  transactionHash: data.transactionHash,
-  blockNumber: data.blockNumber,
-  initiatorWalletAddress: data.initiatorWalletAddress,
-  tokenType: data.tokenType,
-  eventData: {
-    totalAmount: data.totalAmount,
-    recipients: data.recipients,
-  },
-  metadata: data.metadata,
-  blockTimestamp: data.blockTimestamp,
-});
-
-export const createTopupFundsEvent = (data: {
-  escrowId: string;
-  groupId: string;
-  transactionHash: string;
-  blockNumber?: string;
-  initiatorWalletAddress: string;
-  tokenType: "USDC" | "USDT" | "IDRX";
-  topupAmount: string;
-  metadata?: any;
-  blockTimestamp?: string;
-}) => ({
-  eventType: "TOPUP_FUNDS" as const,
-  escrowId: data.escrowId,
-  groupId: data.groupId,
-  transactionHash: data.transactionHash,
-  blockNumber: data.blockNumber,
-  initiatorWalletAddress: data.initiatorWalletAddress,
-  tokenType: data.tokenType,
-  eventData: {
-    topupAmount: data.topupAmount,
-  },
-  metadata: data.metadata,
-  blockTimestamp: data.blockTimestamp,
-});
-
-export const createAddRecipientsEvent = (data: {
-  escrowId: string;
-  groupId: string;
-  transactionHash: string;
-  blockNumber?: string;
-  initiatorWalletAddress: string;
-  tokenType: "USDC" | "USDT" | "IDRX";
-  newRecipients: Array<{
-    walletAddress: string;
-    amount: string;
-    fullname: string;
-  }>;
-  metadata?: any;
-  blockTimestamp?: string;
-}) => ({
-  eventType: "ADD_RECIPIENTS" as const,
-  escrowId: data.escrowId,
-  groupId: data.groupId,
-  transactionHash: data.transactionHash,
-  blockNumber: data.blockNumber,
-  initiatorWalletAddress: data.initiatorWalletAddress,
-  tokenType: data.tokenType,
-  eventData: {
-    newRecipients: data.newRecipients,
-  },
-  metadata: data.metadata,
-  blockTimestamp: data.blockTimestamp,
-});
+//     res.status(200).json({
+//       message: "Escrow event statistics retrieved successfully",
+//       statusCode: 200,
+//       data: {
+//         user: {
+//           _id: user._id,
+//           walletAddress: user.walletAddress,
+//         },
+//         timeRange: timeRange || "all",
+//         summary: {
+//           totalEvents,
+//           totalEscrows: uniqueEscrows,
+//           averageEventsPerEscrow:
+//             uniqueEscrows > 0 ? (totalEvents / uniqueEscrows).toFixed(2) : "0",
+//           escrowsCreated:
+//             statistics.find((s) => s._id === "ESCROW_CREATED")?.count || 0,
+//           topups: statistics.find((s) => s._id === "TOPUP_FUNDS")?.count || 0,
+//           recipientChanges:
+//             (statistics.find((s) => s._id === "ADD_RECIPIENTS")?.count || 0) +
+//             (statistics.find((s) => s._id === "REMOVE_RECIPIENTS")?.count ||
+//               0) +
+//             (statistics.find((s) => s._id === "UPDATE_RECIPIENTS_AMOUNT")
+//               ?.count || 0),
+//           withdrawals:
+//             statistics.find((s) => s._id === "WITHDRAW_FUNDS")?.count || 0,
+//           completions:
+//             statistics.find((s) => s._id === "ESCROW_COMPLETED")?.count || 0,
+//         },
+//         eventsByType: statistics,
+//         tokenBreakdown: tokenStats,
+//         activityTrend: activityTrend,
+//         performance: {
+//           queryExecutionTime: new Date().toISOString(),
+//           dataFreshness: "real-time",
+//         },
+//       },
+//     });
+//     return;
+//   } catch (err: any) {
+//     console.error("❌ Error getting escrow event statistics:", err);
+//     res.status(500).json({
+//       message: "Error getting escrow event statistics",
+//       statusCode: 500,
+//       error: err.message,
+//     });
+//     return;
+//   }
+// }
 
 // Controller untuk dashboard metrics (lightweight dan cepat)
 export async function getDashboardMetrics(req: Request, res: Response) {

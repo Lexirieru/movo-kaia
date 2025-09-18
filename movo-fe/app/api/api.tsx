@@ -204,20 +204,20 @@ export const saveEscrowToDatabase = async (escrowData: {
   }
 };
 
-export const loadAllIncomingTransaction = async (
-  _id: string,
-  walletAddress: string,
-) => {
-  try {
-    const response = await api.post("/loadAllIncomingTransaction", {
-      _id,
-      walletAddress,
-    });
-    return response.data.data;
-  } catch (err) {
-    console.log(err);
-  }
-};
+// export const loadAllIncomingTransaction = async (
+//   _id: string,
+//   walletAddress: string,
+// ) => {
+//   try {
+//     const response = await api.post("/loadAllIncomingTransaction", {
+//       _id,
+//       walletAddress,
+//     });
+//     return response.data.data;
+//   } catch (err) {
+//     console.log(err);
+//   }
+// };
 
 export const loadAllWithdrawHistory = async (
   _id: string,
@@ -447,42 +447,287 @@ export const fetchReceiverEscrowsFromIndexer = async (
   receiverAddress: string,
 ) => {
   try {
+    console.log("🔍 Fetching receiver escrows for address:", receiverAddress);
+
     const query = `
       query GetReceiverEscrows($receiverAddress: String!) {
-        escrowCreateds(where: { receivers_contains: [$receiverAddress] }) {
+        escrowCreateds(where: {receivers_contains: $receiverAddress}) {
           escrowId
           sender
           receivers
-          totalAmount
           amounts
+          totalAmount
+          block_number
+          timestamp_
+          transactionHash_
+          contractId_
         }
       }
     `;
 
     const response = await axios.post(GOLDSKY_API_URL, {
       query,
-      variables: { receiverAddress },
+      variables: {
+        receiverAddress: receiverAddress.toLowerCase(),
+      },
     });
+
+    console.log("📥 Goldsky receiver API response:", response.data);
 
     // Transform the data to match our expected format
     const escrows = response.data.data.escrowCreateds || [];
-    return escrows.map((escrow: any, index: number) => ({
-      id: `escrow-${index}`, // Generate ID since not available in indexer
-      escrowId: escrow.escrowId,
-      sender: escrow.sender,
-      totalAmount: escrow.totalAmount || "0",
-      createdAt: Math.floor(Date.now() / 1000).toString(), // Current timestamp as fallback
-      receivers: escrow.receivers
-        ? escrow.receivers.split(",").map((addr: string) => addr.trim())
-        : [],
-      amounts: escrow.amounts
-        ? escrow.amounts.split(",").map((amount: string) => amount.trim())
-        : [],
-      tokenAddress: "0xf9D5a610fe990bfCdF7dd9FD64bdfe89D6D1eb4c", // Default to USDC for now
+    console.log("📊 Raw receiver escrows from indexer:", escrows);
+
+    if (escrows.length === 0) {
+      console.log("⚠️ No receiver escrows found for address:", receiverAddress);
+      return [];
+    }
+
+    const transformedEscrows = escrows
+      .map((escrow: any, index: number) => {
+        // Parse receivers and amounts arrays
+        const receivers = escrow.receivers
+          ? escrow.receivers
+              .split(",")
+              .map((addr: string) => addr.trim().toLowerCase())
+          : [];
+        const amounts = escrow.amounts
+          ? escrow.amounts.split(",").map((amount: string) => amount.trim())
+          : [];
+
+        // Find the index of the current receiver
+        const receiverIndex = receivers.findIndex(
+          (addr: string) => addr === receiverAddress.toLowerCase(),
+        );
+
+        // Get the amount allocated to this specific receiver
+        const receiverAmount =
+          receiverIndex >= 0 && amounts[receiverIndex]
+            ? amounts[receiverIndex]
+            : "0";
+
+        // Convert timestamp to proper date
+        const createdDate = escrow.timestamp_
+          ? new Date(parseInt(escrow.timestamp_) * 1000)
+          : new Date();
+
+        return {
+          // Basic escrow info
+          id: `receiver-escrow-${index}`,
+          escrowId: escrow.escrowId,
+
+          // Transaction data for receiver dashboard
+          receiverWalletAddress: receiverAddress,
+          senderWalletAddress: escrow.sender,
+          senderName: `${escrow.sender.slice(0, 6)}...${escrow.sender.slice(-4)}`, // Shortened sender address as name
+
+          // Amount data
+          totalAmount: escrow.totalAmount || "0",
+          availableAmount: receiverAmount, // Amount specifically for this receiver
+          originCurrency: "USDC", // Default to USDC, can be enhanced later
+
+          // Transaction metadata
+          transactionHash: escrow.transactionHash_,
+          blockNumber: escrow.block_number,
+          contractId: escrow.contractId_,
+
+          // Dates
+          createdAt: createdDate,
+
+          // Status
+          status: "AVAILABLE", // Default status for incoming transactions
+
+          // Additional receiver data
+          receiverIndex,
+          allReceivers: receivers,
+          allAmounts: amounts,
+        };
+      })
+      .filter((escrow: any) => parseFloat(escrow.availableAmount) > 0); // Only return escrows with available amounts
+
+    console.log("✅ Transformed receiver escrows:", transformedEscrows);
+    return transformedEscrows;
+  } catch (error) {
+    console.error("❌ Error fetching receiver escrows from indexer:", error);
+    return [];
+  }
+};
+
+// Get withdraw events for a specific receiver from onchain data
+export const fetchReceiverWithdrawEvents = async (receiverAddress: string) => {
+  try {
+    console.log("💸 Fetching withdraw events for receiver:", receiverAddress);
+
+    const query = `
+      query GetReceiverWithdraws($receiverAddress: String!) {
+        withdrawFundss(where: {recipient: $receiverAddress}) {
+          escrowId
+          recipient
+          amount
+          timestamp_
+          transactionHash_
+          block_number
+        }
+      }
+    `;
+
+    const response = await axios.post(GOLDSKY_API_URL, {
+      query,
+      variables: {
+        receiverAddress: receiverAddress.toLowerCase(),
+      },
+    });
+
+    console.log("📥 Goldsky withdraw events response:", response.data);
+
+    const withdrawEvents = response.data.data.withdrawFundss || [];
+    console.log("📊 Raw withdraw events:", withdrawEvents);
+
+    return withdrawEvents.map((withdraw: any) => ({
+      escrowId: withdraw.escrowId,
+      recipient: withdraw.recipient,
+      amount: withdraw.amount,
+      timestamp: withdraw.timestamp_
+        ? new Date(parseInt(withdraw.timestamp_) * 1000)
+        : new Date(),
+      transactionHash: withdraw.transactionHash_,
+      blockNumber: withdraw.block_number,
     }));
   } catch (error) {
-    console.error("Error fetching receiver escrows from indexer:", error);
+    console.error("❌ Error fetching withdraw events:", error);
     return [];
+  }
+};
+
+// Calculate available withdrawals by comparing escrow created vs withdraw events
+export const calculateAvailableWithdrawals = async (
+  receiverAddress: string,
+) => {
+  try {
+    console.log("💰 Calculating available withdrawals for:", receiverAddress);
+
+    // Fetch both escrow created events and withdraw events in parallel
+    const [escrowEvents, withdrawEvents] = await Promise.all([
+      fetchReceiverEscrowsFromIndexer(receiverAddress),
+      fetchReceiverWithdrawEvents(receiverAddress),
+    ]);
+
+    console.log("📊 Processing escrow vs withdraw data...");
+
+    // Create a map of withdrawn amounts per escrow
+    const withdrawnAmounts: { [escrowId: string]: number } = {};
+    withdrawEvents.forEach((withdraw: any) => {
+      if (!withdrawnAmounts[withdraw.escrowId]) {
+        withdrawnAmounts[withdraw.escrowId] = 0;
+      }
+      withdrawnAmounts[withdraw.escrowId] += parseFloat(withdraw.amount || "0");
+    });
+
+    // Calculate available amounts
+    const availableWithdrawals = escrowEvents
+      .map((escrow: any) => {
+        const allocatedAmount = parseFloat(escrow.availableAmount || "0");
+        const withdrawnAmount = withdrawnAmounts[escrow.escrowId] || 0;
+        const availableAmount = allocatedAmount - withdrawnAmount;
+
+        return {
+          ...escrow,
+          allocatedAmount: allocatedAmount.toString(),
+          withdrawnAmount: withdrawnAmount.toString(),
+          availableAmount: Math.max(0, availableAmount).toString(), // Ensure non-negative
+          hasWithdrawn: withdrawnAmount > 0,
+        };
+      })
+      .filter((escrow: any) => parseFloat(escrow.availableAmount) > 0);
+
+    const totalAvailable = availableWithdrawals.reduce(
+      (sum: number, withdrawal: any) =>
+        sum + parseFloat(withdrawal.availableAmount),
+      0,
+    );
+
+    console.log("✅ Available withdrawals calculated:", {
+      totalEscrows: escrowEvents.length,
+      availableWithdrawals: availableWithdrawals.length,
+      totalAvailable: totalAvailable.toFixed(2),
+    });
+
+    return {
+      availableWithdrawals,
+      totalAvailable: totalAvailable.toString(),
+      summary: {
+        totalEscrows: escrowEvents.length,
+        availableCount: availableWithdrawals.length,
+        totalAllocated: escrowEvents
+          .reduce(
+            (sum: number, e: any) => sum + parseFloat(e.availableAmount),
+            0,
+          )
+          .toString(),
+        totalWithdrawn: Object.values(withdrawnAmounts)
+          .reduce((sum: number, amount: number) => sum + amount, 0)
+          .toString(),
+      },
+    };
+  } catch (error) {
+    console.error("❌ Error calculating available withdrawals:", error);
+    return {
+      availableWithdrawals: [],
+      totalAvailable: "0",
+      summary: {
+        totalEscrows: 0,
+        availableCount: 0,
+        totalAllocated: "0",
+        totalWithdrawn: "0",
+      },
+    };
+  }
+};
+
+// Get comprehensive receiver dashboard data from onchain sources only
+export const fetchOnchainReceiverDashboardData = async (
+  receiverAddress: string,
+) => {
+  try {
+    console.log(
+      "📋 Fetching comprehensive onchain receiver data for:",
+      receiverAddress,
+    );
+
+    // Get calculated available withdrawals (includes escrow events)
+    const withdrawalData = await calculateAvailableWithdrawals(receiverAddress);
+
+    // Get additional withdraw history for analytics
+    const withdrawHistory = await fetchReceiverWithdrawEvents(receiverAddress);
+
+    return {
+      // Main data for dashboard
+      incomingTransactions: withdrawalData.availableWithdrawals,
+      availableWithdrawals: withdrawalData.availableWithdrawals,
+      totalAvailable: withdrawalData.totalAvailable,
+
+      // Analytics data
+      withdrawHistory,
+      summary: withdrawalData.summary,
+
+      // For backward compatibility
+      escrowEvents: withdrawalData.availableWithdrawals,
+    };
+  } catch (error) {
+    console.error("❌ Error fetching onchain receiver dashboard data:", error);
+    return {
+      incomingTransactions: [],
+      availableWithdrawals: [],
+      totalAvailable: "0",
+      withdrawHistory: [],
+      summary: {
+        totalEscrows: 0,
+        availableCount: 0,
+        totalAllocated: "0",
+        totalWithdrawn: "0",
+      },
+      escrowEvents: [],
+    };
   }
 };
 
@@ -608,5 +853,199 @@ export const getEscrowEventStatistics = async (
   } catch (err) {
     console.error("Error getting escrow event statistics:", err);
     throw err;
+  }
+};
+
+// ============= LEGACY BACKEND FUNCTIONS (DEPRECATED) =============
+// These functions are kept for backward compatibility but should not be used
+// All receiver functionality now uses onchain data only
+
+export const getReceiverEscrowEvents_DEPRECATED = async (
+  walletAddress: string,
+): Promise<any> => {
+  console.warn(
+    "⚠️ Using deprecated backend API. Switch to onchain data fetching.",
+  );
+  try {
+    const response = await api.post("/getReceiverEscrowEvents", {
+      walletAddress,
+    });
+    return response.data;
+  } catch (error) {
+    console.error("❌ Error getting receiver escrow events:", error);
+    throw error;
+  }
+};
+
+export const getAvailableWithdrawals_DEPRECATED = async (
+  walletAddress: string,
+): Promise<any> => {
+  console.warn(
+    "⚠️ Using deprecated backend API. Switch to onchain data fetching.",
+  );
+  try {
+    const response = await api.post("/getAvailableWithdrawals", {
+      walletAddress,
+    });
+    return response.data;
+  } catch (error) {
+    console.error("❌ Error getting available withdrawals:", error);
+    throw error;
+  }
+};
+
+// ============= RECEIVER DASHBOARD API FUNCTIONS (ONCHAIN ONLY) =============
+
+// Get receiver transaction statistics from onchain data
+export const getReceiverTransactionStats = async (receiverAddress: string) => {
+  try {
+    const onchainData =
+      await fetchOnchainReceiverDashboardData(receiverAddress);
+
+    const stats = {
+      totalEscrows: onchainData.summary.totalEscrows,
+      availableEscrows: onchainData.summary.availableCount,
+      totalAllocated: parseFloat(onchainData.summary.totalAllocated),
+      totalWithdrawn: parseFloat(onchainData.summary.totalWithdrawn),
+      totalAvailable: parseFloat(onchainData.totalAvailable),
+      uniqueSenders: new Set(
+        onchainData.availableWithdrawals.map((w: any) => w.senderWalletAddress),
+      ).size,
+      withdrawalHistory: onchainData.withdrawHistory,
+    };
+
+    console.log("✅ Receiver statistics calculated:", stats);
+    return stats;
+  } catch (error) {
+    console.error("❌ Error calculating receiver stats:", error);
+    return {
+      totalEscrows: 0,
+      availableEscrows: 0,
+      totalAllocated: 0,
+      totalWithdrawn: 0,
+      totalAvailable: 0,
+      uniqueSenders: 0,
+      withdrawalHistory: [],
+    };
+  }
+};
+
+// Get detailed escrow information for a specific escrow ID
+export const getEscrowDetails = async (escrowId: string) => {
+  try {
+    console.log("� Fetching detailed escrow information for:", escrowId);
+
+    const query = `
+      query GetEscrowDetails($escrowId: String!) {
+        escrowCreateds(where: { escrowId: $escrowId }) {
+          escrowId
+          sender
+          receivers
+          amounts
+          totalAmount
+          block_number
+          timestamp_
+          transactionHash_
+          contractId_
+        }
+        withdrawFundss(where: { escrowId: $escrowId }) {
+          recipient
+          amount
+          timestamp_
+          transactionHash_
+          block_number
+        }
+      }
+    `;
+
+    const response = await axios.post(GOLDSKY_API_URL, {
+      query,
+      variables: { escrowId },
+    });
+
+    const data = response.data.data;
+    const escrowData = data.escrowCreateds[0];
+    const withdraws = data.withdrawFundss || [];
+
+    if (!escrowData) {
+      return null;
+    }
+
+    // Parse recipients and amounts
+    const receivers = escrowData.receivers
+      ? escrowData.receivers.split(",").map((addr: string) => addr.trim())
+      : [];
+    const amounts = escrowData.amounts
+      ? escrowData.amounts.split(",").map((amount: string) => amount.trim())
+      : [];
+
+    // Create recipient details
+    const recipients = receivers.map((address: string, index: number) => ({
+      address,
+      allocatedAmount: amounts[index] || "0",
+      withdrawnAmount: withdraws
+        .filter((w: any) => w.recipient.toLowerCase() === address.toLowerCase())
+        .reduce((sum: number, w: any) => sum + parseFloat(w.amount || "0"), 0)
+        .toString(),
+    }));
+
+    const result = {
+      ...escrowData,
+      recipients,
+      withdrawHistory: withdraws,
+      createdAt: escrowData.timestamp_
+        ? new Date(parseInt(escrowData.timestamp_) * 1000)
+        : new Date(),
+      totalWithdrawn: withdraws
+        .reduce((sum: number, w: any) => sum + parseFloat(w.amount || "0"), 0)
+        .toString(),
+    };
+
+    console.log("✅ Escrow details fetched:", result);
+    return result;
+  } catch (error) {
+    console.error("❌ Error fetching escrow details:", error);
+    return null;
+  }
+};
+
+// Enhanced receiver dashboard data fetcher - now uses onchain data only
+export const fetchReceiverDashboardData = async (
+  walletAddress: string,
+): Promise<{
+  incomingTransactions: any[];
+  availableWithdrawals: any[];
+  escrowEvents: any[];
+  totalAvailable: string;
+}> => {
+  try {
+    console.log(
+      "📋 Fetching receiver dashboard data from onchain sources for:",
+      walletAddress,
+    );
+
+    // Use onchain-only data fetcher
+    const onchainData = await fetchOnchainReceiverDashboardData(walletAddress);
+
+    console.log("✅ Onchain receiver dashboard data ready:", {
+      incomingTransactions: onchainData.incomingTransactions.length,
+      availableWithdrawals: onchainData.availableWithdrawals.length,
+      totalAvailable: onchainData.totalAvailable,
+    });
+
+    return {
+      incomingTransactions: onchainData.incomingTransactions,
+      availableWithdrawals: onchainData.availableWithdrawals,
+      escrowEvents: onchainData.escrowEvents,
+      totalAvailable: onchainData.totalAvailable,
+    };
+  } catch (error) {
+    console.error("❌ Error fetching onchain receiver dashboard data:", error);
+    return {
+      incomingTransactions: [],
+      availableWithdrawals: [],
+      escrowEvents: [],
+      totalAvailable: "0",
+    };
   }
 };

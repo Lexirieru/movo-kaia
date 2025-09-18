@@ -13,14 +13,6 @@ import {
 } from "@langchain/core/messages";
 import { ChatbotDataModel } from "../models/chatbotModel";
 import chatbotFAQ from "../chatbot.json";
-import { GroupOfUserModel, UserModel } from "../models/userModel";
-import {
-  IncomingTransactionModel,
-  TransactionHistoryModel,
-} from "../models/transactionRecordModel";
-import { createEscrowCreatedEvent } from "./escrowEventController";
-import { EscrowEventModel } from "../models/escrowEventModel";
-
 dotenv.config();
 
 const supportedFromCurrencies = ["ETH", "USDC", "USDT", "DAI", "LINK", "BNB"];

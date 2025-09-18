@@ -1,133 +1,133 @@
 import mongoose, { Schema } from "mongoose";
 
-const TransactionHistorySchema = new Schema({
-  txId: {
-    type: String,
-    required: true,
-  },
-  txHash: {
-    type: String,
-    required: true,
-  },
-  senderWalletAddress: {
-    type: String,
-    required: true,
-  },
-  senderId: {
-    type: String,
-    required: true,
-  },
-  senderName: {
-    type: String,
-    required: true,
-  },
-  receiverName: {
-    type: String,
-    required: true,
-  },
-  groupId: {
-    type: String,
-    required: true,
-  },
-  nameOfGroup: {
-    type: String,
-    required: true,
-  },
-  originCurrency: {
-    type: String,
-    required: true,
-  },
-  // in crypto
-  totalAmount: {
-    type: String,
-    required: true,
-  },
-  Receivers: [
-    {
-      walletAddress: {
-        type: String,
-        required: true,
-      },
-      fullname: {
-        type: String,
-        required: true,
-      },
-      // in crypto
-      amount: {
-        type: String,
-        required: true,
-      },
-      createdAt: {
-        type: Date,
-        default: Date.now,
-      },
-    },
-  ],
-  totalReceiver: {
-    type: Number,
-    required: true,
-  },
-  blockNumber: {
-    type: String,
-    required: true,
-  },
-  // timestamp dari transaksi blockchain
-  timestamp: {
-    type: String,
-    required: true,
-  },
-});
+// const TransactionHistorySchema = new Schema({
+//   txId: {
+//     type: String,
+//     required: true,
+//   },
+//   txHash: {
+//     type: String,
+//     required: true,
+//   },
+//   senderWalletAddress: {
+//     type: String,
+//     required: true,
+//   },
+//   senderId: {
+//     type: String,
+//     required: true,
+//   },
+//   senderName: {
+//     type: String,
+//     required: true,
+//   },
+//   receiverName: {
+//     type: String,
+//     required: true,
+//   },
+//   groupId: {
+//     type: String,
+//     required: true,
+//   },
+//   nameOfGroup: {
+//     type: String,
+//     required: true,
+//   },
+//   originCurrency: {
+//     type: String,
+//     required: true,
+//   },
+//   // in crypto
+//   totalAmount: {
+//     type: String,
+//     required: true,
+//   },
+//   Receivers: [
+//     {
+//       walletAddress: {
+//         type: String,
+//         required: true,
+//       },
+//       fullname: {
+//         type: String,
+//         required: true,
+//       },
+//       // in crypto
+//       amount: {
+//         type: String,
+//         required: true,
+//       },
+//       createdAt: {
+//         type: Date,
+//         default: Date.now,
+//       },
+//     },
+//   ],
+//   totalReceiver: {
+//     type: Number,
+//     required: true,
+//   },
+//   blockNumber: {
+//     type: String,
+//     required: true,
+//   },
+//   // timestamp dari transaksi blockchain
+//   timestamp: {
+//     type: String,
+//     required: true,
+//   },
+// });
 
-export const TransactionHistoryModel = mongoose.model(
-  "TransactionHistory",
-  TransactionHistorySchema
-);
+// export const TransactionHistoryModel = mongoose.model(
+//   "TransactionHistory",
+//   TransactionHistorySchema
+// );
 
-const IncomingTransactionSchema = new Schema(
-  {
-    receiverWalletAddress: {
-      type: String,
-      required: true,
-    },
-    receiverId: {
-      type: String,
-      required: true,
-    },
-    availableAmount: {
-      type: String,
-      required: true,
-    },
-    originCurrency: {
-      type: String,
-      required: true,
-    },
-    senderWalletAddress: {
-      type: String,
-      required: true,
-    },
-    senderName: {
-      type: String,
-      required: true,
-    },
-    createdAt: {
-      type: String,
-      required: true,
-      default: Date.now,
-    },
-    escrowId: {
-      type: String,
-      required: true,
-    },
-  },
-  {
-    timestamps: true,
-  }
-);
+// const IncomingTransactionSchema = new Schema(
+//   {
+//     receiverWalletAddress: {
+//       type: String,
+//       required: true,
+//     },
+//     receiverId: {
+//       type: String,
+//       required: true,
+//     },
+//     availableAmount: {
+//       type: String,
+//       required: true,
+//     },
+//     originCurrency: {
+//       type: String,
+//       required: true,
+//     },
+//     senderWalletAddress: {
+//       type: String,
+//       required: true,
+//     },
+//     senderName: {
+//       type: String,
+//       required: true,
+//     },
+//     createdAt: {
+//       type: String,
+//       required: true,
+//       default: Date.now,
+//     },
+//     escrowId: {
+//       type: String,
+//       required: true,
+//     },
+//   },
+//   {
+//     timestamps: true,
+//   }
+// );
 
-export const IncomingTransactionModel = mongoose.model(
-  "IncomingTransaction",
-  IncomingTransactionSchema
-);
+// export const IncomingTransactionModel = mongoose.model(
+//   "IncomingTransaction",
+//   IncomingTransactionSchema
+// );
 
 const WithdrawHistorySchema = new Schema(
   {

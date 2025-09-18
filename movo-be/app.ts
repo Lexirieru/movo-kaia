@@ -14,8 +14,8 @@ import passport from "passport";
 import authRoutes from "./routes/auth";
 import pricefeedRoutes from "./routes/pricefeed";
 import cookieParser from "cookie-parser";
-import { receiverListener } from "./services/receiverSmartContractListener";
-import { senderListener } from "./services/senderSmartContractListener";
+// import { receiverListener } from "./services/receiverSmartContractListener";
+// import { senderListener } from "./services/senderSmartContractListener";
 
 // import { checkSession } from "./config/checkSession";
 
@@ -104,7 +104,7 @@ app.listen(PORT, () => {
   );
 });
 
-receiverListener();
-senderListener();
+// receiverListener();
+// senderListener();
 
 export default app;

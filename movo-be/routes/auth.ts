@@ -25,7 +25,7 @@ router.get(
           walletAddress: string;
         };
 
-        console.log("🔓 Token decoded:", decoded);
+        // console.log("🔓 Token decoded:", decoded);
 
         const user = await UserModel.findOne({
           _id: decoded._id,
@@ -125,7 +125,7 @@ router.post(
       return;
     }
 
-    console.log("✅ Wallet address provided:", walletAddress);
+    // console.log("✅ Wallet address provided:", walletAddress);
     try {
       // Jika ada _id, cari user berdasarkan _id (untuk pairing scenario)
       let user;

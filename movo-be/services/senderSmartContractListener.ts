@@ -3,7 +3,6 @@ import payrollAbi from "../abi/payrollABI.json";
 import dotenv from "dotenv";
 import {
   IncomingTransactionModel,
-  TransactionHistoryModel,
   WithdrawHistoryModel,
 } from "../models/transactionRecordModel";
 import { GroupOfUserModel, UserModel } from "../models/userModel";

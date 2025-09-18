@@ -2,8 +2,6 @@ import express from "express";
 import {
   saveEscrowEvent,
   getEscrowEventHistory,
-  getUserEscrowEvents,
-  getEscrowEventStatistics,
   getDashboardMetrics,
 } from "../controllers/escrowEventController";
 import jwt from "jsonwebtoken";
@@ -50,49 +48,11 @@ escrowEventRoutes.post(
   getEscrowEventHistory
 );
 
-// POST: Get user's all escrow events (dengan pagination dan filtering)
-escrowEventRoutes.post(
-  "/get-user-events",
-  authenticateToken,
-  getUserEscrowEvents
-);
-
-// POST: Get escrow event statistics (dengan time range dan trends)
-escrowEventRoutes.post(
-  "/get-statistics",
-  authenticateToken,
-  getEscrowEventStatistics
-);
-
 // GET: Get dashboard metrics (quick overview untuk dashboard)
 escrowEventRoutes.get(
   "/dashboard-metrics",
   authenticateToken,
   getDashboardMetrics
-);
-
-// GET: Get user's recent activity (untuk dashboard)
-escrowEventRoutes.get(
-  "/recent-activity",
-  authenticateToken,
-  async (req: any, res: any) => {
-    try {
-      const user = req.user;
-      const recentEvents = await getUserEscrowEvents(
-        {
-          ...req,
-          body: { limit: 10, page: 1, timeRange: "7d" },
-        } as any,
-        res
-      );
-    } catch (error) {
-      res.status(500).json({
-        message: "Error getting recent activity",
-        statusCode: 500,
-        error: error instanceof Error ? error.message : "Unknown error",
-      });
-    }
-  }
 );
 
 export { escrowEventRoutes };

@@ -1,80 +1,80 @@
 import { Request, Response } from "express";
-import { GroupOfUserModel, UserModel } from "../models/userModel"; // Pastikan path-nya benar
+import { UserModel } from "../models/userModel"; // Pastikan path-nya benar
 import {
-  IncomingTransactionModel,
-  TransactionHistoryModel,
+  // IncomingTransactionModel,
+  // TransactionHistoryModel,
   WithdrawHistoryModel,
 } from "../models/transactionRecordModel";
 import { generateSignatureForRedeem } from "../utils/generate_signature";
 import axios from "axios";
-import { burnIdrx } from "../utils/burnIdrx";
+// import { burnIdrx } from "../utils/burnIdrx";
 import { bankDictionary } from "../utils/dictionary";
 
 // nampilin semua info group yang dia join (Nama grup, nama sendernya, total saldo dia di grup itu)
-export async function loadAllJoinedGroupInformation(
-  req: Request,
-  res: Response
-) {
-  const { _id, walletAddress } = req.body;
-  if (!_id || !walletAddress) {
-    res.status(404).json({ message: "id and walletAddress are required" });
-    return;
-  }
+// export async function loadAllJoinedGroupInformation(
+//   req: Request,
+//   res: Response
+// ) {
+//   const { _id, walletAddress } = req.body;
+//   if (!_id || !walletAddress) {
+//     res.status(404).json({ message: "id and walletAddress are required" });
+//     return;
+//   }
 
-  try {
-    const loadAllJoinedGroup = await GroupOfUserModel.find({
-      "Receivers._id": _id,
-      "Receivers.walletAddress": walletAddress,
-    })
-      .sort({ timestamp: -1 }) // descending (terbaru di atas)
-      .lean(); // supaya hasilnya plain JS object dan lebih cepat
+//   try {
+//     const loadAllJoinedGroup = await GroupOfUserModel.find({
+//       "Receivers._id": _id,
+//       "Receivers.walletAddress": walletAddress,
+//     })
+//       .sort({ timestamp: -1 }) // descending (terbaru di atas)
+//       .lean(); // supaya hasilnya plain JS object dan lebih cepat
 
-    res.status(201).json({
-      message: "All group information successfully sended",
-      data: loadAllJoinedGroup,
-    });
-    return;
-  } catch (err: any) {
-    res.status(500).json({
-      message: "Error sending all joined group information",
-      error: err.message,
-    });
-    return;
-  }
-}
-// untuk nampilin semua informasi tentang group (nama group, siapa yang jadi sendernya, total saldo dari masing masing group yang belun diwithdraw))
-export async function loadSpecificGroupInformation(
-  req: Request,
-  res: Response
-) {
-  const { _id, groupId, walletAddress } = req.body;
+//     res.status(201).json({
+//       message: "All group information successfully sended",
+//       data: loadAllJoinedGroup,
+//     });
+//     return;
+//   } catch (err: any) {
+//     res.status(500).json({
+//       message: "Error sending all joined group information",
+//       error: err.message,
+//     });
+//     return;
+//   }
+// }
+// // untuk nampilin semua informasi tentang group (nama group, siapa yang jadi sendernya, total saldo dari masing masing group yang belun diwithdraw))
+// export async function loadSpecificGroupInformation(
+//   req: Request,
+//   res: Response
+// ) {
+//   const { _id, groupId, walletAddress } = req.body;
 
-  if (!_id || !groupId || !walletAddress) {
-    res
-      .status(404)
-      .json({ message: "id, groupId, and walletAddress are required" });
-    return;
-  }
+//   if (!_id || !groupId || !walletAddress) {
+//     res
+//       .status(404)
+//       .json({ message: "id, groupId, and walletAddress are required" });
+//     return;
+//   }
 
-  try {
-    const loadSpecificGroup = await GroupOfUserModel.find({
-      "Receivers._id": _id,
-      groupId,
-    });
+//   try {
+//     const loadSpecificGroup = await GroupOfUserModel.find({
+//       "Receivers._id": _id,
+//       groupId,
+//     });
 
-    res.status(201).json({
-      message: "Specified group's detail successfully sended",
-      data: loadSpecificGroup,
-    });
-    return;
-  } catch (err: any) {
-    res.status(500).json({
-      message: "Error sending specified group's detail",
-      error: err.message,
-    });
-    return;
-  }
-}
+//     res.status(201).json({
+//       message: "Specified group's detail successfully sended",
+//       data: loadSpecificGroup,
+//     });
+//     return;
+//   } catch (err: any) {
+//     res.status(500).json({
+//       message: "Error sending specified group's detail",
+//       error: err.message,
+//     });
+//     return;
+//   }
+// }
 // untuk leave group (db ngeremove receiver ini dari group)
 // export async function leaveGroup(req: Request, res: Response) {
 //   const { _id, walletAddress, groupId } = req.body;
@@ -172,7 +172,8 @@ export async function withdrawFromIDRXtoIDR(req: Request, res: Response) {
     // listen to payrollApproved, burn idrx, generate signature (redeem), post redeem,
     try {
       // BURN idrx disini
-      const txHash = await burnIdrx(amount, bankName, bankAccountNumber);
+      // const txHash = await burnIdrx(amount, bankName, bankAccountNumber);
+      const txHash = "temp_tx_hash"; // Temporary for testing
       if (!txHash) {
         return res.status(500).json({ message: "Failed to burn IDRX" });
       }
@@ -255,34 +256,34 @@ export async function withdrawFromIDRXtoIDR(req: Request, res: Response) {
   }
 }
 
-// untuk nampilin all withdraw history
-export async function loadAllTransactionHistory(req: Request, res: Response) {
-  const { _id, walletAddress } = req.body;
+// // untuk nampilin all withdraw history
+// export async function loadAllTransactionHistory(req: Request, res: Response) {
+//   const { _id, walletAddress } = req.body;
 
-  if (!_id || !walletAddress) {
-    res.status(404).json({ message: "id and walletAddress are required" });
-    return;
-  }
+//   if (!_id || !walletAddress) {
+//     res.status(404).json({ message: "id and walletAddress are required" });
+//     return;
+//   }
 
-  try {
-    const histories = await TransactionHistoryModel.find({
-      receiverId: _id,
-      receiverWalletAddress: walletAddress,
-    })
-      .sort({ timestamp: -1 })
-      .lean();
+//   try {
+//     const histories = await TransactionHistoryModel.find({
+//       receiverId: _id,
+//       receiverWalletAddress: walletAddress,
+//     })
+//       .sort({ timestamp: -1 })
+//       .lean();
 
-    res.status(200).json({
-      message: "Withdraw history successfully loaded",
-      data: histories,
-    });
-  } catch (err: any) {
-    res.status(500).json({
-      message: "Error loading withdraw history",
-      error: err.message,
-    });
-  }
-}
+//     res.status(200).json({
+//       message: "Withdraw history successfully loaded",
+//       data: histories,
+//     });
+//   } catch (err: any) {
+//     res.status(500).json({
+//       message: "Error loading withdraw history",
+//       error: err.message,
+//     });
+//   }
+// }
 
 // untuk nampilin all withdraw history
 export async function loadAllWithdrawHistory(req: Request, res: Response) {
@@ -312,33 +313,34 @@ export async function loadAllWithdrawHistory(req: Request, res: Response) {
     });
   }
 }
-export async function loadAllIncomingTransaction(req: Request, res: Response) {
-  const { _id, walletAddress } = req.body;
 
-  if (!_id || !walletAddress) {
-    res.status(404).json({ message: "id and walletAddress are required" });
-    return;
-  }
+// export async function loadAllIncomingTransaction(req: Request, res: Response) {
+//   const { _id, walletAddress } = req.body;
 
-  try {
-    const histories = await IncomingTransactionModel.find({
-      receiverWalletAddress: walletAddress,
-      receiverId: _id,
-    })
-      .sort({ timestamp: -1 })
-      .lean();
+//   if (!_id || !walletAddress) {
+//     res.status(404).json({ message: "id and walletAddress are required" });
+//     return;
+//   }
 
-    res.status(200).json({
-      message: "Incoming transaction successfully loaded",
-      data: histories,
-    });
-  } catch (err: any) {
-    res.status(500).json({
-      message: "Error loading Incoming transaction",
-      error: err.message,
-    });
-  }
-}
+//   try {
+//     const histories = await IncomingTransactionModel.find({
+//       receiverWalletAddress: walletAddress,
+//       receiverId: _id,
+//     })
+//       .sort({ timestamp: -1 })
+//       .lean();
+
+//     res.status(200).json({
+//       message: "Incoming transaction successfully loaded",
+//       data: histories,
+//     });
+//   } catch (err: any) {
+//     res.status(500).json({
+//       message: "Error loading Incoming transaction",
+//       error: err.message,
+//     });
+//   }
+// }
 
 // untuk nampilin spesifik withdraw history
 export async function loadSpecificWithdrawHistory(req: Request, res: Response) {

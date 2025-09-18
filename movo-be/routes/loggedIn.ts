@@ -13,24 +13,24 @@ import {
 
 import express, { RequestHandler } from "express";
 import {
-  addGroup,
-  saveEscrowToDatabase,
-  deleteGroup,
-  editReceiverAmountInGroup,
-  getEscrowId,
-  loadAllGroup,
-  loadAllGroupTransactionHistory,
-  loadSpecifiedGroup,
-  removeReceiverDataFromGroup,
-  loadSpecifiedGroupTransactionHistory,
+  // addGroup,
+  // saveEscrowToDatabase,
+  // deleteGroup,
+  // editReceiverAmountInGroup,
+  // getEscrowId,
+  // loadAllGroup,
+  // // loadAllGroupTransactionHistory,
+  // loadSpecifiedGroup,
+  // removeReceiverDataFromGroup,
+  // loadSpecifiedGroupTransactionHistory,
   checkWalletAddressesRegistration,
 } from "../controllers/userSenderController";
-import {
-  loadAllIncomingTransaction,
-  loadAllJoinedGroupInformation,
-  loadAllWithdrawHistory,
-  loadSpecificGroupInformation,
-} from "../controllers/userReceiverController";
+import // loadAllIncomingTransaction,
+// loadAllJoinedGroupInformation,
+// loadAllWithdrawHistory,
+// loadSpecificGroupInformation,
+"../controllers/userReceiverController";
+import { getReceiverDashboardSummary } from "../controllers/receiverController";
 // import {
 //   goldskyEscrowCreatedWebhook,
 //   goldskyEscrowReceiverAddedWebhook,
@@ -104,90 +104,90 @@ const routes: RouteDefinition[] = [
   },
 
   // userSenderController
-  {
-    method: "post",
-    path: "/addGroup",
-    action: addGroup,
-  },
-  {
-    method: "post",
-    path: "/saveEscrowToDatabase",
-    action: saveEscrowToDatabase,
-  },
-  {
-    method: "post",
-    path: "/editReceiverAmountInGroup",
-    action: editReceiverAmountInGroup,
-  },
-  {
-    method: "post",
-    path: "/removeReceiverDataFromGroup",
-    action: removeReceiverDataFromGroup,
-  },
-  {
-    method: "post",
-    path: "/getEscrowId",
-    action: getEscrowId,
-  },
-  {
-    method: "post",
-    path: "/loadAllGroup",
-    action: loadAllGroup,
-  },
-  {
-    method: "post",
-    path: "/loadSpecifiedGroupForSender",
-    action: loadSpecifiedGroup,
-  },
-  {
-    method: "post",
-    path: "/deleteGroup",
-    action: deleteGroup,
-  },
-  {
-    method: "post",
-    path: "/loadAllIncomingTransaction",
-    action: loadAllIncomingTransaction,
-  },
-  {
-    method: "post",
-    path: "/loadAllGroupTransactionHistory",
-    action: loadAllGroupTransactionHistory,
-  },
-  {
-    method: "post",
-    path: "/loadSpecifiedGroupTransactionHistory",
-    action: loadSpecifiedGroupTransactionHistory,
-  },
+  // {
+  //   method: "post",
+  //   path: "/addGroup",
+  //   action: addGroup,
+  // },
+  // {
+  //   method: "post",
+  //   path: "/saveEscrowToDatabase",
+  //   action: saveEscrowToDatabase,
+  // },
+  // {
+  //   method: "post",
+  //   path: "/editReceiverAmountInGroup",
+  //   action: editReceiverAmountInGroup,
+  // },
+  // {
+  //   method: "post",
+  //   path: "/removeReceiverDataFromGroup",
+  //   action: removeReceiverDataFromGroup,
+  // },
+  // {
+  //   method: "post",
+  //   path: "/getEscrowId",
+  //   action: getEscrowId,
+  // },
+  // {
+  //   method: "post",
+  //   path: "/loadAllGroup",
+  //   action: loadAllGroup,
+  // },
+  // {
+  //   method: "post",
+  //   path: "/loadSpecifiedGroupForSender",
+  //   action: loadSpecifiedGroup,
+  // },
+  // {
+  //   method: "post",
+  //   path: "/deleteGroup",
+  //   action: deleteGroup,
+  // },
+  // {
+  //   method: "post",
+  //   path: "/loadAllIncomingTransaction",
+  //   action: loadAllIncomingTransaction,
+  // },
+  // {
+  //   method: "post",
+  //   path: "/loadAllGroupTransactionHistory",
+  //   action: loadAllGroupTransactionHistory,
+  // },
+  // {
+  //   method: "post",
+  //   path: "/loadSpecifiedGroupTransactionHistory",
+  //   action: loadSpecifiedGroupTransactionHistory,
+  // },
 
   // userReceiverController
-  {
-    method: "post",
-    path: "/loadAllJoinedGroupInformation",
-    action: loadAllJoinedGroupInformation,
-  },
-  {
-    method: "post",
-    path: "/loadSpecificGroupInformation",
-    action: loadSpecificGroupInformation,
-  },
-  {
-    method: "post",
-    path: "/loadSpecificGroupInformation",
-    action: loadSpecificGroupInformation,
-  },
+  // {
+  //   method: "post",
+  //   path: "/loadAllJoinedGroupInformation",
+  //   action: loadAllJoinedGroupInformation,
+  // },
+  // {
+  //   method: "post",
+  //   path: "/loadSpecificGroupInformation",
+  //   action: loadSpecificGroupInformation,
+  // },
+  // {
+  //   method: "post",
+  //   path: "/loadSpecificGroupInformation",
+  //   action: loadSpecificGroupInformation,
+  // },
 
-  {
-    method: "post",
-    path: "/loadAllWithdrawHistory",
-    action: loadAllWithdrawHistory,
-  },
+  // {
+  //   method: "post",
+  //   path: "/loadAllWithdrawHistory",
+  //   action: loadAllWithdrawHistory,
+  // },
 
-  {
-    method: "post",
-    path: "/loadSpecifiedGroupForReceiver",
-    action: loadSpecificGroupInformation,
-  },
+  // {
+  //   method: "post",
+  //   path: "/loadSpecifiedGroupForReceiver",
+  //   action: loadSpecificGroupInformation,
+  // },
   // {
   //   method: "post",
   //   path: "/webhook/goldsky-escrow-created",
@@ -202,6 +202,11 @@ const routes: RouteDefinition[] = [
     method: "post",
     path: "/checkWalletAddressesRegistration",
     action: checkWalletAddressesRegistration,
+  },
+  {
+    method: "post",
+    path: "/getReceiverDashboardSummary",
+    action: getReceiverDashboardSummary,
   },
 ];
 
