@@ -129,78 +129,78 @@ import mongoose, { Schema } from "mongoose";
 //   IncomingTransactionSchema
 // );
 
-const WithdrawHistorySchema = new Schema(
-  {
-    withdrawId: {
-      type: String,
-      required: false,
-    },
-    receiverWalletAddress: {
-      type: String,
-      required: true,
-    },
-    receiverId: {
-      type: String,
-      required: true,
-    },
-    amount: {
-      type: String,
-      required: true,
-    },
-    choice: {
-      type: String,
-      required: false,
-    },
-    originCurrency: {
-      type: String,
-      required: true,
-    },
-    targetCurrency: {
-      type: String,
-      required: false,
-    },
+// const WithdrawHistorySchema = new Schema(
+//   {
+//     withdrawId: {
+//       type: String,
+//       required: false,
+//     },
+//     receiverWalletAddress: {
+//       type: String,
+//       required: true,
+//     },
+//     receiverId: {
+//       type: String,
+//       required: true,
+//     },
+//     amount: {
+//       type: String,
+//       required: true,
+//     },
+//     choice: {
+//       type: String,
+//       required: false,
+//     },
+//     originCurrency: {
+//       type: String,
+//       required: true,
+//     },
+//     targetCurrency: {
+//       type: String,
+//       required: false,
+//     },
 
-    networkChainId: {
-      type: Number,
-      required: false,
-    },
-    walletAddress: {
-      type: String,
-      required: false,
-    },
+//     networkChainId: {
+//       type: Number,
+//       required: false,
+//     },
+//     walletAddress: {
+//       type: String,
+//       required: false,
+//     },
 
-    depositWalletAddress: {
-      type: String,
-      required: false,
-    },
-    bankId: {
-      type: String,
-      required: false,
-    },
-    bankName: {
-      type: String,
-      required: false,
-    },
-    bankAccountName: {
-      type: String,
-      required: false,
-    },
-    bankAccountNumber: {
-      type: String,
-      required: false,
-    },
-    createdAt: {
-      type: String,
-      required: true,
-      default: Date.now,
-    },
-  },
-  {
-    timestamps: true,
-  }
-);
+//     depositWalletAddress: {
+//       type: String,
+//       required: false,
+//     },
+//     bankId: {
+//       type: String,
+//       required: false,
+//     },
+//     bankName: {
+//       type: String,
+//       required: false,
+//     },
+//     bankAccountName: {
+//       type: String,
+//       required: false,
+//     },
+//     bankAccountNumber: {
+//       type: String,
+//       required: false,
+//     },
+//     createdAt: {
+//       type: String,
+//       required: true,
+//       default: Date.now,
+//     },
+//   },
+//   {
+//     timestamps: true,
+//   }
+// );
 
-export const WithdrawHistoryModel = mongoose.model(
-  "WithdrawHistory",
-  WithdrawHistorySchema
-);
+// export const WithdrawHistoryModel = mongoose.model(
+//   "WithdrawHistory",
+//   WithdrawHistorySchema
+// );

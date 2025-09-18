@@ -3,7 +3,10 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/userContext";
-import { loadAllWithdrawHistory } from "@/app/api/api";
+import {
+  loadAllWithdrawHistory,
+  saveTokenWithdrawToFiatToDatabase,
+} from "@/app/api/api";
 import { WithdrawHistory } from "@/types/historyTemplate";
 import {
   DollarSign,
@@ -43,10 +46,12 @@ export default function ReceiverHistoryPage() {
 
     const fetchWithdrawHistory = async () => {
       try {
+        // Then fetch the data from database
         const historyTemplate = await loadAllWithdrawHistory(
           user._id,
           currentWalletAddress,
         );
+
         if (!historyTemplate || !Array.isArray(historyTemplate)) {
           console.warn("Withdraw history not found or not an array.");
           setWithdrawHistory([]);
@@ -74,10 +79,18 @@ export default function ReceiverHistoryPage() {
             transactionHash: w.transactionHash,
           }),
         );
+
+        console.log(
+          "✅ Withdraw history loaded:",
+          templatesWithdrawHistory.length,
+          "records",
+        );
         setWithdrawHistory(templatesWithdrawHistory);
         setHasFetched(true);
       } catch (err) {
         console.error("Failed to fetch withdraw history", err);
+        setWithdrawHistory([]);
+        setHasFetched(true);
       }
     };
 

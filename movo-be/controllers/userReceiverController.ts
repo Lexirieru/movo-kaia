@@ -1,14 +1,14 @@
 import { Request, Response } from "express";
 import { UserModel } from "../models/userModel"; // Pastikan path-nya benar
-import {
-  // IncomingTransactionModel,
-  // TransactionHistoryModel,
-  WithdrawHistoryModel,
-} from "../models/transactionRecordModel";
+import // IncomingTransactionModel,
+// TransactionHistoryModel,
+// WithdrawHistoryModel,
+"../models/transactionRecordModel";
 import { generateSignatureForRedeem } from "../utils/generate_signature";
 import axios from "axios";
 // import { burnIdrx } from "../utils/burnIdrx";
 import { bankDictionary } from "../utils/dictionary";
+import tokenWithdrawToFiatModel from "../models/tokenWithdrawToFiatModel";
 
 // nampilin semua info group yang dia join (Nama grup, nama sendernya, total saldo dia di grup itu)
 // export async function loadAllJoinedGroupInformation(
@@ -221,7 +221,7 @@ export async function withdrawFromIDRXtoIDR(req: Request, res: Response) {
         }
       );
       console.log(response);
-      const withdrawHistory = new WithdrawHistoryModel({
+      const withdrawHistory = new tokenWithdrawToFiatModel({
         withdrawId,
         receiverId,
         amount,
@@ -286,33 +286,33 @@ export async function withdrawFromIDRXtoIDR(req: Request, res: Response) {
 // }
 
 // untuk nampilin all withdraw history
-export async function loadAllWithdrawHistory(req: Request, res: Response) {
-  const { _id, walletAddress } = req.body;
+// export async function loadAllWithdrawHistory(req: Request, res: Response) {
+//   const { _id, walletAddress } = req.body;
 
-  if (!_id || !walletAddress) {
-    res.status(404).json({ message: "id and walletAddress are required" });
-    return;
-  }
+//   if (!_id || !walletAddress) {
+//     res.status(404).json({ message: "id and walletAddress are required" });
+//     return;
+//   }
 
-  try {
-    const histories = await WithdrawHistoryModel.find({
-      receiverId: _id,
-      receiverWalletAddress: walletAddress,
-    })
-      .sort({ timestamp: -1 })
-      .lean();
+//   try {
+//     const histories = await WithdrawHistoryModel.find({
+//       receiverId: _id,
+//       receiverWalletAddress: walletAddress,
+//     })
+//       .sort({ timestamp: -1 })
+//       .lean();
 
-    res.status(200).json({
-      message: "Withdraw history successfully loaded",
-      data: histories,
-    });
-  } catch (err: any) {
-    res.status(500).json({
-      message: "Error loading withdraw history",
-      error: err.message,
-    });
-  }
-}
+//     res.status(200).json({
+//       message: "Withdraw history successfully loaded",
+//       data: histories,
+//     });
+//   } catch (err: any) {
+//     res.status(500).json({
+//       message: "Error loading withdraw history",
+//       error: err.message,
+//     });
+//   }
+// }
 
 // export async function loadAllIncomingTransaction(req: Request, res: Response) {
 //   const { _id, walletAddress } = req.body;
@@ -343,31 +343,31 @@ export async function loadAllWithdrawHistory(req: Request, res: Response) {
 // }
 
 // untuk nampilin spesifik withdraw history
-export async function loadSpecificWithdrawHistory(req: Request, res: Response) {
-  const { _id, withdrawId, walletAddress } = req.body;
+// export async function loadSpecificWithdrawHistory(req: Request, res: Response) {
+//   const { _id, withdrawId, walletAddress } = req.body;
 
-  if (!_id || !withdrawId || !walletAddress) {
-    res
-      .status(404)
-      .json({ message: "id, withdrawId, and walletAddress are required" });
-    return;
-  }
+//   if (!_id || !withdrawId || !walletAddress) {
+//     res
+//       .status(404)
+//       .json({ message: "id, withdrawId, and walletAddress are required" });
+//     return;
+//   }
 
-  try {
-    const withdrawHistory = await WithdrawHistoryModel.findOne({
-      receiverId: _id,
-      withdrawId,
-      receiverWalletAddress: walletAddress,
-    });
+//   try {
+//     const withdrawHistory = await WithdrawHistoryModel.findOne({
+//       receiverId: _id,
+//       withdrawId,
+//       receiverWalletAddress: walletAddress,
+//     });
 
-    res.status(200).json({
-      message: "Specified withdraw history successfully loaded",
-      data: withdrawHistory,
-    });
-  } catch (err: any) {
-    res.status(500).json({
-      message: "Error loading specified withdraw history",
-      error: err.message,
-    });
-  }
-}
+//     res.status(200).json({
+//       message: "Specified withdraw history successfully loaded",
+//       data: withdrawHistory,
+//     });
+//   } catch (err: any) {
+//     res.status(500).json({
+//       message: "Error loading specified withdraw history",
+//       error: err.message,
+//     });
+//   }
+// }

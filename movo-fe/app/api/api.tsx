@@ -10,6 +10,85 @@ export const api = axios.create({
   withCredentials: true,
 });
 
+// Function to query tokenWithdrawnToFiat from Goldsky
+export const fetchTokenWithdrawnToFiat = async (receiver: string) => {
+  try {
+    console.log("🔍 Fetching tokenWithdrawnToFiat for receiver:", receiver);
+
+    const query = `
+      query FetchTokenWithdrawnToFiat($receiver: String!) {
+        tokenWithdrawnToFiat(receiver: $receiver) {
+          block_number
+          amount
+          contractId_
+          depositWallet
+          escrowId
+          id
+          receiver
+          timestamp_
+          transactionHash_
+        }
+      }
+    `;
+
+    const response = await axios.post(GOLDSKY_API_URL, {
+      query,
+      variables: { receiver },
+    });
+
+    if (response.data.errors) {
+      console.error("❌ GraphQL errors:", response.data.errors);
+      throw new Error(
+        `GraphQL errors: ${JSON.stringify(response.data.errors)}`,
+      );
+    }
+
+    console.log("✅ TokenWithdrawnToFiat data fetched:", response.data.data);
+    return response.data.data.tokenWithdrawnToFiat || [];
+  } catch (error) {
+    console.error("❌ Error fetching tokenWithdrawnToFiat:", error);
+    throw error;
+  }
+};
+
+// Function to trigger backend to fetch and save tokenWithdrawToFiat data
+export const saveTokenWithdrawToFiatToDatabase = async (receiver: string) => {
+  try {
+    console.log(
+      "💾 Saving tokenWithdrawToFiat to database for receiver:",
+      receiver,
+    );
+
+    const response = await api.post("/tokenWithdrawToFiat/fetch", {
+      receiver,
+    });
+
+    console.log("✅ TokenWithdrawToFiat saved to database:", response.data);
+    return response.data;
+  } catch (error) {
+    console.error("❌ Error saving tokenWithdrawToFiat to database:", error);
+    throw error;
+  }
+};
+
+// Function to get tokenWithdrawToFiat history from database
+export const getTokenWithdrawToFiatHistory = async (receiver: string) => {
+  try {
+    console.log(
+      "📚 Getting tokenWithdrawToFiat history for receiver:",
+      receiver,
+    );
+
+    const response = await api.get(`/tokenWithdrawToFiat/history/${receiver}`);
+
+    console.log("✅ TokenWithdrawToFiat history fetched:", response.data);
+    return response.data;
+  } catch (error) {
+    console.error("❌ Error getting tokenWithdrawToFiat history:", error);
+    throw error;
+  }
+};
+
 api.interceptors.response.use(
   (response) => response,
   (error: AxiosError<ErrorResponse>) => {
@@ -224,13 +303,48 @@ export const loadAllWithdrawHistory = async (
   walletAddress: string,
 ) => {
   try {
-    const response = await api.post("/loadAllWithdrawHistory", {
-      _id,
+    console.log(
+      "📚 Loading withdraw history from database for wallet:",
       walletAddress,
-    });
-    return response.data.data;
+    );
+
+    // Get tokenWithdrawToFiat history from database
+    const response = await api.get(
+      `/tokenWithdrawToFiat/history/${walletAddress}`,
+    );
+
+    if (response.data.success && response.data.data) {
+      // Transform database data to match expected format
+      const transformedData = response.data.data.map((withdraw: any) => ({
+        withdrawId: withdraw.transactionHash, // Use transaction hash as withdraw ID
+        receiverId: withdraw.receiver,
+        amount: withdraw.amount,
+        choice: "USDC_TO_FIAT", // Since this is specifically for USDC to fiat withdrawals
+        originCurrency: "USDC",
+        targetCurrency: "IDR",
+        networkChainId: "84532", // Base Sepolia
+        walletAddress: withdraw.receiver,
+        depositWalletAddress: withdraw.depositWallet,
+        bankId: withdraw.contractId,
+        bankName: "Bank Transfer", // Default bank name
+        bankAccountName: "Receiver Account",
+        bankAccountNumber: withdraw.depositWallet,
+        createdAt: new Date(parseInt(withdraw.timestamp) * 1000).toISOString(),
+        claimedAt: new Date(parseInt(withdraw.timestamp) * 1000).toISOString(),
+        transactionHash: withdraw.transactionHash,
+        escrowId: withdraw.escrowId,
+        blockNumber: withdraw.blockNumber,
+      }));
+
+      console.log("✅ Transformed withdraw history:", transformedData);
+      return transformedData;
+    }
+
+    return [];
   } catch (err) {
-    console.log(err);
+    console.error("❌ Error loading withdraw history from database:", err);
+    // Fallback to empty array if there's an error
+    return [];
   }
 };
 

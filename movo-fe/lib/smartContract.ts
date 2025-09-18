@@ -1255,6 +1255,30 @@ export const withdrawUSDCTofiat = async (
         getEscrowAddress("USDC"),
       );
 
+      // Query and save tokenWithdrawToFiat data to database after successful withdrawal
+      try {
+        console.log(
+          "💾 Triggering tokenWithdrawToFiat data save for receiver:",
+          walletClient.account.address,
+        );
+
+        // Import the function dynamically to avoid circular imports
+        const { saveTokenWithdrawToFiatToDatabase } = await import(
+          "../app/api/api"
+        );
+        await saveTokenWithdrawToFiatToDatabase(walletClient.account.address);
+
+        console.log(
+          "✅ TokenWithdrawToFiat data saved to database successfully",
+        );
+      } catch (dbError) {
+        // Don't fail the whole transaction if database save fails
+        console.warn(
+          "⚠️ Failed to save tokenWithdrawToFiat to database:",
+          dbError,
+        );
+      }
+
       return {
         success: true,
         transactionHash: hash,
