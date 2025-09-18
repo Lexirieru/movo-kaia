@@ -47,10 +47,10 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     const checkConnection = async () => {
       try {
         // Only initialize in browser environment
-        if (typeof window !== 'undefined') {
+        if (typeof window !== "undefined") {
           // Initialize LINE Mini Dapp SDK
           await lineWalletProvider.init();
-          
+
           // Check if browser is supported
           if (!lineWalletProvider.isSupportedBrowser()) {
             console.warn("Browser not supported by LINE Mini Dapp");
@@ -93,18 +93,31 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   // Auto-login ketika wallet terconnect dan address berubah
   useEffect(() => {
     const handleWalletConnection = async () => {
+      console.log("🔍 handleWalletConnection called:", {
+        isInitialized,
+        isWalletSyncing,
+        isConnected,
+        address,
+        prevAddress,
+        isLoading,
+        processedAddresses: Array.from(processedAddresses),
+      });
+
       if (!isInitialized) {
+        console.log("❌ Not initialized yet, skipping login");
         return;
       }
 
       if (isWalletSyncing) {
+        console.log("❌ Already syncing, skipping login");
         return;
       }
 
       // KONDISI LOGIN: Wallet terconnect dan address ada
       if (isConnected && address) {
-        // PENGECEKAN 3: Cek jika address sudah pernah diproses
+        // PENGECEKAN: Cek jika address sudah pernah diproses
         if (processedAddresses.has(address.toLowerCase())) {
+          console.log("✅ Address already processed, no need to login");
           // Update prevAddress jika belum di-set
           if (prevAddress !== address) {
             setPrevAddress(address);
@@ -112,50 +125,51 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           return;
         }
 
-        // KONDISI untuk LOGIN:
-        // 1. Address berubah dari prevAddress yang ada
-        // 2. Atau fresh connect (prevAddress undefined tapi bukan first load)
-        const shouldLogin =
-          (prevAddress && address !== prevAddress) || // Address berubah
-          (!prevAddress && !isLoading); // Fresh connect setelah loading selesai
+        // KONDISI untuk LOGIN - Lebih sederhana:
+        // Login jika wallet connected dan belum pernah login untuk address ini
+        const shouldLogin = !processedAddresses.has(address.toLowerCase());
 
         if (shouldLogin) {
-          console.log(prevAddress, address);
+          console.log("🚀 Starting login process for address:", address);
           setIsWalletSyncing(true);
 
           try {
             const response = await loginWithWallet(address);
-            console.log(response);
+            console.log("✅ Login response:", response);
 
             if (response && response.statusCode === 200) {
+              console.log("✅ Login successful");
               // Mark address sebagai processed
               setProcessedAddresses(
                 (prev) => new Set([...prev, address.toLowerCase()]),
               );
               // callback untuk refresh userdata
               if (refreshUserCallback) {
+                console.log("🔄 Calling refresh user callback");
                 await refreshUserCallback();
               }
               // Tunggu sebentar untuk memastikan backend sudah update
-              await new Promise((resolve) => setTimeout(resolve, 500));
+              await new Promise((resolve) => setTimeout(resolve, 1000));
             } else if (
               response &&
-              response.statusCode === 404 &&
+              (response.statusCode === 404 || response.statusCode === 409) &&
               response.redirect
             ) {
-              console.log("redirecting to syncing page");
+              console.log("🔄 Redirecting to syncing page:", response.redirect);
               router.push(response.redirect);
+            } else if (response && response.statusCode === 404) {
+              console.log("🔄 User not found, redirecting to sync-wallet");
+              router.push("/sync-wallet");
+            } else {
+              console.error("❌ Unexpected login response:", response);
             }
           } catch (error: any) {
-            console.error(error);
+            console.error("❌ Login error:", error);
           } finally {
             setIsWalletSyncing(false);
           }
         } else {
-          console.log(
-            "🔄 Setting prevAddress without login (first load):",
-            address,
-          );
+          console.log("⏭️ No need to login for address:", address);
         }
 
         // update previous address dengan address sekarang
@@ -187,14 +201,16 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     try {
       console.log("🔌 Attempting to connect wallet...");
       setIsConnecting(true);
-      
+
       // Only connect in browser environment
-      if (typeof window === 'undefined') {
-        throw new Error("Wallet connection is only available in browser environment");
+      if (typeof window === "undefined") {
+        throw new Error(
+          "Wallet connection is only available in browser environment",
+        );
       }
-      
+
       const connectedAddress = await lineWalletProvider.connectWallet();
-      
+
       if (connectedAddress) {
         setAddress(connectedAddress);
         setIsConnected(true);
@@ -216,12 +232,12 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const disconnect = async () => {
     try {
       // Only disconnect in browser environment
-      if (typeof window !== 'undefined') {
+      if (typeof window !== "undefined") {
         await lineWalletProvider.disconnectWallet();
       }
       await logout();
       console.log("✅ Logout API called successfully");
-      
+
       setAddress(undefined);
       setIsConnected(false);
       setPrevAddress(undefined);

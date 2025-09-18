@@ -25,9 +25,25 @@ connectDB();
 const whitelist = [
   process.env.FRONTEND_URL || "",
   process.env.FARCASTER_URL || "",
+  "http://localhost:3000", // Tambah localhost untuk development
+  "http://127.0.0.1:3000",
 ];
+
+console.log("🌐 CORS whitelist:", whitelist);
+
 const corsOptions = {
-  origin: whitelist,
+  origin: (origin: any, callback: any) => {
+    // Allow requests with no origin (mobile apps, Postman, etc.)
+    if (!origin) return callback(null, true);
+
+    if (whitelist.indexOf(origin) !== -1) {
+      console.log("✅ CORS allowed for origin:", origin);
+      return callback(null, true);
+    } else {
+      console.log("❌ CORS blocked for origin:", origin);
+      return callback(new Error("Not allowed by CORS"));
+    }
+  },
   credentials: true, // Allow cookies
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   allowedHeaders: [
@@ -51,6 +67,8 @@ app.use(express.urlencoded());
 app.use(methodOverride("_method")); //  buat munculin UPDATE dan DELETE
 app.use("/public", express.static(path.join(__dirname, "../public")));
 
+const isProduction = process.env.NODE_ENV === "production";
+
 app.use(
   session({
     secret: process.env.SESSION_SECRET || "somesecret",
@@ -58,9 +76,10 @@ app.use(
     saveUninitialized: false,
     cookie: {
       httpOnly: false,
-      sameSite: "none",
-      secure: false,
-      maxAge: 24 * 60 * 60 * 1000 * 30, // 1 day
+      sameSite: isProduction ? "none" : "lax", // Use lax for development
+      secure: isProduction, // Only secure in production
+      maxAge: 24 * 60 * 60 * 1000 * 30, // 30 days
+      domain: isProduction ? undefined : "localhost", // Explicit domain for development
     },
   })
 );

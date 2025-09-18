@@ -9,20 +9,26 @@ const router: Router = express.Router();
 router.get(
   "/check-auth",
   async (req: Request, res: Response, next: NextFunction) => {
+    console.log("🔍 Check-auth called");
+    console.log("🍪 Cookies received:", req.cookies);
+
     const token = req.cookies?.user_session;
     if (!token) {
-      console.log("Token not found");
+      console.log("❌ Token not found in cookies");
       res
         .status(401)
         .json({ authenticated: false, message: "Token not found" });
       return;
     } else {
+      console.log("✅ Token found:", token.substring(0, 20) + "...");
       try {
         const decoded = jwt.verify(token, process.env.JWT_SECRET!) as {
           _id: string;
           role: string;
           walletAddress: string;
         };
+
+        console.log("🔓 Token decoded:", decoded);
 
         const user = await UserModel.findOne({
           _id: decoded._id,
@@ -31,12 +37,13 @@ router.get(
         });
 
         if (!user) {
-          console.log("Invalid token");
+          console.log("❌ User not found for token");
           res
             .status(401)
             .json({ authenticated: false, message: "Invalid token" });
           return;
         } else {
+          console.log("✅ User authenticated:", user._id);
           res.json({
             user,
             currentWalletAddress: decoded.walletAddress,
@@ -47,7 +54,7 @@ router.get(
           return;
         }
       } catch (err) {
-        console.error("Error while verifying token:", err);
+        console.error("❌ Error while verifying token:", err);
         res.status(401).json({ authenticated: false, message: "Token error" });
         return;
       }
@@ -114,12 +121,20 @@ router.get(
 router.post(
   "/loginWithWallet",
   async (req: Request, res: Response, next: NextFunction) => {
+    console.log("🔐 LoginWithWallet endpoint called");
+    console.log("📝 Request body:", req.body);
+
     const { walletAddress, _id } = req.body;
 
     if (!walletAddress) {
+      console.log("❌ Wallet address is missing");
       res.status(400).json({ message: "Wallet address is required" });
       return;
     }
+
+    console.log("✅ Wallet address provided:", walletAddress);
+    console.log("🔧 Input wallet type:", typeof walletAddress);
+    console.log("🔧 Input wallet length:", walletAddress.length);
 
     try {
       // Jika ada _id, cari user berdasarkan _id (untuk pairing scenario)
@@ -151,6 +166,11 @@ router.post(
         }
       } else {
         // Normal login flow - find user by wallet address
+        console.log(
+          "🔍 Searching for user with wallet address:",
+          walletAddress
+        );
+
         user = await UserModel.findOne({
           "WalletAddresses.walletAddress": new RegExp(
             `^${walletAddress}$`,
@@ -158,30 +178,66 @@ router.post(
           ),
         });
 
+        console.log("👤 Found user:", user ? user._id : "null");
+
         if (!user) {
-          res.status(200).json({
-            message:
-              "Account with specified wallet address is not found. Please register first.",
-            requiresPairing: false,
-            redirect: `/sync-wallet`, // Tambah redirect URL
-            statusCode: 404,
+          console.log("❌ User not found, trying alternative query");
+
+          // Try alternative query without regex
+          user = await UserModel.findOne({
+            "WalletAddresses.walletAddress": walletAddress,
           });
-          return;
+
+          console.log("👤 Alternative query result:", user ? user._id : "null");
+
+          if (!user) {
+            console.log("❌ User definitely not found");
+
+            // Debug disabled for production
+
+            res.status(200).json({
+              message:
+                "Account with specified wallet address is not found. Please register first.",
+              requiresPairing: false,
+              redirect: `/sync-wallet`, // Tambah redirect URL
+              statusCode: 404,
+            });
+            return;
+          }
         }
       }
 
       const token = await generateCookiesToken(user, walletAddress);
 
+      console.log(
+        "🍪 Setting cookie for user:",
+        user._id,
+        "wallet:",
+        walletAddress
+      );
+
+      // Set cookie dengan berbagai konfigurasi untuk development dan production
+      const isProduction = process.env.NODE_ENV === "production";
+
       res.cookie("user_session", token, {
         httpOnly: true,
-        sameSite: "none",
-        secure: true,
-        maxAge: 30 * 24 * 60 * 60 * 1000,
+        sameSite: isProduction ? "none" : "lax", // Development gunakan lax
+        secure: isProduction, // Hanya secure di production
+        maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
+        domain: isProduction ? undefined : "localhost", // Explicit domain untuk development
+        path: "/",
       });
+
+      console.log("✅ Cookie set successfully");
 
       res.status(200).json({
         statusCode: 200,
         message: "Login successful",
+        debug: {
+          userId: user._id,
+          walletAddress,
+          tokenSet: true,
+        },
       });
       return;
     } catch (err) {
@@ -196,14 +252,46 @@ export async function generateCookiesToken(
   newUser: InstanceType<typeof UserModel>,
   walletAddress: string
 ) {
+  console.log("🔧 generateCookiesToken called for user:", newUser._id);
+  console.log("🔧 Looking for wallet address:", walletAddress);
+  console.log("🔧 User wallet addresses:");
+  newUser.WalletAddresses?.forEach((wallet, index) => {
+    console.log(`  ${index}: ${wallet.walletAddress} (${wallet.role})`);
+    if (wallet.walletAddress) {
+      console.log(
+        `     Match check: ${wallet.walletAddress} == ${walletAddress} => ${
+          wallet.walletAddress == walletAddress
+        }`
+      );
+      console.log(
+        `     Case-insensitive check: ${
+          wallet.walletAddress.toLowerCase() == walletAddress.toLowerCase()
+        }`
+      );
+    }
+  });
+
   // nge return wallet yang merupakan object dari WalletAddresses kalok ketemu
-  const walletData = newUser.WalletAddresses.find(
+  let walletData = newUser.WalletAddresses.find(
     (wallet) => wallet.walletAddress == walletAddress
   );
 
+  // If not found with exact match, try case-insensitive
   if (!walletData) {
+    console.log("🔧 Exact match failed, trying case-insensitive match");
+    walletData = newUser.WalletAddresses.find(
+      (wallet) =>
+        wallet.walletAddress &&
+        wallet.walletAddress.toLowerCase() == walletAddress.toLowerCase()
+    );
+  }
+
+  if (!walletData) {
+    console.log("❌ No wallet data found for address:", walletAddress);
     throw new Error("No registered wallet address found in this account");
   }
+
+  console.log("✅ Found wallet data:", walletData);
 
   const token = generateToken({
     randomSeed: crypto.randomBytes(16).toString("hex"),

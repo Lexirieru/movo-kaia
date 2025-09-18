@@ -67,21 +67,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // cek auth pertama kali
   const checkAuth = async () => {
+    console.log("🔍 checkAuth called");
     setLoading(true);
     try {
       const data: GetMeResponse = await getMe();
+      console.log("🔍 getMe response:", data);
 
       if (data && data.authenticated) {
+        console.log("✅ User authenticated:", data.user._id);
         setUser(data.user);
         setCurrentWalletAddress(data.currentWalletAddress || "");
         setCurrentRole(data.currentRole || "none");
       } else {
+        console.log("❌ User not authenticated");
         setUser(null);
         setCurrentWalletAddress("");
         setCurrentRole("none");
       }
     } catch (error) {
-      console.error("Error checking auth:", error);
+      console.error("❌ Error checking auth:", error);
       setUser(null);
       setCurrentWalletAddress("");
       setCurrentRole("none");
@@ -92,21 +96,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Refresh user - dengan tracking state
   const refreshUser = async () => {
+    console.log("🔄 refreshUser called");
     setIsRefreshing(true);
     try {
       const data: GetMeResponse = await getMe();
+      console.log("🔄 refreshUser getMe response:", data);
 
       if (data && data.authenticated) {
+        console.log("✅ User data refreshed:", data.user._id);
         setUser(data.user);
         setCurrentWalletAddress(data.currentWalletAddress || "");
         setCurrentRole(data.currentRole || "none");
       } else {
+        console.log("❌ User not authenticated after refresh");
         setUser(null);
         setCurrentWalletAddress("");
         setCurrentRole("none");
       }
     } catch (error) {
-      console.error("Error refreshing user:", error);
+      console.error("❌ Error refreshing user:", error);
       setUser(null);
       setCurrentWalletAddress("");
       setCurrentRole("none");

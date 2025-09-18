@@ -41,10 +41,25 @@ export const register = async (
 
 export const loginWithWallet = async (walletAddress: string) => {
   try {
+    console.log("🔐 Attempting to login with wallet:", walletAddress);
     const response = await api.post("/loginWithWallet", { walletAddress });
+    console.log("✅ Login API response:", response.data);
     return response.data;
-  } catch (err) {
-    console.log(err);
+  } catch (err: any) {
+    console.error("❌ Login API error:", err);
+
+    // Return error response jika ada status code dari backend
+    if (err.response?.data) {
+      console.log("🔄 Returning backend error response:", err.response.data);
+      return err.response.data;
+    }
+
+    // Return generic error jika tidak ada response dari backend
+    return {
+      statusCode: 500,
+      message: "Network error or server is down",
+      error: true,
+    };
   }
 };
 

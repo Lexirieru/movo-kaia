@@ -9,12 +9,18 @@ import jwt from "jsonwebtoken";
 
 const escrowEventRoutes = express.Router();
 
-// Middleware untuk validasi token
+// Middleware untuk validasi token - support both Authorization header and cookies
 const authenticateToken = (req: any, res: any, next: any) => {
+  // Try to get token from Authorization header first
   const authHeader = req.headers["authorization"];
-  const token = authHeader && authHeader.split(" ")[1];
+  let token = authHeader && authHeader.split(" ")[1];
 
-  if (token == null) {
+  // If no Authorization header, try to get token from cookies
+  if (!token) {
+    token = req.cookies?.user_session;
+  }
+
+  if (!token) {
     return res.status(401).json({
       message: "Access token is required",
       statusCode: 401,
