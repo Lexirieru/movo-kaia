@@ -546,17 +546,36 @@ export const fetchEscrowsFromIndexer = async (userAddress: string) => {
       isLowerCase: userAddress === userAddress?.toLowerCase()
     });
 
+    // const query = `
+    //   query GetUserEscrows($userAddress: String!) {
+    //     escrowCreateds(where: { sender: $userAddress }) {
+    //       escrowId
+    //       sender
+    //       receivers
+    //       totalAmount
+    //       amounts
+    //       block_number
+    //       timestamp_
+    //       transactionHash_
+    //     }
+    //   }
+    // `;
     const query = `
       query GetUserEscrows($userAddress: String!) {
-        escrowCreateds(where: { sender: $userAddress }) {
+        escrowCreateds(
+          where: { sender: $userAddress }
+          orderBy: timestamp_
+          orderDirection: desc
+        ) {
           escrowId
           sender
           receivers
-          totalAmount
           amounts
+          totalAmount
           block_number
           timestamp_
           transactionHash_
+          contractId_
         }
       }
     `;
@@ -594,6 +613,8 @@ export const fetchEscrowsFromIndexer = async (userAddress: string) => {
     }
 
     const transformedEscrows = escrows.map((escrow: any, index: number) => {
+            const tokenAddress = mapContractIdToTokenAddress(escrow.contractId_);
+
       // Parse timestamp if available
       const createdAt = escrow.timestamp_ 
         ? new Date(parseInt(escrow.timestamp_) * 1000).toISOString()
@@ -611,7 +632,7 @@ export const fetchEscrowsFromIndexer = async (userAddress: string) => {
         amounts: escrow.amounts
           ? escrow.amounts.split(",").map((amount: string) => amount.trim())
           : [],
-        tokenAddress: "0xf9D5a610fe990bfCdF7dd9FD64bdfe89D6D1eb4c", // Default to USDC for now
+        tokenAddress: tokenAddress, // ini yang diedit tadinya pake address usdc langsung
         blockNumber: escrow.block_number,
         transactionHash: escrow.transactionHash_,
       };
@@ -629,6 +650,60 @@ export const fetchEscrowsFromIndexer = async (userAddress: string) => {
     return [];
   }
 };
+//ini kali aja kepake
+function mapContractIdToTokenAddress(contractId: string): string {
+  console.log("🔍 Mapping contractId:", contractId);
+  
+  // Define contract mappings
+  const contractMappings = {
+    // USDC Contract
+    "EscrowContract": process.env.NEXT_PUBLIC_USDC_ADDRESS || "0xf9D5a610fe990bfCdF7dd9FD64bdfe89D6D1eb4c",
+    
+    // IDRX Contract  
+    "EscrowIdrxContract": process.env.NEXT_PUBLIC_IDRX_ADDRESS || "0x77fEa84656B5EF40BF33e3835A9921dAEAadb976",
+    
+    // USDT Contract (if you have one)
+    "EscrowUsdtContract": process.env.NEXT_PUBLIC_USDT_ADDRESS || "0x80327544e61e391304ad16f0BAFb2C5c7A76dfB3",
+  };
+
+  // Try exact match first
+  if (contractMappings[contractId as keyof typeof contractMappings]) {
+    const mappedAddress = contractMappings[contractId as keyof typeof contractMappings];
+    console.log(`✅ Exact match: ${contractId} -> ${mappedAddress}`);
+    return mappedAddress;
+  }
+
+  // Try pattern matching for contract addresses
+  const lowerContractId = contractId?.toLowerCase() || "";
+  
+  if (lowerContractId.includes("idrx") || lowerContractId.includes("77fea84")) {
+    console.log(`✅ Pattern match IDRX: ${contractId}`);
+    return process.env.NEXT_PUBLIC_IDRX_ADDRESS || "0x77fEa84656B5EF40BF33e3835A9921dAEAadb976";
+  }
+  
+  if (lowerContractId.includes("usdt") || lowerContractId.includes("80327544")) {
+    console.log(`✅ Pattern match USDT: ${contractId}`);
+    return process.env.NEXT_PUBLIC_USDT_ADDRESS || "0x80327544e61e391304ad16f0BAFb2C5c7A76dfB3";
+  }
+
+  // Default to USDC
+  console.log(`⚠️ No match found for ${contractId}, defaulting to USDC`);
+  return process.env.NEXT_PUBLIC_USDC_ADDRESS || "0xf9D5a610fe990bfCdF7dd9FD64bdfe89D6D1eb4c";
+}
+
+function determineTokenTypeFromContract(contractId: string): "USDC" | "USDT" | "IDRX" {
+  const tokenAddress = mapContractIdToTokenAddress(contractId);
+  
+  const usdcAddress = (process.env.NEXT_PUBLIC_USDC_ADDRESS || "0xf9D5a610fe990bfCdF7dd9FD64bdfe89D6D1eb4c").toLowerCase();
+  const usdtAddress = (process.env.NEXT_PUBLIC_USDT_ADDRESS || "0x80327544e61e391304ad16f0BAFb2C5c7A76dfB3").toLowerCase();
+  const idrxAddress = (process.env.NEXT_PUBLIC_IDRX_ADDRESS || "0x77fEa84656B5EF40BF33e3835A9921dAEAadb976").toLowerCase();
+  
+  const addr = tokenAddress.toLowerCase();
+  
+  if (addr === idrxAddress) return "IDRX";
+  if (addr === usdtAddress) return "USDT";
+  return "USDC";
+}
 
 const fetchReceiverEscrowsFromIndexer = async (receiverAddress: string) => {
   try {
