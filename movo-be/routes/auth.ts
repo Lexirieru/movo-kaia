@@ -9,9 +9,6 @@ const router: Router = express.Router();
 router.get(
   "/check-auth",
   async (req: Request, res: Response, next: NextFunction) => {
-    console.log("🔍 Check-auth called");
-    console.log("🍪 Cookies received:", req.cookies);
-
     const token = req.cookies?.user_session;
     if (!token) {
       console.log("❌ Token not found in cookies");
@@ -43,7 +40,6 @@ router.get(
             .json({ authenticated: false, message: "Invalid token" });
           return;
         } else {
-          console.log("✅ User authenticated:", user._id);
           res.json({
             user,
             currentWalletAddress: decoded.walletAddress,
@@ -121,9 +117,6 @@ router.get(
 router.post(
   "/loginWithWallet",
   async (req: Request, res: Response, next: NextFunction) => {
-    console.log("🔐 LoginWithWallet endpoint called");
-    console.log("📝 Request body:", req.body);
-
     const { walletAddress, _id } = req.body;
 
     if (!walletAddress) {
@@ -133,9 +126,6 @@ router.post(
     }
 
     console.log("✅ Wallet address provided:", walletAddress);
-    console.log("🔧 Input wallet type:", typeof walletAddress);
-    console.log("🔧 Input wallet length:", walletAddress.length);
-
     try {
       // Jika ada _id, cari user berdasarkan _id (untuk pairing scenario)
       let user;
@@ -165,20 +155,12 @@ router.post(
           return;
         }
       } else {
-        // Normal login flow - find user by wallet address
-        console.log(
-          "🔍 Searching for user with wallet address:",
-          walletAddress
-        );
-
         user = await UserModel.findOne({
           "WalletAddresses.walletAddress": new RegExp(
             `^${walletAddress}$`,
             "i"
           ),
         });
-
-        console.log("👤 Found user:", user ? user._id : "null");
 
         if (!user) {
           console.log("❌ User not found, trying alternative query");
@@ -208,13 +190,6 @@ router.post(
       }
 
       const token = await generateCookiesToken(user, walletAddress);
-
-      console.log(
-        "🍪 Setting cookie for user:",
-        user._id,
-        "wallet:",
-        walletAddress
-      );
 
       // Set cookie dengan berbagai konfigurasi untuk development dan production
       const isProduction = process.env.NODE_ENV === "production";
@@ -252,24 +227,21 @@ export async function generateCookiesToken(
   newUser: InstanceType<typeof UserModel>,
   walletAddress: string
 ) {
-  console.log("🔧 generateCookiesToken called for user:", newUser._id);
-  console.log("🔧 Looking for wallet address:", walletAddress);
-  console.log("🔧 User wallet addresses:");
-  newUser.WalletAddresses?.forEach((wallet, index) => {
-    console.log(`  ${index}: ${wallet.walletAddress} (${wallet.role})`);
-    if (wallet.walletAddress) {
-      console.log(
-        `     Match check: ${wallet.walletAddress} == ${walletAddress} => ${
-          wallet.walletAddress == walletAddress
-        }`
-      );
-      console.log(
-        `     Case-insensitive check: ${
-          wallet.walletAddress.toLowerCase() == walletAddress.toLowerCase()
-        }`
-      );
-    }
-  });
+  // newUser.WalletAddresses?.forEach((wallet, index) => {
+  //   console.log(`  ${index}: ${wallet.walletAddress} (${wallet.role})`);
+  //   if (wallet.walletAddress) {
+  //     console.log(
+  //       `     Match check: ${wallet.walletAddress} == ${walletAddress} => ${
+  //         wallet.walletAddress == walletAddress
+  //       }`f
+  //     );
+  //     console.log(
+  //       `     Case-insensitive check: ${
+  //         wallet.walletAddress.toLowerCase() == walletAddress.toLowerCase()
+  //       }`
+  //     );
+  //   }
+  // });
 
   // nge return wallet yang merupakan object dari WalletAddresses kalok ketemu
   let walletData = newUser.WalletAddresses.find(
@@ -278,7 +250,6 @@ export async function generateCookiesToken(
 
   // If not found with exact match, try case-insensitive
   if (!walletData) {
-    console.log("🔧 Exact match failed, trying case-insensitive match");
     walletData = newUser.WalletAddresses.find(
       (wallet) =>
         wallet.walletAddress &&
@@ -290,8 +261,6 @@ export async function generateCookiesToken(
     console.log("❌ No wallet data found for address:", walletAddress);
     throw new Error("No registered wallet address found in this account");
   }
-
-  console.log("✅ Found wallet data:", walletData);
 
   const token = generateToken({
     randomSeed: crypto.randomBytes(16).toString("hex"),

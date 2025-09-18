@@ -74,7 +74,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.log("🔍 getMe response:", data);
 
       if (data && data.authenticated) {
-        console.log("✅ User authenticated:", data.user._id);
         setUser(data.user);
         setCurrentWalletAddress(data.currentWalletAddress || "");
         setCurrentRole(data.currentRole || "none");

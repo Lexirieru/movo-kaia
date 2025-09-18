@@ -29,15 +29,12 @@ const whitelist = [
   "http://127.0.0.1:3000",
 ];
 
-console.log("🌐 CORS whitelist:", whitelist);
-
 const corsOptions = {
   origin: (origin: any, callback: any) => {
     // Allow requests with no origin (mobile apps, Postman, etc.)
     if (!origin) return callback(null, true);
 
     if (whitelist.indexOf(origin) !== -1) {
-      console.log("✅ CORS allowed for origin:", origin);
       return callback(null, true);
     } else {
       console.log("❌ CORS blocked for origin:", origin);

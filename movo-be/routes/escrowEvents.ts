@@ -4,6 +4,7 @@ import {
   getEscrowEventHistory,
   getUserEscrowEvents,
   getEscrowEventStatistics,
+  getDashboardMetrics,
 } from "../controllers/escrowEventController";
 import jwt from "jsonwebtoken";
 
@@ -42,25 +43,56 @@ const authenticateToken = (req: any, res: any, next: any) => {
 // POST: Save escrow event (untuk webhook atau internal use)
 escrowEventRoutes.post("/save-event", saveEscrowEvent);
 
-// POST: Get escrow event history berdasarkan escrowId
+// POST: Get escrow event history berdasarkan escrowId (dengan auth)
 escrowEventRoutes.post(
   "/get-history",
   authenticateToken,
   getEscrowEventHistory
 );
 
-// POST: Get user's all escrow events
+// POST: Get user's all escrow events (dengan pagination dan filtering)
 escrowEventRoutes.post(
   "/get-user-events",
   authenticateToken,
   getUserEscrowEvents
 );
 
-// POST: Get escrow event statistics
+// POST: Get escrow event statistics (dengan time range dan trends)
 escrowEventRoutes.post(
   "/get-statistics",
   authenticateToken,
   getEscrowEventStatistics
+);
+
+// GET: Get dashboard metrics (quick overview untuk dashboard)
+escrowEventRoutes.get(
+  "/dashboard-metrics",
+  authenticateToken,
+  getDashboardMetrics
+);
+
+// GET: Get user's recent activity (untuk dashboard)
+escrowEventRoutes.get(
+  "/recent-activity",
+  authenticateToken,
+  async (req: any, res: any) => {
+    try {
+      const user = req.user;
+      const recentEvents = await getUserEscrowEvents(
+        {
+          ...req,
+          body: { limit: 10, page: 1, timeRange: "7d" },
+        } as any,
+        res
+      );
+    } catch (error) {
+      res.status(500).json({
+        message: "Error getting recent activity",
+        statusCode: 500,
+        error: error instanceof Error ? error.message : "Unknown error",
+      });
+    }
+  }
 );
 
 export { escrowEventRoutes };

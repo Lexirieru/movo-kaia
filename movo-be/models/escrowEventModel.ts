@@ -150,11 +150,30 @@ const EscrowEventSchema = new Schema(
   }
 );
 
-// Indexing untuk performance
+// Enhanced indexing untuk performance optimal
 EscrowEventSchema.index({ escrowId: 1, createdAt: -1 });
 EscrowEventSchema.index({ groupId: 1, createdAt: -1 });
 EscrowEventSchema.index({ initiatorId: 1, createdAt: -1 });
+EscrowEventSchema.index({ initiatorWalletAddress: 1, createdAt: -1 });
 EscrowEventSchema.index({ eventType: 1, createdAt: -1 });
+EscrowEventSchema.index({ tokenType: 1, createdAt: -1 });
+EscrowEventSchema.index({ transactionHash: 1 }, { unique: true });
+
+// Compound indexes untuk queries yang kompleks
+EscrowEventSchema.index({ initiatorId: 1, eventType: 1, createdAt: -1 });
+EscrowEventSchema.index({
+  initiatorWalletAddress: 1,
+  tokenType: 1,
+  createdAt: -1,
+});
+EscrowEventSchema.index({ escrowId: 1, eventType: 1, createdAt: -1 });
+
+// Text index untuk searching (opsional)
+EscrowEventSchema.index({
+  initiatorName: "text",
+  "eventData.recipients.fullname": "text",
+  eventType: "text",
+});
 
 export const EscrowEventModel = mongoose.model(
   "EscrowEvent",

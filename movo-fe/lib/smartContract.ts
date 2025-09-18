@@ -366,7 +366,7 @@ export const findGroupIdForEscrow = async (
   }
 };
 
-// Helper function to save escrow event with proper context
+// Helper function to save escrow event with proper context and validation
 export const saveEscrowEventWithContext = async (
   eventType:
     | "ESCROW_CREATED"
@@ -386,34 +386,85 @@ export const saveEscrowEventWithContext = async (
   userId?: string,
 ) => {
   try {
+    console.log(`📝 Saving ${eventType} event for wallet: ${walletAddress}`);
+
+    // Validate wallet address format
+    const validatedWalletAddress = validateAddress(walletAddress);
+
     // Resolve groupId if userId is available
     let groupId = "unknown";
     if (userId) {
-      groupId = await findGroupIdForEscrow(userId, walletAddress, escrowId);
+      groupId = await findGroupIdForEscrow(
+        userId,
+        validatedWalletAddress,
+        escrowId,
+      );
     }
 
-    await saveEscrowEvent({
+    // Enhanced metadata with chain info
+    const metadata = {
+      gasUsed: receipt.gasUsed?.toString(),
+      gasPrice: receipt.effectiveGasPrice?.toString(),
+      networkId: "84532", // Base Sepolia
+      contractAddress,
+      chainName: "Base Sepolia",
+      blockHash: receipt.blockHash,
+      transactionIndex: receipt.transactionIndex?.toString(),
+      status: receipt.status === 1 ? "success" : "failed",
+    };
+
+    // Calculate block timestamp from receipt if available
+    let blockTimestamp = Math.floor(Date.now() / 1000).toString();
+    if (receipt.blockNumber) {
+      try {
+        const block = await publicClient.getBlock({
+          blockNumber: BigInt(receipt.blockNumber),
+        });
+        blockTimestamp = block.timestamp.toString();
+      } catch (blockError) {
+        console.warn(
+          `⚠️ Could not get block timestamp, using current time:`,
+          blockError,
+        );
+      }
+    }
+
+    const eventPayload = {
       eventType,
       escrowId,
       groupId,
       transactionHash,
       blockNumber: receipt.blockNumber?.toString(),
-      initiatorWalletAddress: walletAddress,
+      initiatorWalletAddress: validatedWalletAddress,
       tokenType,
       eventData,
-      metadata: {
-        gasUsed: receipt.gasUsed?.toString(),
-        gasPrice: receipt.effectiveGasPrice?.toString(),
-        networkId: "84532", // Base Sepolia
-        contractAddress,
-      },
-      blockTimestamp: Math.floor(Date.now() / 1000).toString(),
-    });
+      metadata,
+      blockTimestamp,
+    };
 
-    console.log(`📝 ${eventType} event saved successfully`);
+    console.log(`🔍 Event payload:`, JSON.stringify(eventPayload, null, 2));
+
+    await saveEscrowEvent(eventPayload);
+
+    console.log(
+      `✅ ${eventType} event saved successfully for escrow ${escrowId}`,
+    );
+
+    return {
+      success: true,
+      eventId: `${eventType}_${escrowId}_${transactionHash}`,
+    };
   } catch (eventError) {
-    console.error(`⚠️ Error saving ${eventType} event:`, eventError);
-    // Don't fail the main operation if event saving fails
+    console.error(`❌ Error saving ${eventType} event:`, eventError);
+
+    // Return error info but don't fail the main operation
+    return {
+      success: false,
+      error: eventError instanceof Error ? eventError.message : "Unknown error",
+      eventType,
+      escrowId,
+      transactionHash,
+    };
   }
 };
 
@@ -807,7 +858,7 @@ export const createEscrowOnchain = async (
       console.log("✅ Extracted escrow ID from logs:", escrowId);
     }
 
-    // Save escrow event for tracking
+    // Save escrow event for tracking with enhanced context
     const totalAmount = escrowData.amounts.reduce(
       (sum, amount) => sum + amount,
       BigInt(0),
@@ -815,7 +866,7 @@ export const createEscrowOnchain = async (
 
     // Convert amounts to string format and map receivers
     const recipients = escrowData.receivers.map((receiver, index) => ({
-      walletAddress: receiver,
+      walletAddress: validateAddress(receiver),
       amount: formatTokenAmount(
         escrowData.amounts[index],
         tokenType === "IDRX" ? 18 : 6,
@@ -823,22 +874,42 @@ export const createEscrowOnchain = async (
       fullname: "Unknown User", // Will be resolved in backend
     }));
 
-    await saveEscrowEventWithContext(
+    // Enhanced event data with more context
+    const eventData = {
+      totalAmount: formatTokenAmount(
+        totalAmount,
+        tokenType === "IDRX" ? 18 : 6,
+      ),
+      recipients: recipients,
+      vestingEnabled: escrowData.vestingEnabled || false,
+      vestingDuration: escrowData.vestingDuration || 0,
+      recipientsCount: recipients.length,
+      averageAmount: formatTokenAmount(
+        totalAmount / BigInt(recipients.length),
+        tokenType === "IDRX" ? 18 : 6,
+      ),
+      createdAt: new Date().toISOString(),
+    };
+
+    console.log(`💾 Saving ESCROW_CREATED event with enhanced data`);
+
+    const eventResult = await saveEscrowEventWithContext(
       "ESCROW_CREATED",
       escrowId,
       hash,
       walletClient.account.address,
       tokenType,
-      {
-        totalAmount: formatTokenAmount(
-          totalAmount,
-          tokenType === "IDRX" ? 18 : 6,
-        ),
-        recipients: recipients,
-      },
+      eventData,
       receipt,
       contract.address,
     );
+
+    if (!eventResult.success) {
+      console.warn(
+        `⚠️ Event tracking failed but escrow creation succeeded:`,
+        eventResult.error,
+      );
+    }
 
     return {
       success: true,
@@ -887,7 +958,7 @@ export async function addReceiver(
       console.log("Receiver added successfully:", receipt);
 
       // Save add receiver event for tracking
-      await saveEscrowEventWithContext(
+      const eventResult = await saveEscrowEventWithContext(
         "ADD_RECIPIENTS",
         escrowId,
         txHash,
@@ -896,15 +967,24 @@ export async function addReceiver(
         {
           newRecipients: [
             {
-              walletAddress: receiverAddress,
+              walletAddress: validateAddress(receiverAddress),
               amount: formatTokenAmount(amount, tokenType === "IDRX" ? 18 : 6),
               fullname: "Unknown User", // Will be resolved in backend
             },
           ],
+          escrowId: escrowId,
+          addedAt: new Date().toISOString(),
         },
         receipt,
         contractAddress.address,
       );
+
+      if (!eventResult.success) {
+        console.warn(
+          `⚠️ ADD_RECIPIENTS event tracking failed:`,
+          eventResult.error,
+        );
+      }
 
       return {
         success: true,
