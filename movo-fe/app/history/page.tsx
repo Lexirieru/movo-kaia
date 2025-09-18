@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/userContext";
 import { useWallet } from "@/lib/walletContext";
 import MainLayout from "../components/layout/MainLayout";
 import WalletWarning from "../components/dashboard/WalletWarning";
 
-export default function HistoryPage() {
+function HistoryContent() {
   const { loading, currentWalletAddress, currentRole } = useAuth();
   const { isConnected, address } = useWallet();
   const searchParams = useSearchParams();
@@ -62,5 +62,22 @@ export default function HistoryPage() {
         </div>
       </div>
     </MainLayout>
+  );
+}
+
+export default function HistoryPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-black flex items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-cyan-400 mx-auto mb-4"></div>
+            <p className="text-gray-400">Loading history...</p>
+          </div>
+        </div>
+      }
+    >
+      <HistoryContent />
+    </Suspense>
   );
 }

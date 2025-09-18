@@ -7,6 +7,7 @@ import express from "express";
 import methodOverride from "method-override";
 import cors from "cors";
 import loggedInRoutes from "./routes/loggedIn";
+import { escrowEventRoutes } from "./routes/escrowEvents";
 
 import session from "express-session";
 import passport from "passport";
@@ -70,6 +71,7 @@ app.use(passport.session());
 app.use("/", authRoutes);
 app.use("/", pricefeedRoutes);
 app.use("/", loggedInRoutes);
+app.use("/escrow-events", escrowEventRoutes);
 
 //handle semua endpoint yang gaada untuk menampilkan 404 not found page
 app.get("*", (req, res) => {

@@ -123,6 +123,192 @@ export async function saveEscrowToDatabase(req: Request, res: Response) {
   }
 }
 
+// Controller untuk mengecek apakah wallet addresses sudah terdaftar di Movo
+export async function checkWalletAddressesRegistration(
+  req: Request,
+  res: Response
+) {
+  const { walletAddresses } = req.body;
+
+  // Validasi input
+  if (!walletAddresses || !Array.isArray(walletAddresses)) {
+    res.status(400).json({
+      message: "walletAddresses array is required",
+      statusCode: 400,
+    });
+    return;
+  }
+
+  if (walletAddresses.length === 0) {
+    res.status(400).json({
+      message: "walletAddresses array cannot be empty",
+      statusCode: 400,
+    });
+    return;
+  }
+
+  // Validasi format wallet address
+  const invalidFormatAddresses = walletAddresses.filter((addr: string) => {
+    if (typeof addr !== "string") return true;
+    const cleanAddr = addr.trim().toLowerCase();
+    return !cleanAddr.startsWith("0x") || cleanAddr.length !== 42;
+  });
+
+  if (invalidFormatAddresses.length > 0) {
+    res.status(400).json({
+      message: "Invalid wallet address format detected",
+      statusCode: 400,
+      data: {
+        invalidAddresses: invalidFormatAddresses,
+        note: "Wallet addresses must start with 0x and be 42 characters long",
+      },
+    });
+    return;
+  }
+
+  try {
+    // Normalize wallet addresses (lowercase untuk case-insensitive comparison)
+    const normalizedAddresses = walletAddresses.map((addr: string) =>
+      addr.trim().toLowerCase()
+    );
+
+    // Remove duplicates
+    const uniqueAddresses = [...new Set(normalizedAddresses)];
+
+    console.log("🔍 Checking wallet addresses:", uniqueAddresses);
+
+    // Query database untuk cari users dengan wallet addresses yang diminta
+    const registeredUsers = await UserModel.find(
+      {
+        "WalletAddresses.walletAddress": {
+          $in: uniqueAddresses.map((addr) => new RegExp(`^${addr}$`, "i")), // Case-insensitive regex
+        },
+      },
+      {
+        "WalletAddresses.$": 1, // Hanya ambil matching wallet address
+        fullname: 1,
+        email: 1,
+        _id: 1,
+      }
+    ).lean();
+
+    // Extract registered wallet addresses dari hasil query
+    const registeredAddresses = new Set();
+    const registeredAddressDetails: Array<{
+      walletAddress: string;
+      userId: string;
+      fullname: string;
+      email: string;
+      role: string;
+    }> = [];
+
+    registeredUsers.forEach((user) => {
+      user.WalletAddresses?.forEach((wallet: any) => {
+        const normalizedWalletAddr = wallet.walletAddress.toLowerCase();
+        if (uniqueAddresses.includes(normalizedWalletAddr)) {
+          registeredAddresses.add(normalizedWalletAddr);
+          registeredAddressDetails.push({
+            walletAddress: wallet.walletAddress, // Original case
+            userId: user._id.toString(),
+            fullname: user.fullname,
+            email: user.email,
+            role: wallet.role || "none",
+          });
+        }
+      });
+    });
+
+    // Cari wallet addresses yang belum terdaftar
+    const unregisteredAddresses = uniqueAddresses.filter(
+      (addr) => !registeredAddresses.has(addr)
+    );
+
+    // Prepare response
+    const totalChecked = uniqueAddresses.length;
+    const totalRegistered = registeredAddressDetails.length;
+    const totalUnregistered = unregisteredAddresses.length;
+    const isAllRegistered = totalUnregistered === 0;
+
+    console.log("📊 Registration check results:", {
+      totalChecked,
+      totalRegistered,
+      totalUnregistered,
+      isAllRegistered,
+    });
+
+    res.status(200).json({
+      message: isAllRegistered
+        ? "All wallet addresses are registered in Movo"
+        : `${totalUnregistered} wallet address(es) are not registered in Movo`,
+      statusCode: 200,
+      data: {
+        summary: {
+          totalChecked,
+          totalRegistered,
+          totalUnregistered,
+          isAllRegistered,
+        },
+        registeredAddresses: registeredAddressDetails,
+        unregisteredAddresses: unregisteredAddresses.map((addr) => ({
+          walletAddress: addr,
+          status: "Not registered in Movo",
+          note: "This address needs to register first before receiving escrow payments",
+        })),
+        // Untuk debugging - addresses yang dicek
+        checkedAddresses: uniqueAddresses,
+      },
+      // Flag untuk easy checking di frontend
+      canProceedWithEscrow: isAllRegistered,
+    });
+
+    return;
+  } catch (err: any) {
+    console.error("❌ Error checking wallet addresses registration:", err);
+    res.status(500).json({
+      message: "Error checking wallet addresses registration",
+      statusCode: 500,
+      error: err.message,
+    });
+    return;
+  }
+}
+
+// // Helper function untuk validate single wallet address format
+// function isValidWalletAddress(address: string): boolean {
+//   if (typeof address !== "string") return false;
+//   const cleanAddr = address.trim();
+//   return cleanAddr.startsWith("0x") && cleanAddr.length === 42;
+// }
+
+// // Helper function untuk get user details by wallet address
+// async function getUserByWalletAddress(walletAddress: string) {
+//   try {
+//     const user = await UserModel.findOne({
+//       "WalletAddresses.walletAddress": new RegExp(`^${walletAddress}$`, "i"),
+//     }).lean();
+
+//     if (!user) return null;
+
+//     // Find the specific wallet address data
+//     const walletData = user.WalletAddresses?.find(
+//       (wallet: any) =>
+//         wallet.walletAddress.toLowerCase() === walletAddress.toLowerCase()
+//     );
+
+//     return {
+//       userId: user._id.toString(),
+//       fullname: user.fullname,
+//       email: user.email,
+//       walletAddress: walletData?.walletAddress || walletAddress,
+//       role: walletData?.role || "none",
+//       availableBalance: walletData?.availableBalance || 0,
+//     };
+//   } catch (error) {
+//     console.error("Error getting user by wallet address:", error);
+//     return null;
+//   }
+// }
+
 export async function editReceiverAmountInGroup(req: Request, res: Response) {
   const { senderId, groupId, receiverId, amount } = req.body;
   if (!senderId || !receiverId || !groupId || amount === undefined) {
@@ -300,7 +486,6 @@ export async function loadSpecifiedGroup(req: Request, res: Response) {
     return;
   }
 }
-
 // untuk ngehapus satu group spesifik
 export async function deleteGroup(req: Request, res: Response) {
   const { _id, groupId } = req.body;
@@ -337,7 +522,6 @@ export async function deleteGroup(req: Request, res: Response) {
     return;
   }
 }
-
 // history tentang kapan dia ngebayar semua receivernya, berapa totalnya
 export async function loadAllGroupTransactionHistory(
   req: Request,
@@ -368,6 +552,7 @@ export async function loadAllGroupTransactionHistory(
     return;
   }
 }
+
 // siapa namanya, berapa total yang dia terima
 export async function loadSpecifiedGroupTransactionHistory(
   req: Request,

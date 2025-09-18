@@ -1,9 +1,9 @@
 import { GroupOfUser } from "@/types/receiverInGroupTemplate";
 import axios, { AxiosError } from "axios";
-
 interface ErrorResponse {
   message?: string;
 }
+const GOLDSKY_API_URL = process.env.NEXT_PUBLIC_GOLDSKY_API_URL!;
 
 export const api = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_BASE_URL,
@@ -262,6 +262,7 @@ export const editReceiverAmountInGroup = async (
     console.log(err);
   }
 };
+
 export const removeReceiverDataFromGroup = async (
   receiverId: string,
   groupId: string,
@@ -357,14 +358,25 @@ export const logout = async () => {
   return response.data.message;
 };
 
-// Goldsky Indexer API Integration
-const GOLDSKY_API_URL = "https://api.goldsky.com/api/public/project_cmfnod75l9o1r01xy81lz52hq/subgraphs/test-escrow-movo/1.0.0/gn";
-
+export const checkWalletAddressesRegistration = async (
+  walletAddresses: string[],
+) => {
+  try {
+    const response = await api.post("/checkWalletAddressesRegistration", {
+      walletAddresses,
+    });
+    console.log(response);
+    return response.data;
+  } catch (error) {
+    console.error("Error checking wallet addresses registration:", error);
+    throw error;
+  }
+};
 
 export const fetchEscrowsFromIndexer = async (userAddress: string) => {
   try {
     console.log("🔍 Fetching escrows for address:", userAddress);
-    
+
     const query = `
       query GetUserEscrows($userAddress: String!) {
         escrowCreateds(where: { sender: $userAddress }) {
@@ -376,11 +388,10 @@ export const fetchEscrowsFromIndexer = async (userAddress: string) => {
         }
       }
     `;
-
     console.log("📤 Sending GraphQL query to Goldsky...");
     const response = await axios.post(GOLDSKY_API_URL, {
       query,
-      variables: { userAddress }
+      variables: { userAddress },
     });
 
     console.log("📥 Goldsky API response:", response.data);
@@ -388,23 +399,27 @@ export const fetchEscrowsFromIndexer = async (userAddress: string) => {
     // Transform the data to match our expected format
     const escrows = response.data.data.escrowCreateds || [];
     console.log("📊 Raw escrows from indexer:", escrows);
-    
+
     if (escrows.length === 0) {
       console.log("⚠️ No escrows found for address:", userAddress);
       return [];
     }
-    
+
     const transformedEscrows = escrows.map((escrow: any, index: number) => ({
       id: `escrow-${index}`, // Generate ID since not available in indexer
       escrowId: escrow.escrowId,
       sender: escrow.sender,
       totalAmount: escrow.totalAmount || "0",
       createdAt: Math.floor(Date.now() / 1000).toString(), // Current timestamp as fallback
-      receivers: escrow.receivers ? escrow.receivers.split(',').map((addr: string) => addr.trim()) : [],
-      amounts: escrow.amounts ? escrow.amounts.split(',').map((amount: string) => amount.trim()) : [],
-      tokenAddress: "0xf9D5a610fe990bfCdF7dd9FD64bdfe89D6D1eb4c" // Default to USDC for now
+      receivers: escrow.receivers
+        ? escrow.receivers.split(",").map((addr: string) => addr.trim())
+        : [],
+      amounts: escrow.amounts
+        ? escrow.amounts.split(",").map((amount: string) => amount.trim())
+        : [],
+      tokenAddress: "0xf9D5a610fe990bfCdF7dd9FD64bdfe89D6D1eb4c", // Default to USDC for now
     }));
-    
+
     console.log("✅ Transformed escrows:", transformedEscrows);
     return transformedEscrows;
   } catch (error) {
@@ -413,7 +428,9 @@ export const fetchEscrowsFromIndexer = async (userAddress: string) => {
   }
 };
 
-export const fetchReceiverEscrowsFromIndexer = async (receiverAddress: string) => {
+export const fetchReceiverEscrowsFromIndexer = async (
+  receiverAddress: string,
+) => {
   try {
     const query = `
       query GetReceiverEscrows($receiverAddress: String!) {
@@ -429,7 +446,7 @@ export const fetchReceiverEscrowsFromIndexer = async (receiverAddress: string) =
 
     const response = await axios.post(GOLDSKY_API_URL, {
       query,
-      variables: { receiverAddress }
+      variables: { receiverAddress },
     });
 
     // Transform the data to match our expected format
@@ -440,9 +457,13 @@ export const fetchReceiverEscrowsFromIndexer = async (receiverAddress: string) =
       sender: escrow.sender,
       totalAmount: escrow.totalAmount || "0",
       createdAt: Math.floor(Date.now() / 1000).toString(), // Current timestamp as fallback
-      receivers: escrow.receivers ? escrow.receivers.split(',').map((addr: string) => addr.trim()) : [],
-      amounts: escrow.amounts ? escrow.amounts.split(',').map((amount: string) => amount.trim()) : [],
-      tokenAddress: "0xf9D5a610fe990bfCdF7dd9FD64bdfe89D6D1eb4c" // Default to USDC for now
+      receivers: escrow.receivers
+        ? escrow.receivers.split(",").map((addr: string) => addr.trim())
+        : [],
+      amounts: escrow.amounts
+        ? escrow.amounts.split(",").map((amount: string) => amount.trim())
+        : [],
+      tokenAddress: "0xf9D5a610fe990bfCdF7dd9FD64bdfe89D6D1eb4c", // Default to USDC for now
     }));
   } catch (error) {
     console.error("Error fetching receiver escrows from indexer:", error);
@@ -466,7 +487,7 @@ export const fetchEscrowDetailsFromIndexer = async (escrowId: string) => {
 
     const response = await axios.post(GOLDSKY_API_URL, {
       query,
-      variables: { escrowId }
+      variables: { escrowId },
     });
 
     const escrow = response.data.data.escrowCreateds[0];
@@ -479,12 +500,98 @@ export const fetchEscrowDetailsFromIndexer = async (escrowId: string) => {
       sender: escrow.sender,
       totalAmount: escrow.totalAmount || "0",
       createdAt: Math.floor(Date.now() / 1000).toString(), // Current timestamp as fallback
-      receivers: escrow.receivers ? escrow.receivers.split(',').map((addr: string) => addr.trim()) : [],
-      amounts: escrow.amounts ? escrow.amounts.split(',').map((amount: string) => amount.trim()) : [],
-      tokenAddress: "0xf9D5a610fe990bfCdF7dd9FD64bdfe89D6D1eb4c" // Default to USDC for now
+      receivers: escrow.receivers
+        ? escrow.receivers.split(",").map((addr: string) => addr.trim())
+        : [],
+      amounts: escrow.amounts
+        ? escrow.amounts.split(",").map((amount: string) => amount.trim())
+        : [],
+      tokenAddress: "0xf9D5a610fe990bfCdF7dd9FD64bdfe89D6D1eb4c", // Default to USDC for now
     };
   } catch (error) {
     console.error("Error fetching escrow details from indexer:", error);
     return null;
+  }
+};
+
+// ============= ESCROW EVENT TRACKING API FUNCTIONS =============
+
+export const saveEscrowEvent = async (eventData: {
+  eventType:
+    | "ESCROW_CREATED"
+    | "TOPUP_FUNDS"
+    | "ADD_RECIPIENTS"
+    | "REMOVE_RECIPIENTS"
+    | "UPDATE_RECIPIENTS_AMOUNT"
+    | "WITHDRAW_FUNDS"
+    | "ESCROW_COMPLETED";
+  escrowId: string;
+  groupId: string;
+  transactionHash: string;
+  blockNumber?: string;
+  initiatorWalletAddress: string;
+  tokenType: "USDC" | "USDT" | "IDRX";
+  eventData: any;
+  metadata?: {
+    gasUsed?: string;
+    gasPrice?: string;
+    networkId?: string;
+    contractAddress?: string;
+  };
+  blockTimestamp?: string;
+}) => {
+  try {
+    const response = await api.post("/escrow-events/save-event", eventData);
+    return response.data;
+  } catch (err) {
+    console.error("Error saving escrow event:", err);
+    throw err;
+  }
+};
+
+// Get history berdasarkan escrowId
+export const getEscrowEventHistory = async (escrowId: string) => {
+  try {
+    const response = await api.post("/escrow-events/get-history", { escrowId });
+    return response.data;
+  } catch (err) {
+    console.error("Error getting escrow event history:", err);
+    throw err;
+  }
+};
+
+// Get semua events user
+export const getUserEscrowEvents = async (
+  _id: string,
+  walletAddress: string,
+) => {
+  try {
+    const response = await api.post("/escrow-events/get-user-events", {
+      _id,
+      walletAddress,
+    });
+    return response.data;
+  } catch (err) {
+    console.error("Error getting user escrow events:", err);
+    throw err;
+  }
+};
+
+// Get statistik dengan time range
+export const getEscrowEventStatistics = async (
+  _id: string,
+  walletAddress: string,
+  timeRange?: "24h" | "7d" | "30d" | "90d" | "all",
+) => {
+  try {
+    const response = await api.post("/escrow-events/get-statistics", {
+      _id,
+      walletAddress,
+      timeRange,
+    });
+    return response.data;
+  } catch (err) {
+    console.error("Error getting escrow event statistics:", err);
+    throw err;
   }
 };

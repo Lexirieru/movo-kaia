@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import ReceiverDashboard from "../components/dashboard/ReceiverDashboard";
 import DashboardWrapper from "../components/dashboard/DashboardWrapper";
 import WalletWarning from "../components/dashboard/WalletWarning";
@@ -12,7 +12,7 @@ import GroupDashboard from "../components/dashboard/GroupDashboard";
 import MainLayout from "../components/layout/MainLayout";
 import { useSearchParams } from "next/navigation";
 
-export default function DashboardPage() {
+function DashboardContent() {
   const { user, loading, authenticated, currentWalletAddress, currentRole } =
     useAuth();
   const { isConnected, address } = useWallet();
@@ -193,5 +193,22 @@ export default function DashboardPage() {
         </div>
       </div>
     </MainLayout>
+  );
+}
+
+export default function DashboardPage() {
+  return (
+    <Suspense
+      fallback={
+        <section className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-black flex items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-cyan-400 mx-auto mb-4"></div>
+            <p className="text-gray-400">Loading dashboard...</p>
+          </div>
+        </section>
+      }
+    >
+      <DashboardContent />
+    </Suspense>
   );
 }

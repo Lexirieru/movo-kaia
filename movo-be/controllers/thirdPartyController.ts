@@ -18,6 +18,8 @@ import {
   IncomingTransactionModel,
   TransactionHistoryModel,
 } from "../models/transactionRecordModel";
+import { createEscrowCreatedEvent } from "./escrowEventController";
+import { EscrowEventModel } from "../models/escrowEventModel";
 
 dotenv.config();
 
@@ -38,362 +40,400 @@ interface ChatItem {
   response: string;
 }
 
-export const goldskyEscrowCreatedWebhook = async (
-  req: Request,
-  res: Response
-) => {
-  try {
-    const {
-      escrowId,
-      block_number,
-      sender,
-      id,
-      receivers,
-      timestamp_,
-      transactionHash_,
-      totalAmount,
-      createdAt,
-    } = req.body;
+// export const goldskyEscrowCreatedWebhook = async (
+//   req: Request,
+//   res: Response
+// ) => {
+//   try {
+//     const {
+//       escrowId,
+//       block_number,
+//       sender,
+//       id,
+//       receivers,
+//       timestamp_,
+//       transactionHash_,
+//       totalAmount,
+//       createdAt,
+//     } = req.body;
 
-    if (
-      !escrowId ||
-      !block_number ||
-      !sender ||
-      !id ||
-      !receivers ||
-      !totalAmount
-    ) {
-      res.status(400).send("Bad Request: Incomplete payload");
-      return;
-    }
+//     if (
+//       !escrowId ||
+//       !block_number ||
+//       !sender ||
+//       !id ||
+//       !receivers ||
+//       !totalAmount
+//     ) {
+//       res.status(400).send("Bad Request: Incomplete payload");
+//       return;
+//     }
 
-    const receivedSecret = req.headers["goldsky-webhook-secret"];
-    const expectedSecret = process.env.GOLDSKY_WEBHOOK_SECRET;
-    if (receivedSecret !== expectedSecret) {
-      res.status(403).send("Forbidden: Invalid Secret");
-      return;
-    }
+//     const receivedSecret = req.headers["goldsky-webhook-secret"];
+//     const expectedSecret = process.env.GOLDSKY_WEBHOOK_SECRET;
+//     if (receivedSecret !== expectedSecret) {
+//       res.status(403).send("Forbidden: Invalid Secret");
+//       return;
+//     }
 
-    console.log("✅ Webhook verified");
+//     console.log("✅ Webhook verified");
 
-    // Transaction hash dari payload atau fallback ke id
-    const transactionHash = transactionHash_ || id.split("-")[0];
+//     // Transaction hash dari payload atau fallback ke id
+//     const transactionHash = transactionHash_ || id.split("-")[0];
 
-    // Pecah string receivers (jika ada multiple addresses)
-    const receiversArray = receivers.split(",");
+//     // Pecah string receivers (jika ada multiple addresses)
+//     const receiversArray = receivers.split(",");
 
-    // Cari user detail dari UserModel untuk setiap receiver
-    const mappedReceivers = await Promise.all(
-      receiversArray.map(async (addr: string) => {
-        const walletAddress = addr.trim();
-        const user = await UserModel.findOne({
-          "WalletAddresses.walletAddress": walletAddress,
-        });
+//     // Cari user detail dari UserModel untuk setiap receiver
+//     const mappedReceivers = await Promise.all(
+//       receiversArray.map(async (addr: string) => {
+//         const walletAddress = addr.trim();
+//         const user = await UserModel.findOne({
+//           "WalletAddresses.walletAddress": walletAddress,
+//         });
 
-        if (!user) {
-          console.warn(
-            `⚠️ User not found for wallet address: ${walletAddress}`
-          );
-          return {
-            _id: null,
-            walletAddress: walletAddress,
-            fullname: "Unknown User",
-            apiKey: "",
-            secretKey: "",
-            depositWalletAddress: "",
-            bankId: "",
-            bankName: "",
-            bankAccountName: "",
-            bankAccountNumber: "",
-            originCurrency: "USDC",
-            tokenIcon: "USDC",
-            amount: 0, // akan diisi nanti dari pembagian totalAmount
-          };
-        }
-        return {
-          _id: user._id,
-          walletAddress: walletAddress,
-          fullname: user.fullname || "Unknown User",
-          apiKey: user.apiKey || "",
-          secretKey: user.secretKey || "",
-          depositWalletAddress: user.depositWalletAddress || "",
-          originCurrency: "USDC",
-          tokenIcon: "USDC",
-          amount: 0, // akan diisi nanti dari pembagian totalAmount
-        };
-      })
-    );
+//         if (!user) {
+//           console.warn(
+//             `⚠️ User not found for wallet address: ${walletAddress}`
+//           );
+//           return {
+//             _id: null,
+//             walletAddress: walletAddress,
+//             fullname: "Unknown User",
+//             apiKey: "",
+//             secretKey: "",
+//             depositWalletAddress: "",
+//             bankId: "",
+//             bankName: "",
+//             bankAccountName: "",
+//             bankAccountNumber: "",
+//             originCurrency: "USDC",
+//             tokenIcon: "USDC",
+//             amount: 0, // akan diisi nanti dari pembagian totalAmount
+//           };
+//         }
+//         return {
+//           _id: user._id,
+//           walletAddress: walletAddress,
+//           fullname: user.fullname || "Unknown User",
+//           apiKey: user.apiKey || "",
+//           secretKey: user.secretKey || "",
+//           depositWalletAddress: user.depositWalletAddress || "",
+//           originCurrency: "USDC",
+//           tokenIcon: "USDC",
+//           amount: 0, // akan diisi nanti dari pembagian totalAmount
+//         };
+//       })
+//     );
 
-    // Cari informasi sender
-    const senderUser = await UserModel.findOne({
-      "WalletAddresses.walletAddress": sender,
-    });
+//     // Cari informasi sender
+//     const senderUser = await UserModel.findOne({
+//       "WalletAddresses.walletAddress": sender,
+//     });
 
-    // Cari group untuk mendapatkan informasi tambahan
-    const existingGroup = await GroupOfUserModel.findOne({
-      senderWalletAddress: sender,
-    });
+//     // Cari group untuk mendapatkan informasi tambahan
+//     const existingGroup = await GroupOfUserModel.findOne({
+//       senderWalletAddress: sender,
+//     });
 
-    // Convert totalAmount dari wei/smallest unit ke decimal (assuming 6 decimals for USDC)
-    const totalAmountInDecimal = (parseInt(totalAmount) / 1000000).toString();
+//     // Convert totalAmount dari wei/smallest unit ke decimal (assuming 6 decimals for USDC)
+//     const totalAmountInDecimal = (parseInt(totalAmount) / 1000000).toString();
 
-    // Bagi rata amount untuk setiap receiver (bisa disesuaikan logic pembagiannya)
-    const amountPerReceiver =
-      parseFloat(totalAmountInDecimal) / receiversArray.length;
+//     // Bagi rata amount untuk setiap receiver (bisa disesuaikan logic pembagiannya)
+//     const amountPerReceiver =
+//       parseFloat(totalAmountInDecimal) / receiversArray.length;
 
-    // Update mappedReceivers dengan amount yang tepat
-    const receiversWithAmount = mappedReceivers.map((receiver) => ({
-      ...receiver,
-      amount: amountPerReceiver.toString(),
-    }));
+//     // Update mappedReceivers dengan amount yang tepat
+//     const receiversWithAmount = mappedReceivers.map((receiver) => ({
+//       ...receiver,
+//       amount: amountPerReceiver.toString(),
+//     }));
 
-    // Generate unique transaction ID
-    const txId = `TX-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+//     // Generate unique transaction ID
+//     const txId = `TX-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
-    // Create TransactionHistory record
-    const transactionHistoryData = {
-      txId: txId,
-      txHash: transactionHash,
-      senderWalletAddress: sender,
-      senderId: senderUser?._id?.toString() || "unknown",
-      senderName: senderUser?.fullname || "Unknown Sender",
-      receiverName:
-        receiversWithAmount.length > 1
-          ? `Multiple Recipients (${receiversWithAmount.length})`
-          : receiversWithAmount[0]?.fullname || "Unknown Receiver",
-      groupId: existingGroup?._id?.toString() || "unknown",
-      nameOfGroup: existingGroup?.nameOfGroup || "Unknown Group",
-      originCurrency: "USDC",
-      totalAmount: totalAmountInDecimal,
-      Receivers: receiversWithAmount.map((receiver) => ({
-        walletAddress: receiver.walletAddress,
-        fullname: receiver.fullname,
-        amount: receiver.amount,
-        createdAt: new Date(parseInt(createdAt) * 1000), // Convert timestamp to Date
-      })),
-      totalReceiver: receiversArray.length,
-      blockNumber: block_number,
-      timestamp: timestamp_ || createdAt,
-    };
+//     // Create TransactionHistory record
+//     const transactionHistoryData = {
+//       txId: txId,
+//       txHash: transactionHash,
+//       senderWalletAddress: sender,
+//       senderId: senderUser?._id?.toString() || "unknown",
+//       senderName: senderUser?.fullname || "Unknown Sender",
+//       receiverName:
+//         receiversWithAmount.length > 1
+//           ? `Multiple Recipients (${receiversWithAmount.length})`
+//           : receiversWithAmount[0]?.fullname || "Unknown Receiver",
+//       groupId: existingGroup?._id?.toString() || "unknown",
+//       nameOfGroup: existingGroup?.nameOfGroup || "Unknown Group",
+//       originCurrency: "USDC",
+//       totalAmount: totalAmountInDecimal,
+//       Receivers: receiversWithAmount.map((receiver) => ({
+//         walletAddress: receiver.walletAddress,
+//         fullname: receiver.fullname,
+//         amount: receiver.amount,
+//         createdAt: new Date(parseInt(createdAt) * 1000), // Convert timestamp to Date
+//       })),
+//       totalReceiver: receiversArray.length,
+//       blockNumber: block_number,
+//       timestamp: timestamp_ || createdAt,
+//     };
 
-    // Save TransactionHistory to database
-    const transactionHistory = new TransactionHistoryModel(
-      transactionHistoryData
-    );
-    const savedTransactionHistory = await transactionHistory.save();
+//     // Save TransactionHistory to database
+//     const transactionHistory = new TransactionHistoryModel(
+//       transactionHistoryData
+//     );
+//     const savedTransactionHistory = await transactionHistory.save();
 
-    console.log("💾 TransactionHistory saved:", savedTransactionHistory._id);
+//     console.log("💾 TransactionHistory saved:", savedTransactionHistory._id);
 
-    // Create IncomingTransaction records untuk setiap receiver
-    const incomingTransactions = await Promise.all(
-      receiversWithAmount.map(async (receiver) => {
-        const incomingTransactionData = {
-          receiverWalletAddress: receiver.walletAddress,
-          receiverId: receiver._id?.toString() || "unknown",
-          availableAmount: receiver.amount, // Initially available amount = total amount
-          originCurrency: "USDC",
-          senderWalletAddress: sender,
-          senderName: senderUser?.fullname || "Unknown Sender",
-          createdAt: new Date(parseInt(createdAt) * 1000).toISOString(),
-          escrowId: escrowId,
-        };
+//     // Create IncomingTransaction records untuk setiap receiver
+//     const incomingTransactions = await Promise.all(
+//       receiversWithAmount.map(async (receiver) => {
+//         const incomingTransactionData = {
+//           receiverWalletAddress: receiver.walletAddress,
+//           receiverId: receiver._id?.toString() || "unknown",
+//           availableAmount: receiver.amount, // Initially available amount = total amount
+//           originCurrency: "USDC",
+//           senderWalletAddress: sender,
+//           senderName: senderUser?.fullname || "Unknown Sender",
+//           createdAt: new Date(parseInt(createdAt) * 1000).toISOString(),
+//           escrowId: escrowId,
+//         };
 
-        const incomingTransaction = new IncomingTransactionModel(
-          incomingTransactionData
-        );
+//         const incomingTransaction = new IncomingTransactionModel(
+//           incomingTransactionData
+//         );
 
-        return await incomingTransaction.save();
-      })
-    );
+//         return await incomingTransaction.save();
+//       })
+//     );
 
-    console.log(
-      "💰 IncomingTransactions created:",
-      incomingTransactions.length
-    );
+//     console.log(
+//       "💰 IncomingTransactions created:",
+//       incomingTransactions.length
+//     );
 
-    // Update group dengan informasi escrow
-    const updatedGroup = await GroupOfUserModel.findOneAndUpdate(
-      { senderWalletAddress: sender },
-      {
-        $set: {
-          escrowId,
-          blockNumber: block_number,
-          transactionHash,
-          status: "ESCROW_CREATED",
-          totalAmount: totalAmountInDecimal,
-        },
-        $push: { Receivers: { $each: receiversWithAmount } },
-      },
-      { new: true, upsert: true } // Create if doesn't exist
-    );
+//     // Update group dengan informasi escrow
+//     const updatedGroup = await GroupOfUserModel.findOneAndUpdate(
+//       { senderWalletAddress: sender },
+//       {
+//         $set: {
+//           escrowId,
+//           blockNumber: block_number,
+//           transactionHash,
+//           status: "ESCROW_CREATED",
+//           totalAmount: totalAmountInDecimal,
+//         },
+//         $push: { Receivers: { $each: receiversWithAmount } },
+//       },
+//       { new: true, upsert: true } // Create if doesn't exist
+//     );
 
-    console.log("📦 Group updated:", updatedGroup._id);
+//     console.log("📦 Group updated:", updatedGroup._id);
 
-    res.status(200).json({
-      message: "EscrowCreated event processed successfully",
-      data: {
-        transactionHistory: {
-          _id: savedTransactionHistory._id,
-          txId: savedTransactionHistory.txId,
-          totalAmount: savedTransactionHistory.totalAmount,
-          totalReceivers: savedTransactionHistory.totalReceiver,
-        },
-        incomingTransactions: incomingTransactions.length,
-        group: {
-          _id: updatedGroup._id,
-          escrowId: updatedGroup.escrowId,
-          status: updatedGroup.status,
-        },
-        receivers: receiversWithAmount.length,
-      },
-    });
-    return;
-  } catch (err) {
-    console.error("❌ Error handling EscrowCreated webhook:", err);
-    res.status(500).send("Internal Server Error");
-    return;
-  }
-};
+//     // Create EscrowEvent record untuk audit trail
+//     try {
+//       const escrowEventData = createEscrowCreatedEvent({
+//         escrowId,
+//         groupId: updatedGroup._id.toString(),
+//         transactionHash,
+//         blockNumber: block_number,
+//         initiatorWalletAddress: sender,
+//         tokenType: "USDC",
+//         totalAmount: totalAmountInDecimal,
+//         recipients: receiversWithAmount.map((receiver) => ({
+//           walletAddress: receiver.walletAddress,
+//           amount: receiver.amount,
+//           fullname: receiver.fullname,
+//         })),
+//         metadata: {
+//           blockNumber: block_number,
+//           networkId: "1", // Ethereum mainnet
+//           contractAddress: "escrow_contract_address", // Update with actual contract address
+//         },
+//         blockTimestamp: timestamp_ || createdAt,
+//       });
 
-export const goldskyEscrowReceiverAddedWebhook = async (
-  req: Request,
-  res: Response
-) => {
-  try {
-    const { escrowId, blockNumber, transactionHash, sender, id, receivers } =
-      req.body;
+//       const escrowEvent = new EscrowEventModel({
+//         ...escrowEventData,
+//         initiatorId: senderUser?._id?.toString() || "unknown",
+//         initiatorName: senderUser?.fullname || "Unknown Sender",
+//         status: "CONFIRMED",
+//         blockTimestamp: new Date(parseInt(timestamp_ || createdAt) * 1000),
+//       });
 
-    if (
-      !escrowId ||
-      !blockNumber ||
-      !transactionHash ||
-      !sender ||
-      !id ||
-      !receivers
-    ) {
-      res.status(400).send("Bad Request: Incomplete payload");
-      return;
-    }
+//       const savedEscrowEvent = await escrowEvent.save();
+//       console.log("📝 EscrowEvent saved:", savedEscrowEvent._id);
+//     } catch (eventError) {
+//       console.error("⚠️ Error saving escrow event:", eventError);
+//       // Don't fail the main webhook if event saving fails
+//     }
 
-    const receivedSecret = req.headers["goldsky-webhook-secret"];
-    const expectedSecret = process.env.GOLDSKY_WEBHOOK_SECRET;
+//     res.status(200).json({
+//       message: "EscrowCreated event processed successfully",
+//       data: {
+//         transactionHistory: {
+//           _id: savedTransactionHistory._id,
+//           txId: savedTransactionHistory.txId,
+//           totalAmount: savedTransactionHistory.totalAmount,
+//           totalReceivers: savedTransactionHistory.totalReceiver,
+//         },
+//         incomingTransactions: incomingTransactions.length,
+//         group: {
+//           _id: updatedGroup._id,
+//           escrowId: updatedGroup.escrowId,
+//           status: updatedGroup.status,
+//         },
+//         receivers: receiversWithAmount.length,
+//       },
+//     });
+//     return;
+//   } catch (err) {
+//     console.error("❌ Error handling EscrowCreated webhook:", err);
+//     res.status(500).send("Internal Server Error");
+//     return;
+//   }
+// };
 
-    if (receivedSecret !== expectedSecret) {
-      console.error("Invalid secret header!");
-      res.status(403).send("Forbidden: Invalid Secret");
-      return;
-    }
+// export const goldskyEscrowReceiverAddedWebhook = async (
+//   req: Request,
+//   res: Response
+// ) => {
+//   try {
+//     const { escrowId, blockNumber, transactionHash, sender, id, receivers } =
+//       req.body;
 
-    console.log("✅ Webhook verified");
+//     if (
+//       !escrowId ||
+//       !blockNumber ||
+//       !transactionHash ||
+//       !sender ||
+//       !id ||
+//       !receivers
+//     ) {
+//       res.status(400).send("Bad Request: Incomplete payload");
+//       return;
+//     }
 
-    // Check if group exists
-    const existingGroup = await GroupOfUserModel.findById(id);
-    if (!existingGroup) {
-      res
-        .status(404)
-        .send("Could not find groupofuser model with that specified id");
-      return;
-    }
+//     const receivedSecret = req.headers["goldsky-webhook-secret"];
+//     const expectedSecret = process.env.GOLDSKY_WEBHOOK_SECRET;
 
-    // Pecah string receivers (jika ada multiple addresses)
-    const receiversArray = receivers.split(",");
+//     if (receivedSecret !== expectedSecret) {
+//       console.error("Invalid secret header!");
+//       res.status(403).send("Forbidden: Invalid Secret");
+//       return;
+//     }
 
-    // Cari user detail dari UserModel untuk setiap receiver
-    const mappedReceivers = await Promise.all(
-      receiversArray.map(async (addr: string) => {
-        const walletAddress = addr.trim();
+//     console.log("✅ Webhook verified");
 
-        // Query user berdasarkan wallet address
-        const user = await UserModel.findOne({
-          "WalletAddresses.walletAddress": walletAddress,
-        });
+//     // Check if group exists
+//     const existingGroup = await GroupOfUserModel.findById(id);
+//     if (!existingGroup) {
+//       res
+//         .status(404)
+//         .send("Could not find groupofuser model with that specified id");
+//       return;
+//     }
 
-        if (!user) {
-          console.warn(
-            `⚠️ User not found for wallet address: ${walletAddress}`
-          );
-          return {
-            _id: null,
-            walletAddress: walletAddress,
-            fullname: "",
-            apiKey: "",
-            secretKey: "",
-            depositWalletAddress: "",
-            bankId: "",
-            bankName: "",
-            bankAccountName: "",
-            bankAccountNumber: "",
-            originCurrency: "", // masih kosong → bisa diisi frontend
-            tokenIcon: "USDC", // masih placeholder → bisa diisi frontend
-            amount: 0, // bisa diisi belakangan
-          };
-        }
+//     // Pecah string receivers (jika ada multiple addresses)
+//     const receiversArray = receivers.split(",");
 
-        return {
-          _id: user._id,
-          walletAddress: walletAddress,
-          fullname: user.fullname || "",
-          apiKey: user.apiKey || "",
-          secretKey: user.secretKey || "",
-          depositWalletAddress: user.depositWalletAddress || "",
-          originCurrency: "", // masih kosong → bisa diisi frontend
-          tokenIcon: "USDC", // masih placeholder → bisa diisi frontend
-          amount: 0, // bisa diisi belakangan
-        };
-      })
-    );
+//     // Cari user detail dari UserModel untuk setiap receiver
+//     const mappedReceivers = await Promise.all(
+//       receiversArray.map(async (addr: string) => {
+//         const walletAddress = addr.trim();
 
-    console.log("👥 Mapped receivers with bank info:", mappedReceivers.length);
+//         // Query user berdasarkan wallet address
+//         const user = await UserModel.findOne({
+//           "WalletAddresses.walletAddress": walletAddress,
+//         });
 
-    // Update group dengan informasi receiver baru dan data webhook
-    const updatedGroup = await GroupOfUserModel.findOneAndUpdate(
-      { senderWalletAddress: sender, _id: id },
-      {
-        $set: {
-          escrowId: escrowId,
-          blockNumber: blockNumber,
-          transactionHash: transactionHash,
-          status: "RECEIVER_ADDED", // atau status lain yang sesuai
-        },
-        // Add new receivers atau update existing ones
-        $addToSet: { Receivers: { $each: mappedReceivers } },
-      },
-      { new: true }
-    );
+//         if (!user) {
+//           console.warn(
+//             `⚠️ User not found for wallet address: ${walletAddress}`
+//           );
+//           return {
+//             _id: null,
+//             walletAddress: walletAddress,
+//             fullname: "",
+//             apiKey: "",
+//             secretKey: "",
+//             depositWalletAddress: "",
+//             bankId: "",
+//             bankName: "",
+//             bankAccountName: "",
+//             bankAccountNumber: "",
+//             originCurrency: "", // masih kosong → bisa diisi frontend
+//             tokenIcon: "USDC", // masih placeholder → bisa diisi frontend
+//             amount: 0, // bisa diisi belakangan
+//           };
+//         }
 
-    if (!updatedGroup) {
-      res.status(404).send("Group not found for this senderWalletAddress");
-      return;
-    }
+//         return {
+//           _id: user._id,
+//           walletAddress: walletAddress,
+//           fullname: user.fullname || "",
+//           apiKey: user.apiKey || "",
+//           secretKey: user.secretKey || "",
+//           depositWalletAddress: user.depositWalletAddress || "",
+//           originCurrency: "", // masih kosong → bisa diisi frontend
+//           tokenIcon: "USDC", // masih placeholder → bisa diisi frontend
+//           amount: 0, // bisa diisi belakangan
+//         };
+//       })
+//     );
 
-    console.log(
-      "💾 EscrowReceiverAdded event + Receivers saved:",
-      updatedGroup._id
-    );
-    console.log(
-      "📊 Total receivers in group:",
-      updatedGroup.Receivers?.length || 0
-    );
+//     console.log("👥 Mapped receivers with bank info:", mappedReceivers.length);
 
-    res.status(200).json({
-      message: "EscrowReceiverAdded event saved with receivers and bank info",
-      data: {
-        groupId: updatedGroup._id,
-        escrowId: updatedGroup.escrowId,
-        totalReceivers: updatedGroup.Receivers?.length || 0,
-        newReceiversAdded: mappedReceivers.length,
-        receiversWithBankInfo: mappedReceivers.filter(
-          (r) => r.bankAccountNumber
-        ).length,
-      },
-    });
-    return;
-  } catch (err) {
-    console.error("❌ Error handling EscrowReceiverAdded webhook:", err);
-    res.status(500).send("Internal Server Error");
-    return;
-  }
-};
+//     // Update group dengan informasi receiver baru dan data webhook
+//     const updatedGroup = await GroupOfUserModel.findOneAndUpdate(
+//       { senderWalletAddress: sender, _id: id },
+//       {
+//         $set: {
+//           escrowId: escrowId,
+//           blockNumber: blockNumber,
+//           transactionHash: transactionHash,
+//           status: "RECEIVER_ADDED", // atau status lain yang sesuai
+//         },
+//         // Add new receivers atau update existing ones
+//         $addToSet: { Receivers: { $each: mappedReceivers } },
+//       },
+//       { new: true }
+//     );
+
+//     if (!updatedGroup) {
+//       res.status(404).send("Group not found for this senderWalletAddress");
+//       return;
+//     }
+
+//     console.log(
+//       "💾 EscrowReceiverAdded event + Receivers saved:",
+//       updatedGroup._id
+//     );
+//     console.log(
+//       "📊 Total receivers in group:",
+//       updatedGroup.Receivers?.length || 0
+//     );
+
+//     res.status(200).json({
+//       message: "EscrowReceiverAdded event saved with receivers and bank info",
+//       data: {
+//         groupId: updatedGroup._id,
+//         escrowId: updatedGroup.escrowId,
+//         totalReceivers: updatedGroup.Receivers?.length || 0,
+//         newReceiversAdded: mappedReceivers.length,
+//         receiversWithBankInfo: mappedReceivers.filter(
+//           (r) => r.bankAccountNumber
+//         ).length,
+//       },
+//     });
+//     return;
+//   } catch (err) {
+//     console.error("❌ Error handling EscrowReceiverAdded webhook:", err);
+//     res.status(500).send("Internal Server Error");
+//     return;
+//   }
+// };
 
 export const getResponseFromGemini = async (req: Request, res: Response) => {
   const { companyId, question, IDRX_CHAIN_ID } = req.body;
