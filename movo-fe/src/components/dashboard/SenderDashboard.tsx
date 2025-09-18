@@ -57,6 +57,35 @@ export default function SenderDashboard({
     "all",
   );
 
+  // Function to refresh streams data
+  const refreshStreams = async () => {
+    if (!user?._id) return;
+    
+    try {
+      console.log("🔄 Refreshing streams data...");
+      const groupStreams = await loadAllGroup(user._id, "");
+      console.log("📊 Refreshed streams data:", groupStreams);
+      
+      if (groupStreams && groupStreams.length > 0) {
+        const group = groupStreams.find((g: any) => g._id === groupId);
+        if (group && group.receivers) {
+          const mappedStreams: Stream[] = group.receivers.map((receiver: any) => ({
+            _id: receiver._id || Date.now().toString(),
+            token: receiver.originCurrency || "USDC",
+            tokenIcon: receiver.tokenIcon || "💰",
+            recipient: receiver.depositWalletAddress || "",
+            fullname: receiver.fullname || "Unknown",
+            totalAmount: receiver.amount || 0,
+            totalSent: 0,
+          }));
+          setStreams(mappedStreams);
+        }
+      }
+    } catch (err) {
+      console.error("❌ Failed to refresh streams data", err);
+    }
+  };
+
   useEffect(() => {
     if (loading || !user?._id || hasFetched) return;
 
@@ -105,6 +134,16 @@ export default function SenderDashboard({
 
     fetchGroupStreams();
   }, [loading, user, hasFetched, groupId, refreshFlag]);
+
+  // Reset hasFetched ketika user berubah (wallet change)
+  useEffect(() => {
+    if (user?._id) {
+      console.log("🔄 User changed, resetting fetch state");
+      setHasFetched(false);
+      setStreams([]);
+    }
+  }, [user?._id]);
+
   const handleRefund = async (id: string) => {
     const confirmRefund = window.confirm(
       "Are you sure you want to refund from this person? This action cannot be undone.",
@@ -503,6 +542,7 @@ export default function SenderDashboard({
           };
           setStreams((prev) => [mapped, ...prev]);
         }}
+        onEscrowCreated={refreshStreams}
       />
     </MainLayout>
   );

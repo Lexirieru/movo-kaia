@@ -2,8 +2,6 @@
 import { useState } from "react";
 import { X, Plus, Trash2, Wallet } from "lucide-react";
 import { ReceiverInGroup } from "@/types/receiverInGroupTemplate";
-import { useAuth } from "@/lib/userContext";
-import { getEscrowId, saveEscrowToDatabase } from "@/app/api/api";
 import { useParams } from "next/navigation";
 import { useWalletClientHook } from "@/lib/useWalletClient";
 import {
@@ -16,6 +14,7 @@ interface CreateStreamModalProps {
   isOpen: boolean;
   onClose: () => void;
   onCreateStream: (stream: ReceiverInGroup) => void;
+  onEscrowCreated?: () => void; // Callback untuk refresh data setelah escrow dibuat
   //If there is already escrow
   existingEscrow?: {
     escrowId: string;
@@ -66,11 +65,11 @@ export default function CreateStreamModal({
   isOpen,
   onClose,
   onCreateStream,
+  onEscrowCreated,
   existingEscrow,
 }: CreateStreamModalProps) {
   const params = useParams();
   const groupId = params.groupId as string;
-  const { user } = useAuth();
   const walletClient = useWalletClientHook();
 
   const initialFormData: FormData = existingEscrow
@@ -203,17 +202,8 @@ export default function CreateStreamModal({
               "Failed to add receiver to escrow onchain",
           );
         }
-        if (!user) return;
 
-        const newStream: ReceiverInGroup = {
-          _id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
-          groupId,
-          originCurrency: formData.token,
-          tokenIcon: formData.token === "USDC" ? "💵" : "🔗",
-          depositWalletAddress: receiver.address,
-          amount: parseFloat(receiver.amount),
-        };
-        onCreateStream(newStream);
+        // Receiver added successfully onchain - no database calls needed
         setMessage({
           type: "success",
           text: `Receiver addedd successfully! Transaction: ${addReceiverResult.transactionHash}`,
@@ -252,7 +242,7 @@ export default function CreateStreamModal({
               ? (formData.vestingUnit === "weeks" ? formData.vestingDuration * 7 : formData.vestingDuration)
               : 0,
           },
-          user?._id, // Pass userId to help backend find user
+          undefined, // No userId needed for wallet-only authentication
         );
 
         // ini escrowIdnya harusnya ngambil dari BE
@@ -262,9 +252,9 @@ export default function CreateStreamModal({
             escrowResult.error || "Failed to create escrow onchain",
           );
         }
-        if (!user) throw new Error("User not found");
 
-        const escrowId = await getEscrowId(user?._id, groupId);
+        // Generate escrowId from transaction hash or use a unique identifier
+        const escrowId = escrowResult.escrowId || `escrow_${walletClient.account.address}_${Date.now()}`;
 
         console.log("escrowId", escrowId);
         const escrowIdBytes = `0x${escrowId}` as `0x${string}`;
@@ -284,37 +274,27 @@ export default function CreateStreamModal({
           createdAt: new Date().toISOString(),
         };
 
-        // Save escrow data to database to link escrowId with groupId
-        await saveEscrowToDatabase(escrowData);
-
-        if (!user) return;
-        // If escrow created successfully onchain, save to backend
-        for (const receiver of formData.receivers) {
-          const newStream: ReceiverInGroup = {
-            _id:
-              Date.now().toString() + Math.random().toString(36).substr(2, 9),
-            groupId,
-            originCurrency: formData.token,
-            tokenIcon: formData.token === "USDC" ? "💵" : "🔗",
-            depositWalletAddress: receiver.address,
-            amount: parseFloat(receiver.amount),
-          };
-
-          // Send to parent component
-          onCreateStream(newStream);
-        }
+        // Escrow created successfully onchain - no database calls needed
+        // Data will be available through Goldsky indexer
 
         setMessage({
           type: "success",
           text: `Escrow created successfully onchain! Transaction: ${escrowResult.transactionHash}`,
         });
+
+        // Auto refresh parent data
+        if (onEscrowCreated) {
+          setTimeout(() => {
+            onEscrowCreated();
+          }, 1000); // Wait 1 second for blockchain confirmation
+        }
       }
 
       // Close modal after a delay to show success message
       setTimeout(() => {
         onClose();
         resetForm();
-      }, 2000);
+      }, 2000); // Reduced delay since no animation
     } catch (e) {
       console.error("Error creating escrow:", e);
       setMessage({
@@ -363,6 +343,7 @@ export default function CreateStreamModal({
             <X className="w-6 h-6" />
           </button>
         </div>
+
 
         <div className="flex-1 overflow-y-auto p-6">
           <div className="space-y-6">

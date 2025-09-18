@@ -92,7 +92,7 @@ export function useTokenAllowance(
 // Hook untuk membaca escrow details
 export function useEscrowDetails(escrowId: string) {
   return useContractRead({
-    address: '0xFF2A27508d77cd00A810d6B29e5158Fb44a4c74d', // Escrow contract address
+    address: '0x306408Aca69417e44154E51f41CbFdE9Cb8FD142', // Escrow contract address
     abi: [], // Escrow ABI
     functionName: 'getEscrowDetails',
     args: [escrowId],
@@ -102,7 +102,7 @@ export function useEscrowDetails(escrowId: string) {
 // Hook untuk membaca semua escrows dari user
 export function useUserEscrows(userAddress?: `0x${string}`) {
   return useContractRead({
-    address: '0xFF2A27508d77cd00A810d6B29e5158Fb44a4c74d', // Escrow contract address
+    address: '0x306408Aca69417e44154E51f41CbFdE9Cb8FD142', // Escrow contract address
     abi: [], // Escrow ABI
     functionName: 'getUserEscrows',
     args: userAddress ? [userAddress] : undefined,

@@ -7,9 +7,34 @@ import {
 } from "viem";
 import { escrowAbis } from "./abis/escrowAbis";
 import { escrowIdrxAbis } from "./abis/escrowIdrxAbis";
+import { usdcAbis } from "./abis/usdcAbis";
+import { usdtAbis } from "./abis/usdtAbis";
+import { idrxAbis } from "./abis/idrxAbis";
 import { getEscrowAddress, getTokenAddress } from "./contractConfig";
-import { saveEscrowEvent } from "../app/api/api";
-import { loadAllGroup } from "../app/api/api";
+
+// Import saveEscrowEventWithContext function
+const saveEscrowEventWithContext = async (
+  eventType: string,
+  escrowId: string,
+  transactionHash: string,
+  userAddress: string,
+  tokenType: string,
+  eventData: any,
+  receipt: any,
+  contractAddress: string,
+) => {
+  // This function should be implemented to save escrow events
+  // For now, we'll just log the event
+  console.log("Saving escrow event:", {
+    eventType,
+    escrowId,
+    transactionHash,
+    userAddress,
+    tokenType,
+    eventData,
+    contractAddress,
+  });
+};
 
 // Define Base Sepolia chain with correct Chain ID
 export const baseSepolia = defineChain({
@@ -190,19 +215,19 @@ export const escrowIdrxContract = getContract({
 
 export const usdcContract = getContract({
   address: getTokenAddress("USDC") as `0x${string}`,
-  abi: escrowAbis,
+  abi: usdcAbis,
   client: publicClient,
 });
 
 export const usdtContract = getContract({
   address: getTokenAddress("USDT") as `0x${string}`,
-  abi: escrowAbis,
+  abi: usdtAbis,
   client: publicClient,
 });
 
 export const idrxContract = getContract({
   address: getTokenAddress("IDRX") as `0x${string}`,
-  abi: escrowIdrxAbis,
+  abi: idrxAbis,
   client: publicClient,
 });
 
@@ -309,7 +334,37 @@ export const formatTokenAmount = (
   amount: bigint,
   decimals: number = 6,
 ): string => {
-  return (Number(amount) / Math.pow(10, decimals)).toString();
+  try {
+    // Convert BigInt to string to avoid precision loss
+    const amountStr = amount.toString();
+    
+    // Handle edge cases
+    if (amountStr === '0') {
+      return '0.0';
+    }
+    
+    // Handle the decimal conversion manually to avoid precision issues
+    if (amountStr.length <= decimals) {
+      // Amount is less than 1 unit
+      // Use a safer approach for padding
+      const paddedAmount = '0'.repeat(decimals + 1 - amountStr.length) + amountStr;
+      const integerPart = paddedAmount.slice(0, -decimals) || '0';
+      const decimalPart = paddedAmount.slice(-decimals);
+      return `${integerPart}.${decimalPart}`;
+    } else {
+      // Amount is 1 unit or more
+      const integerPart = amountStr.slice(0, -decimals);
+      const decimalPart = amountStr.slice(-decimals);
+      return `${integerPart}.${decimalPart}`;
+    }
+  } catch (error) {
+    console.error("Error formatting token amount:", error);
+    // Fallback to simple division for very large numbers
+    const divisor = BigInt(Math.pow(10, decimals));
+    const integerPart = amount / divisor;
+    const decimalPart = amount % divisor;
+    return `${integerPart}.${decimalPart.toString().padStart(decimals, '0')}`;
+  }
 };
 
 // Helper function to extract escrow ID from transaction logs
@@ -338,149 +393,7 @@ export const extractEscrowIdFromLogs = (receipt: any): string | null => {
   }
 };
 
-// Helper function to find groupId for user's wallet address
-export const findGroupIdForEscrow = async (
-  userId: string,
-  walletAddress: string,
-  escrowId?: string,
-): Promise<string> => {
-  try {
-    const groups = await loadAllGroup(userId, walletAddress);
 
-    if (groups && groups.length > 0) {
-      // If we have escrowId, try to find matching group
-      if (escrowId) {
-        const matchingGroup = groups.find(
-          (group: any) => group.escrowId === escrowId,
-        );
-        if (matchingGroup) {
-          return matchingGroup._id;
-        }
-      }
-
-      // Otherwise, return the most recent group or first group
-      const sortedGroups = groups.sort(
-        (a: any, b: any) =>
-          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-      );
-      return sortedGroups[0]._id;
-    }
-
-    return "unknown";
-  } catch (error) {
-    console.error("Error finding group ID:", error);
-    return "unknown";
-  }
-};
-
-// Helper function to save escrow event with proper context and validation
-export const saveEscrowEventWithContext = async (
-  eventType:
-    | "ESCROW_CREATED"
-    | "TOPUP_FUNDS"
-    | "ADD_RECIPIENTS"
-    | "REMOVE_RECIPIENTS"
-    | "UPDATE_RECIPIENTS_AMOUNT"
-    | "WITHDRAW_FUNDS"
-    | "ESCROW_COMPLETED",
-  escrowId: string,
-  transactionHash: string,
-  walletAddress: string,
-  tokenType: "USDC" | "USDT" | "IDRX",
-  eventData: any,
-  receipt: any,
-  contractAddress: string,
-  userId?: string,
-) => {
-  try {
-    console.log(`📝 Saving ${eventType} event for wallet: ${walletAddress}`);
-    console.log(`🔍 Wallet address validation:`, {
-      original: walletAddress,
-      length: walletAddress.length,
-      startsWith0x: walletAddress.startsWith('0x'),
-      isValidFormat: /^0x[a-fA-F0-9]{40}$/.test(walletAddress)
-    });
-
-    // Validate wallet address format
-    const validatedWalletAddress = validateAddress(walletAddress);
-    console.log(`✅ Validated wallet address: ${validatedWalletAddress}`);
-
-    // Resolve groupId if userId is available
-    let groupId = "unknown";
-    if (userId) {
-      groupId = await findGroupIdForEscrow(
-        userId,
-        validatedWalletAddress,
-        escrowId,
-      );
-    }
-
-    // Enhanced metadata with chain info
-    const metadata = {
-      gasUsed: receipt.gasUsed?.toString(),
-      gasPrice: receipt.effectiveGasPrice?.toString(),
-      networkId: "84532", // Base Sepolia
-      contractAddress,
-      chainName: "Base Sepolia",
-      blockHash: receipt.blockHash,
-      transactionIndex: receipt.transactionIndex?.toString(),
-      status: receipt.status === 1 ? "success" : "failed",
-    };
-
-    // Calculate block timestamp from receipt if available
-    let blockTimestamp = Math.floor(Date.now() / 1000).toString();
-    if (receipt.blockNumber) {
-      try {
-        const block = await publicClient.getBlock({
-          blockNumber: BigInt(receipt.blockNumber),
-        });
-        blockTimestamp = block.timestamp.toString();
-      } catch (blockError) {
-        console.warn(
-          `⚠️ Could not get block timestamp, using current time:`,
-          blockError,
-        );
-      }
-    }
-
-    const eventPayload = {
-      eventType,
-      escrowId,
-      groupId,
-      transactionHash,
-      blockNumber: receipt.blockNumber?.toString(),
-      initiatorWalletAddress: validatedWalletAddress,
-      tokenType,
-      eventData,
-      metadata,
-      blockTimestamp,
-    };
-
-    console.log(`🔍 Event payload:`, JSON.stringify(eventPayload, null, 2));
-
-    await saveEscrowEvent(eventPayload);
-
-    console.log(
-      `✅ ${eventType} event saved successfully for escrow ${escrowId}`,
-    );
-
-    return {
-      success: true,
-      eventId: `${eventType}_${escrowId}_${transactionHash}`,
-    };
-  } catch (eventError) {
-    console.error(`❌ Error saving ${eventType} event:`, eventError);
-
-    // Return error info but don't fail the main operation
-    return {
-      success: false,
-      error: eventError instanceof Error ? eventError.message : "Unknown error",
-      eventType,
-      escrowId,
-      transactionHash,
-    };
-  }
-};
 
 // Check token balance
 export const checkTokenBalance = async (
@@ -518,11 +431,18 @@ export const checkTokenAllowance = async (
   escrowId: string,
 ): Promise<bigint> => {
   try {
-    console.log(escrowId);
-    const details = await escrowIdrxContract.read.getEscrowDetails([
-      escrowId as `0x${string}`,
-    ]);
-    console.log(details);
+    console.log("🔍 Checking allowance for escrowId:", escrowId);
+    
+    // Get the correct escrow contract address based on token type
+    let escrowContractAddress;
+    if (tokenType === "IDRX") {
+      escrowContractAddress = getEscrowAddress("IDRX");
+    } else {
+      // For USDC and USDT, use the regular escrow contract
+      escrowContractAddress = getEscrowAddress("USDC");
+    }
+    
+    console.log("🔍 Escrow contract address for allowance:", escrowContractAddress);
     
     const tokenAddress = getTokenAddress(tokenType);
     const allowance = await publicClient.readContract({
@@ -540,11 +460,13 @@ export const checkTokenAllowance = async (
         },
       ],
       functionName: "allowance",
-      args: [owner as `0x${string}`, details[0] as `0x${string}`],
+      args: [owner as `0x${string}`, escrowContractAddress as `0x${string}`],
     });
+    
+    console.log("🔍 Current allowance:", allowance.toString());
     return allowance as bigint;
   } catch (error) {
-    console.error("Error checking token allowance:", error);
+    console.error("❌ Error checking token allowance:", error);
     return BigInt(0);
   }
 };
@@ -558,9 +480,28 @@ export const approveTokens = async (
 ): Promise<boolean> => {
   try {
     const tokenAddress = getTokenAddress(tokenType);
-    const details = await escrowIdrxContract.read.getEscrowDetails([
-      escrowId as `0x${string}`,
-    ]);
+    
+    // Get the correct escrow contract address based on token type
+    let escrowContractAddress;
+    if (tokenType === "IDRX") {
+      escrowContractAddress = getEscrowAddress("IDRX");
+    } else {
+      // For USDC and USDT, use the regular escrow contract
+      escrowContractAddress = getEscrowAddress("USDC");
+    }
+
+    console.log("🔍 Approve tokens debug:", {
+      tokenType,
+      tokenAddress,
+      escrowContractAddress,
+      amount: amount.toString(),
+      escrowId
+    });
+
+    // Validate escrow contract address
+    if (!escrowContractAddress || escrowContractAddress === "0x0000000000000000000000000000000000000000") {
+      throw new Error("Invalid escrow contract address");
+    }
 
     const { request } = await publicClient.simulateContract({
       address: tokenAddress as `0x${string}`,
@@ -577,16 +518,19 @@ export const approveTokens = async (
         },
       ],
       functionName: "approve",
-      args: [details[0] as `0x${string}`, amount],
+      args: [escrowContractAddress as `0x${string}`, amount],
       account: walletClient.account.address,
     });
+
+    console.log("✅ Approval simulation successful, proceeding with transaction");
 
     const hash = await walletClient.writeContract(request);
     await publicClient.waitForTransactionReceipt({ hash });
 
+    console.log("✅ Approval transaction successful:", hash);
     return true;
   } catch (error) {
-    console.error("Error approving tokens:", error);
+    console.error("❌ Error approving tokens:", error);
     return false;
   }
 };
@@ -931,27 +875,9 @@ export const createEscrowOnchain = async (
       createdAt: new Date().toISOString(),
     };
 
-    console.log(`💾 Saving ESCROW_CREATED event with enhanced data`);
-    console.log(`🔍 Wallet address being sent: ${walletClient.account.address}`);
-
-    const eventResult = await saveEscrowEventWithContext(
-      "ESCROW_CREATED",
-      escrowId,
-      hash,
-      walletClient.account.address,
-      tokenType,
-      eventData,
-      receipt,
-      contract.address,
-      userId, // Pass userId if available
-    );
-
-    if (!eventResult.success) {
-      console.warn(
-        `⚠️ Event tracking failed but escrow creation succeeded:`,
-        eventResult.error,
-      );
-    }
+    console.log(`✅ Escrow created successfully onchain`);
+    console.log(`🔍 Transaction hash: ${hash}`);
+    console.log(`🔍 Escrow ID: ${escrowId}`);
 
     return {
       success: true,
@@ -999,34 +925,8 @@ export async function addReceiver(
     if (receipt.status == "success") {
       console.log("Receiver added successfully:", receipt);
 
-      // Save add receiver event for tracking
-      const eventResult = await saveEscrowEventWithContext(
-        "ADD_RECIPIENTS",
-        escrowId,
-        txHash,
-        walletClient.account.address,
-        tokenType,
-        {
-          newRecipients: [
-            {
-              walletAddress: validateAddress(receiverAddress),
-              amount: formatTokenAmount(amount, tokenType === "IDRX" ? 18 : 6),
-              fullname: "Unknown User", // Will be resolved in backend
-            },
-          ],
-          escrowId: escrowId,
-          addedAt: new Date().toISOString(),
-        },
-        receipt,
-        contractAddress.address,
-      );
-
-      if (!eventResult.success) {
-        console.warn(
-          `⚠️ ADD_RECIPIENTS event tracking failed:`,
-          eventResult.error,
-        );
-      }
+      // Receiver added successfully onchain
+      console.log(`✅ Receiver added successfully to escrow ${escrowId}`);
 
       return {
         success: true,
@@ -1062,27 +962,93 @@ export const topUpFunds = async (
       contract = escrowContract; // For USDC and USDT
     }
 
-    //    {
-    //   inputs: [
-    //     { internalType: "bytes32", name: "_escrowId", type: "bytes32" },
-    //     { internalType: "uint256", name: "_amount", type: "uint256" },
-    //   ],
-    //   name: "topUpFunds",
-    //   outputs: [],
-    //   stateMutability: "nonpayable",
-    //   type: "function",
-    // },
+    console.log("🔍 topUpFunds debug:", {
+      escrowId,
+      amount: amount.toString(),
+      tokenType,
+      contractAddress: contract.address
+    });
 
-    // escrowId :0x961497dd1a35f330dc1578ec978c6813d026361df4f7a766360c1704d676c8a3
-    // amount : 5000000n
+    // First, let's check if the escrow exists and validate its state
+    try {
+      const escrowDetails = await contract.read.getEscrowDetails([
+        escrowId as `0x${string}`,
+      ]);
+      console.log("🔍 Escrow details:", escrowDetails);
+      
+      // Check if escrow exists (first element should not be zero address)
+      if (escrowDetails[0] === "0x0000000000000000000000000000000000000000") {
+        throw new Error("Escrow not found or invalid escrow ID");
+      }
+      
+      // Check if escrow is active
+      const isActive = escrowDetails[9]; // isActive is at index 9
+      if (!isActive) {
+        throw new Error("Escrow is not active");
+      }
+      
+      // Check if user has enough token balance
+      const tokenAddress = getTokenAddress(tokenType);
+      const userBalance = await publicClient.readContract({
+        address: tokenAddress as `0x${string}`,
+        abi: [
+          {
+            inputs: [{ internalType: "address", name: "account", type: "address" }],
+            name: "balanceOf",
+            outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
+            stateMutability: "view",
+            type: "function",
+          },
+        ],
+        functionName: "balanceOf",
+        args: [walletClient.account.address],
+      });
+      
+      console.log("🔍 User token balance:", userBalance.toString());
+      console.log("🔍 Required amount:", amount.toString());
+      
+      if (userBalance < amount) {
+        throw new Error(`Insufficient token balance. Required: ${amount.toString()}, Available: ${userBalance.toString()}`);
+      }
+      
+      // Check allowance - use escrow contract address as spender
+      const allowance = await publicClient.readContract({
+        address: tokenAddress as `0x${string}`,
+        abi: [
+          {
+            inputs: [
+              { internalType: "address", name: "owner", type: "address" },
+              { internalType: "address", name: "spender", type: "address" },
+            ],
+            name: "allowance",
+            outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
+            stateMutability: "view",
+            type: "function",
+          },
+        ],
+        functionName: "allowance",
+        args: [walletClient.account.address, contract.address],
+      });
+      
+      console.log("🔍 Current allowance:", allowance.toString());
+      
+      if (allowance < amount) {
+        throw new Error(`Insufficient allowance. Required: ${amount.toString()}, Available: ${allowance.toString()}`);
+      }
+      
+    } catch (error) {
+      console.error("❌ Error validating escrow and balance:", error);
+      throw error;
+    }
 
+    // Use the full escrow ABI for better error handling
     const { request } = await contract.simulate.topUpFunds(
       [escrowId as `0x${string}`, amount],
       {
         account: walletClient.account.address,
       },
     );
-    console.log("dibawah");
+    console.log("✅ Simulation successful, proceeding with transaction");
 
     const hash = await walletClient.writeContract(request);
     const receipt = await publicClient.waitForTransactionReceipt({ hash });

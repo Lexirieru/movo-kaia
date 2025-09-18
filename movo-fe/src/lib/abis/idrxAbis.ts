@@ -1,4 +1,4 @@
-export const idrxAbi = [
+export const idrxAbis = [
   { inputs: [], stateMutability: "nonpayable", type: "constructor" },
   {
     inputs: [

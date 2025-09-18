@@ -3,8 +3,8 @@ export const CONTRACT_CONFIG = {
   // Base Network (Chain ID: 84532)
   base: {
     // Escrow Contracts
-    escrow: '0xFF2A27508d77cd00A810d6B29e5158Fb44a4c74d', // For USDT and USDC
-    escrowIDRX: '0x764C9F2FAAC26C2dF7Af8B370c43259Bc476Dee1', // For IDRX
+    escrow: '0x306408Aca69417e44154E51f41CbFdE9Cb8FD142', // For USDT and USDC
+    escrowIDRX: '0x54C99B5800eC0aD6F39C7C19e001BA73eE21314a', // For IDRX
     
     // Token Contracts
     mockUSDC: '0xf9D5a610fe990bfCdF7dd9FD64bdfe89D6D1eb4c',

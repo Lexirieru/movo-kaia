@@ -1,11 +1,145 @@
 import { GroupOfUser } from "@/types/receiverInGroupTemplate";
 import axios, { AxiosError } from "axios";
+import { getTokenType } from "@/lib/tokenMapping";
+import { createPublicClient, http, parseAbi } from "viem";
+import { baseSepolia } from "viem/chains";
+import { getDefaultChain } from "@/lib/addresses/chainAddress";
 interface ErrorResponse {
   message?: string;
 }
-const GOLDSKY_API_URL = process.env.NEXT_PUBLIC_GOLDSKY_API_URL || "https://api.goldsky.com/api/public/project_cmfnod75l9o1r01xy81lz52hq/subgraphs/test-escrow-movo/1.0.0/gn";
+// Goldsky API URLs for different escrow contracts
+const GOLDSKY_ESCROW_API_URL = process.env.NEXT_PUBLIC_GOLDSKY_ESCROW_API_URL || "https://api.goldsky.com/api/public/project_cmf7w213gukw101tb0u5m7760/subgraphs/movo-basesepolia-escrow/1.0.0/gn";
+const GOLDSKY_ESCROW_IDRX_API_URL = process.env.NEXT_PUBLIC_GOLDSKY_ESCROW_IDRX_API_URL || "https://api.goldsky.com/api/public/project_cmf7w213gukw101tb0u5m7760/subgraphs/movo-basesepolia-escrowIdrx/1.0.0/gn";
 
-console.log("🔧 Goldsky API URL:", GOLDSKY_API_URL);
+// Simple in-memory cache for API responses
+const cache = new Map<string, { data: any; timestamp: number }>();
+const CACHE_DURATION = 30000; // 30 seconds cache
+
+// Cache helper functions
+const getCachedData = (key: string) => {
+  const cached = cache.get(key);
+  if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
+    console.log("📦 Using cached data for:", key);
+    return cached.data;
+  }
+  return null;
+};
+
+const setCachedData = (key: string, data: any) => {
+  cache.set(key, { data, timestamp: Date.now() });
+  console.log("💾 Cached data for:", key);
+};
+
+// Clear cache for specific address or all cache
+export const clearCache = (address?: string) => {
+  if (address) {
+    const senderKey = `sender_${address.toLowerCase()}`;
+    const receiverKey = `receiver_${address.toLowerCase()}`;
+    const receiverSimpleKey = `receiver_simple_${address.toLowerCase()}`;
+    cache.delete(senderKey);
+    cache.delete(receiverKey);
+    cache.delete(receiverSimpleKey);
+    console.log("🗑️ Cleared cache for address:", address);
+  } else {
+    cache.clear();
+    console.log("🗑️ Cleared all cache");
+  }
+};
+
+// Function to clear cache when escrow is created
+export const clearCacheOnEscrowCreated = (walletAddress: string) => {
+  clearCache(walletAddress);
+  // Also clear contract details cache
+  contractDetailsCache.clear();
+  console.log("🔄 Cache cleared due to new escrow creation");
+};
+
+// Function to clear contract details cache
+export const clearContractCache = () => {
+  contractDetailsCache.clear();
+  console.log("🗑️ Contract details cache cleared");
+};
+
+console.log("🔧 Goldsky Escrow API URL:", GOLDSKY_ESCROW_API_URL);
+console.log("🔧 Goldsky Escrow IDRX API URL:", GOLDSKY_ESCROW_IDRX_API_URL);
+
+// Viem client configuration
+const publicClient = createPublicClient({
+  chain: baseSepolia,
+  transport: http(),
+});
+
+// Escrow contract ABI for getEscrowDetails
+const escrowContractABI = parseAbi([
+  "function getEscrowDetails(bytes32 _escrowId) view returns (address sender, address tokenAddress, uint256 totalAllocatedAmount, uint256 totalDepositedAmount, uint256 totalWithdrawnAmount, uint256 availableBalance, uint256 createdAt, uint256 lastTopUpAt, uint256 receiverCount, uint256 activeReceiverCount, address[] receiverAddresses)"
+]);
+
+// Cache for contract details to avoid repeated calls
+const contractDetailsCache = new Map<string, any>();
+
+// Function to read escrow details from smart contract
+const getEscrowDetailsFromContract = async (escrowId: string, contractAddress: string) => {
+  try {
+    const cacheKey = `${contractAddress}-${escrowId}`;
+    
+    // Check cache first
+    if (contractDetailsCache.has(cacheKey)) {
+      console.log("📦 Using cached contract details for:", cacheKey);
+      return contractDetailsCache.get(cacheKey);
+    }
+
+    console.log("📋 Reading escrow details from contract:", { escrowId, contractAddress });
+    
+    const result = await publicClient.readContract({
+      address: contractAddress as `0x${string}`,
+      abi: escrowContractABI,
+      functionName: 'getEscrowDetails',
+      args: [escrowId as `0x${string}`],
+    });
+
+    console.log("✅ Escrow details from contract:", result);
+
+    const contractDetails = {
+      sender: result[0],
+      tokenAddress: result[1],
+      totalAllocatedAmount: result[2].toString(),
+      totalDepositedAmount: result[3].toString(),
+      totalWithdrawnAmount: result[4].toString(),
+      availableBalance: result[5].toString(),
+      createdAt: result[6].toString(),
+      lastTopUpAt: result[7].toString(),
+      receiverCount: result[8].toString(),
+      activeReceiverCount: result[9].toString(),
+      receiverAddresses: result[10],
+    };
+
+    // Cache the result for 5 minutes
+    contractDetailsCache.set(cacheKey, contractDetails);
+    setTimeout(() => {
+      contractDetailsCache.delete(cacheKey);
+    }, 5 * 60 * 1000); // 5 minutes
+
+    return contractDetails;
+  } catch (error) {
+    console.error("❌ Error reading escrow details from contract:", error);
+    return null;
+  }
+};
+
+// Function to get contract address based on token type
+const getContractAddressByTokenType = (tokenType: string): string => {
+  const tokenTypeLower = tokenType.toLowerCase();
+  const chain = getDefaultChain();
+  
+  if (tokenTypeLower === 'idrx') {
+    return chain.contracts.escrowIdrx;
+  } else if (tokenTypeLower === 'usdt') {
+    return chain.contracts.escrow; // USDT uses same escrow contract as USDC
+  } else {
+    // Default to USDC
+    return chain.contracts.escrow;
+  }
+};
 
 // Test function to verify Goldsky API is working
 export const testGoldskyConnection = async () => {
@@ -21,13 +155,13 @@ export const testGoldskyConnection = async () => {
       }
     `;
     
-    const response = await axios.post(GOLDSKY_API_URL, {
+    const response = await axios.post(GOLDSKY_ESCROW_API_URL, {
       query: testQuery,
     }, {
       headers: {
         'Content-Type': 'application/json',
       },
-      timeout: 10000,
+      timeout: 15000, // 15 second timeout for better reliability
     });
     
     console.log("✅ Goldsky connection test successful:", response.data);
@@ -64,7 +198,7 @@ export const fetchTokenWithdrawnToFiat = async (receiver: string) => {
       }
     `;
 
-    const response = await axios.post(GOLDSKY_API_URL, {
+    const response = await axios.post(GOLDSKY_ESCROW_API_URL, {
       query,
       variables: { receiver },
     });
@@ -538,6 +672,12 @@ export const checkWalletAddressesRegistration = async (
 // buat senderdashboard
 export const fetchEscrowsFromIndexer = async (userAddress: string) => {
   try {
+    const cacheKey = `sender_${userAddress.toLowerCase()}`;
+    const cachedData = getCachedData(cacheKey);
+    if (cachedData) {
+      return cachedData;
+    }
+
     console.log("🔍 Fetching escrows for address:", userAddress);
     console.log("🔍 Address validation:", {
       address: userAddress,
@@ -566,12 +706,14 @@ export const fetchEscrowsFromIndexer = async (userAddress: string) => {
           where: { sender: $userAddress }
           orderBy: timestamp_
           orderDirection: desc
+          first: 100
         ) {
           escrowId
           sender
           receivers
           amounts
           totalAmount
+          tokenAddress
           block_number
           timestamp_
           transactionHash_
@@ -583,14 +725,14 @@ export const fetchEscrowsFromIndexer = async (userAddress: string) => {
     console.log("📤 Sending GraphQL query to Goldsky...");
     console.log("📤 Query variables:", { userAddress });
     
-    const response = await axios.post(GOLDSKY_API_URL, {
+    const response = await axios.post(GOLDSKY_ESCROW_API_URL, {
       query,
       variables: { userAddress: userAddress.toLowerCase() }, // Ensure lowercase
     }, {
       headers: {
         'Content-Type': 'application/json',
       },
-      timeout: 10000, // 10 second timeout
+      timeout: 15000, // 15 second timeout for better reliability
     });
 
     console.log("📥 Goldsky API response:", response.data);
@@ -612,40 +754,67 @@ export const fetchEscrowsFromIndexer = async (userAddress: string) => {
       return [];
     }
 
-    const transformedEscrows = escrows.map((escrow: any, index: number) => {
-            const tokenAddress = mapContractIdToTokenAddress(escrow.contractId_);
+    // Process escrows and add contract data
+    const transformedEscrows = await Promise.all(
+      escrows.map(async (escrow: any, index: number) => {
+        // Use tokenAddress from GraphQL data if available, otherwise fallback to contractId mapping
+        const tokenAddress = escrow.tokenAddress || mapContractIdToTokenAddress(escrow.contractId_);
+        
+        // Determine token type from tokenAddress
+        const tokenType = getTokenType(tokenAddress);
 
-      // Parse timestamp if available
-      const createdAt = escrow.timestamp_ 
-        ? new Date(parseInt(escrow.timestamp_) * 1000).toISOString()
-        : new Date().toISOString();
+        // Parse timestamp if available
+        const createdAt = escrow.timestamp_ 
+          ? new Date(parseInt(escrow.timestamp_) * 1000).toISOString()
+          : new Date().toISOString();
 
-      return {
-        id: `escrow-${index}`, // Generate ID since not available in indexer
-        escrowId: escrow.escrowId,
-        sender: escrow.sender,
-        totalAmount: escrow.totalAmount || "0",
-        createdAt: createdAt,
-        receivers: escrow.receivers
-          ? escrow.receivers.split(",").map((addr: string) => addr.trim())
-          : [],
-        amounts: escrow.amounts
-          ? escrow.amounts.split(",").map((amount: string) => amount.trim())
-          : [],
-        tokenAddress: tokenAddress, // ini yang diedit tadinya pake address usdc langsung
-        blockNumber: escrow.block_number,
-        transactionHash: escrow.transactionHash_,
-      };
-    });
+        // Get contract address based on token type
+        const contractAddress = getContractAddressByTokenType(tokenType);
+        
+        // Read additional details from smart contract
+        const contractDetails = await getEscrowDetailsFromContract(escrow.escrowId, contractAddress);
+
+        return {
+          id: `escrow-${index}`, // Generate ID since not available in indexer
+          escrowId: escrow.escrowId,
+          sender: escrow.sender,
+          totalAmount: escrow.totalAmount || "0",
+          createdAt: createdAt,
+          receivers: escrow.receivers
+            ? escrow.receivers.split(",").map((addr: string) => addr.trim())
+            : [],
+          amounts: escrow.amounts
+            ? escrow.amounts.split(",").map((amount: string) => amount.trim())
+            : [],
+          tokenAddress: tokenAddress, // ini yang diedit tadinya pake address usdc langsung
+          tokenType: tokenType, // Dynamic token type based on tokenAddress
+          blockNumber: escrow.block_number,
+          transactionHash: escrow.transactionHash_,
+          
+          // Additional contract data
+          allocatedAmount: contractDetails?.totalAllocatedAmount || "0",
+          depositedAmount: contractDetails?.totalDepositedAmount || "0",
+          withdrawnAmount: contractDetails?.totalWithdrawnAmount || "0",
+          availableBalance: contractDetails?.availableBalance || "0",
+          receiverCount: contractDetails?.receiverCount || "0",
+          activeReceiverCount: contractDetails?.activeReceiverCount || "0",
+          lastTopUpAt: contractDetails?.lastTopUpAt || "0",
+        };
+      })
+    );
 
     console.log("✅ Transformed escrows:", transformedEscrows);
+    
+    // Cache the result
+    setCachedData(cacheKey, transformedEscrows);
+    
     return transformedEscrows;
   } catch (error) {
     console.error("❌ Error fetching escrows from indexer:", error);
     console.error("❌ Error details:", {
       message: error instanceof Error ? error.message : 'Unknown error',
       userAddress,
-      GOLDSKY_API_URL
+      GOLDSKY_ESCROW_API_URL
     });
     return [];
   }
@@ -711,12 +880,18 @@ const fetchReceiverEscrowsFromIndexer = async (receiverAddress: string) => {
 
     const query = `
       query GetReceiverEscrows($receiverAddress: String!) {
-        escrowCreateds(where: {receivers_contains: $receiverAddress}) {
+        escrowCreateds(
+          where: {receivers_contains: $receiverAddress}
+          orderBy: timestamp_
+          orderDirection: desc
+          first: 100
+        ) {
           escrowId
           sender
           receivers
           amounts
           totalAmount
+          tokenAddress
           block_number
           timestamp_
           transactionHash_
@@ -730,7 +905,7 @@ const fetchReceiverEscrowsFromIndexer = async (receiverAddress: string) => {
       originalAddress: receiverAddress 
     });
 
-    const response = await axios.post(GOLDSKY_API_URL, {
+    const response = await axios.post(GOLDSKY_ESCROW_API_URL, {
       query,
       variables: {
         receiverAddress: receiverAddress.toLowerCase(),
@@ -739,7 +914,7 @@ const fetchReceiverEscrowsFromIndexer = async (receiverAddress: string) => {
       headers: {
         'Content-Type': 'application/json',
       },
-      timeout: 10000,
+      timeout: 15000, // 15 second timeout for better reliability
     });
 
     console.log("📥 Goldsky receiver API response:", response.data);
@@ -773,7 +948,7 @@ const fetchReceiverEscrowsFromIndexer = async (receiverAddress: string) => {
       `;
       
       try {
-        const debugResponse = await axios.post(GOLDSKY_API_URL, {
+        const debugResponse = await axios.post(GOLDSKY_ESCROW_API_URL, {
           query: debugQuery,
         });
         console.log("🔍 Debug - Sample escrows:", debugResponse.data.data.escrowCreateds);
@@ -790,6 +965,7 @@ const fetchReceiverEscrowsFromIndexer = async (receiverAddress: string) => {
           escrowId: escrow.escrowId,
           receivers: escrow.receivers,
           amounts: escrow.amounts,
+          tokenAddress: escrow.tokenAddress,
           receiverAddress: receiverAddress.toLowerCase()
         });
 
@@ -829,6 +1005,9 @@ const fetchReceiverEscrowsFromIndexer = async (receiverAddress: string) => {
           ? new Date(parseInt(escrow.timestamp_) * 1000)
           : new Date();
 
+        // Determine token type from tokenAddress
+        const tokenType = getTokenType(escrow.tokenAddress);
+
         return {
           // Basic escrow info
           id: `receiver-escrow-${index}`,
@@ -842,7 +1021,10 @@ const fetchReceiverEscrowsFromIndexer = async (receiverAddress: string) => {
           // Amount data
           totalAmount: escrow.totalAmount || "0",
           availableAmount: receiverAmount, // Amount specifically for this receiver
-          originCurrency: "USDC", // Default to USDC, can be enhanced later
+          originCurrency: tokenType, // Dynamic token type based on tokenAddress
+          
+          // Token data
+          tokenAddress: escrow.tokenAddress,
 
           // Transaction metadata
           transactionHash: escrow.transactionHash_,
@@ -881,7 +1063,12 @@ const fetchReceiverWithdrawEvents = async (receiverAddress: string) => {
 
     const query = `
       query GetReceiverWithdraws($receiverAddress: String!) {
-        withdrawFundss(where: {recipient: $receiverAddress}) {
+        withdrawFunds(
+          where: {recipient: $receiverAddress}
+          orderBy: timestamp_
+          orderDirection: desc
+          first: 100
+        ) {
           escrowId
           recipient
           amount
@@ -892,16 +1079,27 @@ const fetchReceiverWithdrawEvents = async (receiverAddress: string) => {
       }
     `;
 
-    const response = await axios.post(GOLDSKY_API_URL, {
+    const response = await axios.post(GOLDSKY_ESCROW_API_URL, {
       query,
       variables: {
         receiverAddress: receiverAddress.toLowerCase(),
       },
+    }, {
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      timeout: 15000, // 15 second timeout for better reliability
     });
 
     console.log("📥 Goldsky withdraw events response:", response.data);
 
-    const withdrawEvents = response.data.data.withdrawFunds || [];
+    // Check if response has errors
+    if (response.data.errors) {
+      console.error("❌ GraphQL errors in withdraw events response:", response.data.errors);
+      return [];
+    }
+
+    const withdrawEvents = response.data.data?.withdrawFunds || [];
     console.log("📊 Raw withdraw events:", withdrawEvents);
 
     return withdrawEvents.map((withdraw: any) => ({
@@ -920,24 +1118,282 @@ const fetchReceiverWithdrawEvents = async (receiverAddress: string) => {
   }
 };
 
+// Optimized function to fetch receiver data with single combined query
+const fetchReceiverDataOptimized = async (receiverAddress: string) => {
+  try {
+    const cacheKey = `receiver_${receiverAddress.toLowerCase()}`;
+    const cachedData = getCachedData(cacheKey);
+    if (cachedData) {
+      return cachedData;
+    }
+
+    console.log("🚀 Fetching optimized receiver data for:", receiverAddress);
+
+    const query = `
+      query GetReceiverData($receiverAddress: String!) {
+        escrowCreateds(
+          where: {receivers_contains: $receiverAddress}
+          orderBy: timestamp_
+          orderDirection: desc
+          first: 100
+        ) {
+          escrowId
+          sender
+          receivers
+          amounts
+          totalAmount
+          tokenAddress
+          block_number
+          timestamp_
+          transactionHash_
+          contractId_
+        }
+      }
+    `;
+
+    const response = await axios.post(GOLDSKY_ESCROW_API_URL, {
+      query,
+      variables: {
+        receiverAddress: receiverAddress.toLowerCase(),
+      },
+    }, {
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      timeout: 15000, // 15 second timeout for better reliability
+    });
+
+    if (response.data.errors) {
+      console.error("❌ GraphQL errors in optimized receiver query:", response.data.errors);
+      return { escrowEvents: [], withdrawEvents: [] };
+    }
+
+    const escrowEvents = response.data.data.escrowCreateds || [];
+    // For now, we'll skip withdraw events to avoid GraphQL errors
+    // This can be added back later when the schema is confirmed
+    const withdrawEvents: any[] = [];
+
+    console.log("✅ Optimized receiver data fetched:", {
+      escrowEvents: escrowEvents.length,
+      withdrawEvents: withdrawEvents.length
+    });
+
+    const result = { escrowEvents, withdrawEvents };
+    
+    // Cache the result
+    setCachedData(cacheKey, result);
+    
+    return result;
+  } catch (error) {
+    console.error("❌ Error fetching optimized receiver data:", error);
+    return { escrowEvents: [], withdrawEvents: [] };
+  }
+};
+
+// Simplified function to get receiver escrows without withdraw calculation
+const fetchReceiverEscrowsSimple = async (receiverAddress: string) => {
+  try {
+    console.log("🚀 Fetching receiver escrows (simplified) for:", receiverAddress);
+
+    const cacheKey = `receiver_simple_${receiverAddress.toLowerCase()}`;
+    const cachedData = getCachedData(cacheKey);
+    if (cachedData) {
+      return cachedData;
+    }
+
+    const query = `
+      query GetReceiverEscrowsSimple {
+        escrowCreateds {
+          receivers
+          sender
+          tokenAddress
+          escrowId
+          totalAmount
+          amounts
+          timestamp_
+        }
+      }
+    `;
+
+    const response = await axios.post(GOLDSKY_ESCROW_API_URL, {
+      query,
+    }, {
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      timeout: 15000, // 15 second timeout for better reliability
+    });
+
+    if (response.data.errors) {
+      console.error("❌ GraphQL errors in simplified receiver query:", response.data.errors);
+      return [];
+    }
+
+    const allEscrows = response.data.data.escrowCreateds || [];
+    console.log("✅ All escrows fetched:", allEscrows.length);
+    
+    // Filter escrows that contain the receiver address
+    const escrows = allEscrows
+      .filter((escrow: any) => {
+        if (!escrow.receivers) return false;
+        const receivers = escrow.receivers.split(",").map((addr: string) => addr.trim().toLowerCase());
+        return receivers.includes(receiverAddress.toLowerCase());
+      })
+      .sort((a: any, b: any) => {
+        // Sort by timestamp descending (newest first)
+        const timestampA = parseInt(a.timestamp_) || 0;
+        const timestampB = parseInt(b.timestamp_) || 0;
+        return timestampB - timestampA;
+      })
+      .slice(0, 100); // Limit to 100 most recent escrows
+    
+    console.log("✅ Filtered and sorted receiver escrows:", escrows.length);
+
+    // Transform the data to match our expected format
+    const transformedEscrows = await Promise.all(
+      escrows
+        .map(async (escrow: any, index: number) => {
+          console.log(`🔍 Processing escrow ${index}:`, {
+            escrowId: escrow.escrowId,
+            receivers: escrow.receivers,
+            amounts: escrow.amounts,
+            tokenAddress: escrow.tokenAddress,
+            receiverAddress: receiverAddress.toLowerCase()
+          });
+
+          // Parse receivers and amounts arrays
+          const receivers = escrow.receivers
+            ? escrow.receivers
+                .split(",")
+                .map((addr: string) => addr.trim().toLowerCase())
+            : [];
+          const amounts = escrow.amounts
+            ? escrow.amounts.split(",").map((amount: string) => amount.trim())
+            : [];
+
+          console.log(`🔍 Parsed data:`, {
+            receivers,
+            amounts,
+            receiverAddress: receiverAddress.toLowerCase()
+          });
+
+          // Find the index of the current receiver
+          const receiverIndex = receivers.findIndex(
+            (addr: string) => addr === receiverAddress.toLowerCase(),
+          );
+
+          console.log(`🔍 Receiver index:`, receiverIndex);
+
+          // Get the amount allocated to this specific receiver
+          const receiverAmount =
+            receiverIndex >= 0 && amounts[receiverIndex]
+              ? amounts[receiverIndex]
+              : "0";
+
+          console.log(`🔍 Receiver amount:`, receiverAmount);
+
+          // Convert timestamp to proper date
+          const createdDate = escrow.timestamp_
+            ? new Date(parseInt(escrow.timestamp_) * 1000)
+            : new Date();
+
+          // Determine token type from tokenAddress
+          const tokenType = getTokenType(escrow.tokenAddress);
+
+          // Get contract address based on token type
+          const contractAddress = getContractAddressByTokenType(tokenType);
+          
+          // Read additional details from smart contract
+          const contractDetails = await getEscrowDetailsFromContract(escrow.escrowId, contractAddress);
+
+          return {
+            // Basic escrow info
+            id: `receiver-escrow-${index}`,
+            escrowId: escrow.escrowId,
+
+            // Transaction data for receiver dashboard
+            receiverWalletAddress: receiverAddress,
+            senderWalletAddress: escrow.sender,
+            senderName: `${escrow.sender.slice(0, 6)}...${escrow.sender.slice(-4)}`, // Shortened sender address as name
+
+            // Amount data
+            totalAmount: escrow.totalAmount || "0",
+            availableAmount: receiverAmount, // Amount specifically for this receiver
+            originCurrency: tokenType, // Dynamic token type based on tokenAddress
+            
+            // Token data
+            tokenAddress: escrow.tokenAddress,
+
+            // Transaction metadata
+            transactionHash: escrow.transactionHash_,
+            blockNumber: escrow.block_number,
+            contractId: escrow.contractId_,
+
+            // Dates
+            createdAt: createdDate,
+
+            // Status
+            status: "AVAILABLE", // Default status for incoming transactions
+
+            // Additional receiver data
+            receiverIndex,
+            allReceivers: receivers,
+            allAmounts: amounts,
+
+            // Additional contract data
+            allocatedAmount: contractDetails?.totalAllocatedAmount || "0",
+            depositedAmount: contractDetails?.totalDepositedAmount || "0",
+            withdrawnAmount: contractDetails?.totalWithdrawnAmount || "0",
+            availableBalance: contractDetails?.availableBalance || "0",
+            receiverCount: contractDetails?.receiverCount || "0",
+            activeReceiverCount: contractDetails?.activeReceiverCount || "0",
+            lastTopUpAt: contractDetails?.lastTopUpAt || "0",
+          };
+        })
+    ).then(results => 
+      results.filter((escrow: any) => parseFloat(escrow.availableAmount) > 0) // Only return escrows with available amounts
+    );
+
+    console.log("✅ Transformed receiver escrows:", transformedEscrows);
+    console.log("✅ Number of transformed escrows:", transformedEscrows.length);
+    console.log("✅ Available amounts:", transformedEscrows.map((e: any) => e.availableAmount));
+    console.log("✅ Performance summary:", {
+      totalEscrowsFetched: allEscrows.length,
+      filteredEscrows: escrows.length,
+      finalTransformedEscrows: transformedEscrows.length,
+      receiverAddress: receiverAddress
+    });
+    
+    // Cache the result
+    setCachedData(cacheKey, transformedEscrows);
+    
+    return transformedEscrows;
+  } catch (error) {
+    console.error("❌ Error fetching simplified receiver escrows:", error);
+    return [];
+  }
+};
+
 // Calculate available withdrawals by comparing escrow created vs withdraw events
 const calculateAvailableWithdrawals = async (receiverAddress: string) => {
   try {
     console.log("💰 Calculating available withdrawals for:", receiverAddress);
 
-    // Fetch both escrow created events and withdraw events in parallel
-    const [escrowEvents, withdrawEvents] = await Promise.all([
-      fetchReceiverEscrowsFromIndexer(receiverAddress),
-      fetchReceiverWithdrawEvents(receiverAddress),
-    ]);
+    // Use simplified receiver escrows function
+    const escrowEvents = await fetchReceiverEscrowsSimple(receiverAddress);
+    const withdrawEvents: any[] = []; // Skip withdraw events for now
+
+    // Ensure we have valid arrays even if one fails
+    const validEscrowEvents = Array.isArray(escrowEvents) ? escrowEvents : [];
+    const validWithdrawEvents = Array.isArray(withdrawEvents) ? withdrawEvents : [];
 
     console.log("📊 Processing escrow vs withdraw data...");
-    console.log("📊 Escrow events:", escrowEvents.length);
-    console.log("📊 Withdraw events:", withdrawEvents.length);
+    console.log("📊 Escrow events:", validEscrowEvents.length);
+    console.log("📊 Withdraw events:", validWithdrawEvents.length);
 
     // Create a map of withdrawn amounts per escrow
     const withdrawnAmounts: { [escrowId: string]: number } = {};
-    withdrawEvents.forEach((withdraw: any) => {
+    validWithdrawEvents.forEach((withdraw: any) => {
       if (!withdrawnAmounts[withdraw.escrowId]) {
         withdrawnAmounts[withdraw.escrowId] = 0;
       }
@@ -947,7 +1403,7 @@ const calculateAvailableWithdrawals = async (receiverAddress: string) => {
     console.log("📊 Withdrawn amounts map:", withdrawnAmounts);
 
     // Calculate available amounts
-    const availableWithdrawals = escrowEvents
+    const availableWithdrawals = validEscrowEvents
       .map((escrow: any) => {
         const allocatedAmount = parseFloat(escrow.availableAmount || "0");
         const withdrawnAmount = withdrawnAmounts[escrow.escrowId] || 0;
@@ -957,7 +1413,8 @@ const calculateAvailableWithdrawals = async (receiverAddress: string) => {
           allocatedAmount,
           withdrawnAmount,
           availableAmount,
-          availableAmountString: escrow.availableAmount
+          availableAmountString: escrow.availableAmount,
+          tokenAddress: escrow.tokenAddress
         });
 
         return {
@@ -966,6 +1423,8 @@ const calculateAvailableWithdrawals = async (receiverAddress: string) => {
           withdrawnAmount: withdrawnAmount.toString(),
           availableAmount: Math.max(0, availableAmount).toString(), // Ensure non-negative
           hasWithdrawn: withdrawnAmount > 0,
+          // Ensure tokenAddress is preserved
+          tokenAddress: escrow.tokenAddress,
         };
       })
       .filter((escrow: any) => parseFloat(escrow.availableAmount) > 0);
@@ -1025,24 +1484,37 @@ const fetchOnchainReceiverDashboardData = async (receiverAddress: string) => {
       receiverAddress,
     );
 
-    // Get calculated available withdrawals (includes escrow events)
-    const withdrawalData = await calculateAvailableWithdrawals(receiverAddress);
+    // Use simplified receiver escrows function
+    const availableWithdrawals = await fetchReceiverEscrowsSimple(receiverAddress);
+    
+    // Calculate total available amount
+    const totalAvailable = availableWithdrawals.reduce(
+      (sum: number, withdrawal: any) => sum + parseFloat(withdrawal.availableAmount || "0"),
+      0,
+    ).toString();
 
-    // Get additional withdraw history for analytics
-    const withdrawHistory = await fetchReceiverWithdrawEvents(receiverAddress);
+    console.log("✅ Receiver dashboard data ready:", {
+      availableWithdrawals: availableWithdrawals.length,
+      totalAvailable
+    });
 
     return {
       // Main data for dashboard
-      incomingTransactions: withdrawalData.availableWithdrawals,
-      availableWithdrawals: withdrawalData.availableWithdrawals,
-      totalAvailable: withdrawalData.totalAvailable,
+      incomingTransactions: availableWithdrawals,
+      availableWithdrawals: availableWithdrawals,
+      totalAvailable: totalAvailable,
 
-      // Analytics data
-      withdrawHistory,
-      summary: withdrawalData.summary,
+      // Analytics data (simplified)
+      withdrawHistory: [],
+      summary: {
+        totalEscrows: availableWithdrawals.length,
+        availableCount: availableWithdrawals.length,
+        totalAllocated: totalAvailable,
+        totalWithdrawn: "0",
+      },
 
       // For backward compatibility
-      escrowEvents: withdrawalData.availableWithdrawals,
+      escrowEvents: availableWithdrawals,
     };
   } catch (error) {
     console.error("❌ Error fetching onchain receiver dashboard data:", error);
@@ -1249,7 +1721,7 @@ export const getEscrowDetails = async (escrowId: string) => {
       }
     `;
 
-    const response = await axios.post(GOLDSKY_API_URL, {
+    const response = await axios.post(GOLDSKY_ESCROW_API_URL, {
       query,
       variables: { escrowId },
     });

@@ -15,7 +15,6 @@ interface WalletContextType {
   isConnected: boolean;
   address: string | undefined;
   isConnecting: boolean;
-  isLoading: boolean;
   isWalletSyncing: boolean; // wallet sync sama backend
   disconnect: () => void;
   connectWallet: () => Promise<void>;
@@ -82,7 +81,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         isConnected,
         address,
         prevAddress,
-        isLoading,
+        isConnecting,
         processedAddresses: Array.from(processedAddresses),
       });
 
@@ -235,7 +234,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     isConnected,
     address,
     isConnecting,
-    isLoading: false, // Wagmi handles loading state internally
     isWalletSyncing,
     disconnect,
     connectWallet,

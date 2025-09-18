@@ -48,4 +48,15 @@ export interface IncomingTransaction {
   senderWalletAddress: string;
   senderName: string;
   createdAt: Date;
+  // Additional onchain metadata
+  escrowId?: string;
+  transactionHash?: string;
+  blockNumber?: number;
+  allocatedAmount?: string;
+  withdrawnAmount?: string;
+  hasWithdrawn?: boolean;
+  // Token metadata
+  tokenAddress?: string;
+  tokenType?: string;
+  tokenIcon?: string;
 }

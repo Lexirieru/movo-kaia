@@ -45,12 +45,28 @@ export default function GroupDashboard({ onRoleChange }: GroupDashboardProps) {
   const [isTopupModalOpen, setIsTopupModalOpen] = useState(false);
   const [selectedEscrowId, setSelectedEscrowId] = useState<string | null>(null);
 
+  // Function to refresh escrows data
+  const refreshEscrows = async () => {
+    if (!address) return;
+    
+    try {
+      console.log("🔄 Refreshing escrows data...");
+      const escrowsData: EscrowData[] = await fetchEscrowsFromIndexer(address);
+      console.log("📊 Refreshed escrows data:", escrowsData);
+      setEscrows(escrowsData);
+    } catch (err) {
+      console.error("❌ Failed to refresh escrows from indexer", err);
+    }
+  };
+
   useEffect(() => {
-    if (loading || !isConnected || !address || hasFetched) return;
+    if (loading || !isConnected || !address) return;
 
     console.log("🚀 Starting escrow fetch process...");
     console.log("📱 Connected wallet address:", address);
     console.log("🔗 Wallet connected:", isConnected);
+    console.log("🔄 Has fetched:", hasFetched);
+    console.log("⏰ Timestamp:", new Date().toISOString());
 
     const fetchEscrows = async () => {
       try {
@@ -61,10 +77,11 @@ export default function GroupDashboard({ onRoleChange }: GroupDashboardProps) {
         setHasFetched(true);
       } catch (err) {
         console.error("❌ Failed to fetch escrows from indexer", err);
+        setHasFetched(true); // Set to true even on error to prevent infinite retry
       }
     };
     fetchEscrows();
-  }, [loading, isConnected, address, hasFetched]);
+  }, [loading, isConnected, address]); // Removed hasFetched from dependencies
 
   // --- LOGIKA FILTER & KALKULASI ---
   const filteredEscrows = escrows.filter((escrow) =>
@@ -73,8 +90,42 @@ export default function GroupDashboard({ onRoleChange }: GroupDashboardProps) {
 
   // Reset hasFetched ketika address berubah
   useEffect(() => {
+    console.log("🔄 Wallet address changed, resetting fetch state");
     setHasFetched(false);
     setEscrows([]); // Clear existing escrows when wallet changes
+  }, [address]);
+
+  // Reset hasFetched ketika wallet connection status berubah
+  useEffect(() => {
+    if (!isConnected) {
+      console.log("🔄 Wallet disconnected, resetting fetch state");
+      setHasFetched(false);
+      setEscrows([]);
+    }
+  }, [isConnected]);
+
+  // Force refresh when address changes (for wallet switching without disconnect)
+  useEffect(() => {
+    if (address && isConnected) {
+      console.log("🔄 Wallet address changed, forcing refresh");
+      setHasFetched(false);
+      setEscrows([]);
+      
+      // Trigger immediate refresh
+      const forceRefresh = async () => {
+        try {
+          console.log("🔍 Force fetching escrows from indexer for address:", address);
+          const escrowsData: EscrowData[] = await fetchEscrowsFromIndexer(address);
+          console.log("📊 Force refreshed escrows data:", escrowsData);
+          setEscrows(escrowsData);
+          setHasFetched(true);
+        } catch (err) {
+          console.error("❌ Failed to force refresh escrows from indexer", err);
+          setHasFetched(true);
+        }
+      };
+      forceRefresh();
+    }
   }, [address]);
 
   const handleEscrowDeleted = () => {
@@ -231,13 +282,14 @@ export default function GroupDashboard({ onRoleChange }: GroupDashboardProps) {
           isOpen={isCreateModalOpen}
           onClose={() => setIsCreateModalOpen(false)}
           onCreateStream={handleCreateGroup}
+          onEscrowCreated={refreshEscrows}
         />
 
         {/* Topup Fund Modal */}
         <TopupFundModal
           isOpen={isTopupModalOpen}
           onClose={() => setIsTopupModalOpen(false)}
-          groupId={selectedEscrowId || ""}
+          escrowId={selectedEscrowId || ""}
         />
       </div>
     </div>

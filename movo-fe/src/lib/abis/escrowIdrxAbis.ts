@@ -55,6 +55,12 @@ export const escrowIdrxAbis = [
       },
       {
         indexed: false,
+        internalType: "address",
+        name: "tokenAddress",
+        type: "address",
+      },
+      {
+        indexed: false,
         internalType: "uint256",
         name: "totalAmount",
         type: "uint256",

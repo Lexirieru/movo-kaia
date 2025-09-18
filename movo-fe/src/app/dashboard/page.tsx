@@ -191,10 +191,17 @@ function DynamicDashboard({ userRole, effectiveWalletAddress, onRoleChange }: Dy
         )}
         
         {activeFilter === "claimable" && (
-          <ReceiverDashboard 
-            incomingTransactions={receiverData?.availableWithdrawals || []}
-            isLoading={isCheckingData}
-          />
+          <>
+            {console.log("🔍 Rendering claimable filter with data:", {
+              receiverData: receiverData,
+              availableWithdrawals: receiverData?.availableWithdrawals,
+              isLoading: isCheckingData
+            })}
+            <ReceiverDashboard 
+              incomingTransactions={receiverData?.availableWithdrawals || []}
+              isLoading={isCheckingData}
+            />
+          </>
         )}
         
         {activeFilter === "all" && (
@@ -213,20 +220,18 @@ function DynamicDashboard({ userRole, effectiveWalletAddress, onRoleChange }: Dy
             )}
 
             {/* Claimable Escrows Section */}
-            {receiverData?.availableWithdrawals?.length > 0 && (
-              <div>
-                <h3 className="text-lg font-medium text-white mb-3 flex items-center">
-                  <span className="w-1.5 h-1.5 bg-green-400 rounded-full mr-2"></span>
-                  Available to Claim ({receiverData.availableWithdrawals.length})
-                </h3>
-                <div className="bg-white/5 rounded-lg p-4">
-                  <ReceiverDashboard 
-                    incomingTransactions={receiverData?.availableWithdrawals || []}
-                    isLoading={isCheckingData}
-                  />
-                </div>
+            <div>
+              <h3 className="text-lg font-medium text-white mb-3 flex items-center">
+                <span className="w-1.5 h-1.5 bg-green-400 rounded-full mr-2"></span>
+                Available to Claim ({receiverData?.availableWithdrawals?.length || 0})
+              </h3>
+              <div className="bg-white/5 rounded-lg p-4">
+                <ReceiverDashboard 
+                  incomingTransactions={receiverData?.availableWithdrawals || []}
+                  isLoading={isCheckingData}
+                />
               </div>
-            )}
+            </div>
 
             {/* No data message */}
             {allEscrows.length === 0 && (

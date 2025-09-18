@@ -82,6 +82,7 @@ contract Escrow is ReentrancyGuard, Ownable, Pausable {
     event EscrowCreated(
         bytes32 indexed escrowId,
         address indexed sender,
+        address tokenAddress,
         uint256 totalAmount,
         uint256 createdAt,
         address[] receivers,
@@ -247,10 +248,8 @@ contract Escrow is ReentrancyGuard, Ownable, Pausable {
                 }
             }
             
-            // Validate vesting duration
-            if (_vestingDuration > 10 * 365 * 24 * 60 * 60) {
-                revert("Vesting duration too long");
-            }
+            // Validate vesting duration - No maximum limit
+            // Vesting duration can be any length
         } else if (_vestingStartTime > 0) {
             // If only start time provided without duration, revert
             revert("Vesting duration must be provided if start time is set");
@@ -301,6 +300,7 @@ contract Escrow is ReentrancyGuard, Ownable, Pausable {
         emit EscrowCreated(
             escrowId,
             msg.sender,
+            _tokenAddress,
             totalAmount,
             block.timestamp,
             _receivers,
@@ -490,9 +490,8 @@ contract Escrow is ReentrancyGuard, Ownable, Pausable {
         if (_newVestingStartTime > block.timestamp + 365 * 24 * 60 * 60) {
             revert("New vesting start time too far in the future");
         }
-        if (_newVestingDuration > 10 * 365 * 24 * 60 * 60) {
-            revert("New vesting duration too long");
-        }
+        // No maximum limit for new vesting duration
+        // Vesting duration can be any length
         
         // Calculate total new allocation
         uint256 totalNewAllocation = 0;

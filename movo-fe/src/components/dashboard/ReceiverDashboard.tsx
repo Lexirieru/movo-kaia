@@ -18,6 +18,7 @@ import {
   fetchReceiverDashboardData,
   getReceiverTransactionStats,
 } from "@/app/api/api";
+import { getTokenType, getTokenIcon, formatTokenAmount } from "@/lib/tokenMapping";
 
 interface ReceiverDashboardProps {
   onDropdownOpen?: () => void;
@@ -48,29 +49,48 @@ export default function ReceiverDashboard({
 
   // Use data from props if available, otherwise fetch from API
   useEffect(() => {
+    console.log("🔄 ReceiverDashboard useEffect triggered:", {
+      propIncomingTransactions: propIncomingTransactions,
+      propIncomingTransactionsLength: propIncomingTransactions?.length,
+      currentWalletAddress: currentWalletAddress,
+      user: user?._id
+    });
+    
     if (propIncomingTransactions && propIncomingTransactions.length > 0) {
       // Use data from parent dashboard
       console.log("🔄 Using data from parent dashboard:", propIncomingTransactions);
       
       // Map onchain data to IncomingTransaction interface
       const mappedTransactions: IncomingTransaction[] = propIncomingTransactions
-        .map((withdrawal: any) => ({
-          receiverWalletAddress: currentWalletAddress || "",
-          receiverId: user?._id || "",
-          totalAmount: withdrawal.totalAmount?.toString() || "0",
-          availableAmount: withdrawal.availableAmount?.toString() || "0",
-          originCurrency: withdrawal.originCurrency || "USDC",
-          senderWalletAddress: withdrawal.senderWalletAddress || "",
-          senderName: withdrawal.senderName || "Unknown Sender",
-          createdAt: withdrawal.createdAt ? new Date(withdrawal.createdAt) : new Date(),
-          // Additional onchain metadata
-          escrowId: withdrawal.escrowId,
-          transactionHash: withdrawal.transactionHash,
-          blockNumber: withdrawal.blockNumber,
-          allocatedAmount: withdrawal.allocatedAmount,
-          withdrawnAmount: withdrawal.withdrawnAmount,
-          hasWithdrawn: withdrawal.hasWithdrawn || false,
-        }))
+        .map((withdrawal: any) => {
+          console.log("🔍 Mapping withdrawal data:", withdrawal);
+          
+          // Determine token type from tokenAddress
+          const tokenType = getTokenType(withdrawal.tokenAddress);
+          const tokenIcon = getTokenIcon(tokenType);
+          
+          return {
+            receiverWalletAddress: currentWalletAddress || "",
+            receiverId: user?._id || "",
+            totalAmount: withdrawal.allocatedAmount?.toString() || "0",
+            availableAmount: withdrawal.availableAmount?.toString() || "0",
+            originCurrency: tokenType,
+            senderWalletAddress: withdrawal.senderWalletAddress || withdrawal.sender || "",
+            senderName: withdrawal.senderName || "Unknown Sender",
+            createdAt: withdrawal.createdAt ? new Date(withdrawal.createdAt) : new Date(),
+            // Additional onchain metadata
+            escrowId: withdrawal.escrowId,
+            transactionHash: withdrawal.transactionHash,
+            blockNumber: withdrawal.blockNumber,
+            allocatedAmount: withdrawal.allocatedAmount,
+            withdrawnAmount: withdrawal.withdrawnAmount,
+            hasWithdrawn: withdrawal.hasWithdrawn || false,
+            // Token metadata
+            tokenAddress: withdrawal.tokenAddress,
+            tokenType: tokenType,
+            tokenIcon: tokenIcon,
+          };
+        })
         .filter((transaction) => parseFloat(transaction.availableAmount) > 0);
 
       console.log("✅ Mapped incoming transactions from props:", mappedTransactions);
@@ -91,6 +111,11 @@ export default function ReceiverDashboard({
             setIsLoadingStats(false);
           });
       }
+    } else if (propIncomingTransactions && propIncomingTransactions.length === 0) {
+      // Handle empty data case
+      console.log("🔄 Empty data received from parent dashboard");
+      setIncomingTransactions([]);
+      setHasFetched(true);
     } else if (!propIncomingTransactions && !propIsLoading && currentWalletAddress && !hasFetched) {
       // Fallback to API fetch if no props provided
       const fetchIncomingTransactions = async () => {
@@ -111,23 +136,33 @@ export default function ReceiverDashboard({
 
           // Map onchain data to IncomingTransaction interface
           const mappedTransactions: IncomingTransaction[] = withdrawals
-            .map((withdrawal: any) => ({
-              receiverWalletAddress: currentWalletAddress,
-              receiverId: user?._id || "",
-              totalAmount: withdrawal.totalAmount?.toString() || "0",
-              availableAmount: withdrawal.availableAmount?.toString() || "0",
-              originCurrency: withdrawal.originCurrency || "USDC",
-              senderWalletAddress: withdrawal.senderWalletAddress || "",
-              senderName: withdrawal.senderName || "Unknown Sender",
-              createdAt: withdrawal.createdAt ? new Date(withdrawal.createdAt) : new Date(),
-              // Additional onchain metadata
-              escrowId: withdrawal.escrowId,
-              transactionHash: withdrawal.transactionHash,
-              blockNumber: withdrawal.blockNumber,
-              allocatedAmount: withdrawal.allocatedAmount,
-              withdrawnAmount: withdrawal.withdrawnAmount,
-              hasWithdrawn: withdrawal.hasWithdrawn || false,
-            }))
+            .map((withdrawal: any) => {
+              // Determine token type from tokenAddress
+              const tokenType = getTokenType(withdrawal.tokenAddress);
+              const tokenIcon = getTokenIcon(tokenType);
+              
+              return {
+                receiverWalletAddress: currentWalletAddress,
+                receiverId: user?._id || "",
+                totalAmount: withdrawal.totalAmount?.toString() || "0",
+                availableAmount: withdrawal.availableAmount?.toString() || "0",
+                originCurrency: tokenType,
+                senderWalletAddress: withdrawal.senderWalletAddress || "",
+                senderName: withdrawal.senderName || "Unknown Sender",
+                createdAt: withdrawal.createdAt ? new Date(withdrawal.createdAt) : new Date(),
+                // Additional onchain metadata
+                escrowId: withdrawal.escrowId,
+                transactionHash: withdrawal.transactionHash,
+                blockNumber: withdrawal.blockNumber,
+                allocatedAmount: withdrawal.allocatedAmount,
+                withdrawnAmount: withdrawal.withdrawnAmount,
+                hasWithdrawn: withdrawal.hasWithdrawn || false,
+                // Token metadata
+                tokenAddress: withdrawal.tokenAddress,
+                tokenType: tokenType,
+                tokenIcon: tokenIcon,
+              };
+            })
             .filter((transaction) => parseFloat(transaction.availableAmount) > 0);
 
           console.log("✅ Mapped incoming transactions from API:", mappedTransactions);
@@ -332,11 +367,13 @@ export default function ReceiverDashboard({
     currentWalletAddress,
     incomingTransactionsLength: incomingTransactions.length,
     propIsLoading,
-    propIncomingTransactionsLength: propIncomingTransactions?.length || 0
+    propIncomingTransactionsLength: propIncomingTransactions?.length || 0,
+    propIncomingTransactions: propIncomingTransactions,
+    filteredTransactionsLength: filteredTransactions.length
   });
 
   // Show loading if parent is loading or if we're still fetching data
-  if (propIsLoading || (!propIncomingTransactions && (loading || !hasFetched))) {
+  if (propIsLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-black flex items-center justify-center">
         <div className="text-center">
@@ -505,10 +542,20 @@ export default function ReceiverDashboard({
                       onChange={() => handleSelectTransaction(index)}
                       className="w-4 h-4 text-green-600 bg-white/10 border-white/20 rounded focus:ring-green-500 focus:ring-2"
                     />
-                    <div className="w-8 h-8 bg-gradient-to-r from-green-400 to-emerald-500 rounded-full flex items-center justify-center">
-                      <span className="text-white text-sm font-bold">
-                        {transaction.originCurrency.charAt(0)}
-                      </span>
+                    <div className="w-8 h-8 rounded-full flex items-center justify-center overflow-hidden">
+                      {transaction.tokenIcon ? (
+                        <img 
+                          src={transaction.tokenIcon} 
+                          alt={transaction.originCurrency}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full bg-gradient-to-r from-green-400 to-emerald-500 flex items-center justify-center">
+                          <span className="text-white text-sm font-bold">
+                            {transaction.originCurrency.charAt(0)}
+                          </span>
+                        </div>
+                      )}
                     </div>
                     <div>
                       <div className="text-white font-medium">

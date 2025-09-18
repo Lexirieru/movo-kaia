@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import { useWalletClientHook } from "@/lib/useWalletClient";
 import { useWallet } from "@/lib/walletContext";
-import { loadSpecifiedGroup } from "@/app/api/api";
+import { getEscrowDetails } from "@/app/api/api";
 import {
   topUpFunds,
   checkTokenBalance,
@@ -19,24 +19,25 @@ import {
   approveTokens,
 } from "@/lib/smartContract";
 import { formatTokenAmount, parseTokenAmount } from "@/lib/smartContract";
+import { getEscrowAddress } from "@/lib/contractConfig";
 import { useAuth } from "@/lib/userContext";
 
 interface TopupFundModalProps {
   isOpen: boolean;
   onClose: () => void;
-  groupId: string;
+  escrowId: string;
 }
 
 export default function TopupFundModal({
   isOpen,
   onClose,
-  groupId,
+  escrowId,
 }: TopupFundModalProps) {
   const { user } = useAuth();
 
   const walletClient = useWalletClientHook();
   const { isConnected, address } = useWallet();
-  const [groupData, setGroupData] = useState<any>(null);
+  const [escrowData, setEscrowData] = useState<any>(null);
   const [topupAmount, setTopupAmount] = useState<string>("");
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingData, setIsLoadingData] = useState(false);
@@ -46,65 +47,196 @@ export default function TopupFundModal({
   } | null>(null);
   const [tokenBalance, setTokenBalance] = useState<string>("0");
   const [tokenAllowance, setTokenAllowance] = useState<string>("0");
+  const [escrowContractAddress, setEscrowContractAddress] = useState<string>("");
+  const [isApproved, setIsApproved] = useState(false);
+  const [showSuccessPopup, setShowSuccessPopup] = useState(false);
+  const [tokenType, setTokenType] = useState<"USDC" | "USDT" | "IDRX">("USDC");
 
   useEffect(() => {
-    if (isOpen && groupId && user?._id) {
+    if (isOpen && escrowId) {
       const fetchData = async () => {
         setIsLoadingData(true);
         try {
-          const groupResult = await loadSpecifiedGroup(user._id, groupId);
-          if (groupResult) {
-            setGroupData(groupResult);
+          // Load escrow details from the API
+          const escrowResult = await getEscrowDetails(escrowId);
+          if (escrowResult) {
+            setEscrowData(escrowResult);
+            // Determine token type based on contractId
+            const contractId = escrowResult.contractId_;
+            if (contractId && contractId.includes("IDRX")) {
+              setTokenType("IDRX");
+            } else if (contractId && contractId.includes("USDT")) {
+              setTokenType("USDT");
+            } else {
+              setTokenType("USDC");
+            }
           } else {
-            setGroupData(null);
+            setEscrowData(null);
           }
         } catch (error) {
-          console.error("Error loading group data:", error);
+          console.error("Error loading escrow data:", error);
           setMessage({
             type: "error",
-            text: "Failed to load group data. Please try again.",
+            text: "Failed to load escrow data. Please try again.",
           });
-          setGroupData(null);
+          setEscrowData(null);
         } finally {
           setIsLoadingData(false);
         }
       };
       fetchData();
     }
-  }, [isOpen, groupId, user?._id]);
+  }, [isOpen, escrowId]);
 
-  // Check token balance and allowance when group data changes
+  // Check token balance and allowance when escrow data changes
   useEffect(() => {
-    if (isConnected && address && groupData && groupData.escrowId) {
+    if (isConnected && address && escrowData && escrowData.escrowId) {
       checkTokenInfo();
     }
-  }, [isConnected, address, groupData]);
+  }, [isConnected, address, escrowData]);
+
+  // Check approval status when topup amount changes
+  useEffect(() => {
+    if (isConnected && address && escrowData && escrowData.escrowId && topupAmount) {
+      const checkApprovalStatus = async () => {
+        try {
+          const parsedAmount = parseTokenAmount(
+            topupAmount,
+            tokenType === "USDC" || tokenType === "USDT" ? 6 : 2,
+          );
+          const allowance = await checkTokenAllowance(
+            tokenType,
+            address!,
+            escrowData.escrowId,
+          );
+          setIsApproved(allowance >= parsedAmount);
+        } catch (error) {
+          console.error("Error checking approval status:", error);
+        }
+      };
+      checkApprovalStatus();
+    }
+  }, [topupAmount, isConnected, address, escrowData, tokenType]);
 
   const checkTokenInfo = async () => {
-    if (!groupData || !groupData.escrowId) return;
+    if (!escrowData || !escrowData.escrowId) return;
 
     try {
+      // Get escrow contract address based on token type
+      const escrowAddress = getEscrowAddress(tokenType);
+      setEscrowContractAddress(escrowAddress);
+
       const balance = await checkTokenBalance(
-        groupData.originCurrency,
+        tokenType,
         address!,
       );
       const allowance = await checkTokenAllowance(
-        groupData.originCurrency,
+        tokenType,
         address!,
-        groupData.escrowId,
+        escrowData.escrowId,
       );
 
       setTokenBalance(
-        formatTokenAmount(balance, groupData.originCurrency === "USDC" || groupData.originCurrency === "USDT" ? 6 : 2),
+        formatTokenAmount(balance, tokenType === "USDC" || tokenType === "USDT" ? 6 : 2),
       );
       setTokenAllowance(
         formatTokenAmount(
           allowance,
-          groupData.originCurrency === "USDC" || groupData.originCurrency === "USDT" ? 6 : 2,
+          tokenType === "USDC" || tokenType === "USDT" ? 6 : 2,
         ),
       );
+
+      // Check if already approved
+      const parsedAmount = parseTokenAmount(
+        topupAmount || "0",
+        tokenType === "USDC" || tokenType === "USDT" ? 6 : 2,
+      );
+      setIsApproved(allowance >= parsedAmount);
     } catch (error) {
       console.error("Error checking token info:", error);
+    }
+  };
+
+  const handleApprove = async () => {
+    if (!walletClient) {
+      setMessage({
+        type: "error",
+        text: "Wallet client not ready. Please try reconnecting your wallet.",
+      });
+      return;
+    }
+
+    if (!isConnected || !address) {
+      setMessage({ type: "error", text: "Please connect your wallet first." });
+      return;
+    }
+
+    if (!topupAmount.trim() || parseFloat(topupAmount) <= 0) {
+      setMessage({
+        type: "error",
+        text: "Please enter a valid amount greater than 0.",
+      });
+      return;
+    }
+
+    if (!escrowData || !escrowData.escrowId) {
+      setMessage({
+        type: "error",
+        text: "Escrow data not found. Please try again.",
+      });
+      return;
+    }
+
+    setIsLoading(true);
+    setMessage(null);
+
+    try {
+      const parsedAmount = parseTokenAmount(
+        topupAmount,
+        tokenType === "USDC" || tokenType === "USDT" ? 6 : 2,
+      );
+
+      // Check if user has enough balance
+      const userBalance = await checkTokenBalance(
+        tokenType,
+        address,
+      );
+      if (userBalance < parsedAmount) {
+        throw new Error(
+          `Insufficient balance. You have ${formatTokenAmount(userBalance, tokenType === "USDC" || tokenType === "USDT" ? 6 : 2)} ${tokenType}`,
+        );
+      }
+
+      // Approve tokens
+      const approvalSuccess = await approveTokens(
+        walletClient,
+        tokenType,
+        escrowData.escrowId,
+        parsedAmount,
+      );
+
+      if (approvalSuccess) {
+        setMessage({
+          type: "success",
+          text: `Approval successful! You can now proceed with topup.`,
+        });
+        setIsApproved(true);
+        // Refresh token info
+        checkTokenInfo();
+      } else {
+        throw new Error("Failed to approve tokens for escrow contract");
+      }
+    } catch (error) {
+      console.error("Error approving tokens:", error);
+      setMessage({
+        type: "error",
+        text:
+          error instanceof Error
+            ? error.message
+            : "Failed to approve tokens. Please try again.",
+      });
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -130,7 +262,7 @@ export default function TopupFundModal({
       return;
     }
 
-    if (!groupData || !groupData.escrowId) {
+    if (!escrowData || !escrowData.escrowId) {
       setMessage({
         type: "error",
         text: "Escrow data not found. Please try again.",
@@ -138,11 +270,10 @@ export default function TopupFundModal({
       return;
     }
 
-    // Validate escrow address format
-    if (!groupData.escrowId) {
+    if (!isApproved) {
       setMessage({
         type: "error",
-        text: "Invalid escrow contract address. Please check your escrow setup.",
+        text: "Please approve tokens first before proceeding with topup.",
       });
       return;
     }
@@ -153,73 +284,44 @@ export default function TopupFundModal({
     try {
       const parsedAmount = parseTokenAmount(
         topupAmount,
-        groupData.originCurrency === "USDC" || groupData.originCurrency === "USDT" ? 6 : 2,
+        tokenType === "USDC" || tokenType === "USDT" ? 6 : 2,
       );
-
-      // Check if user has enough balance
-      const userBalance = await checkTokenBalance(
-        groupData.originCurrency,
-        address,
-      );
-      if (userBalance < parsedAmount) {
-        throw new Error(
-          `Insufficient balance. You have ${formatTokenAmount(userBalance, groupData.originCurrency === "USDC" || groupData.originCurrency === "USDT" ? 6 : 2)} ${groupData.originCurrency}`,
-        );
-      }
-      console.log(groupData.escrowId);
-
-      const currentAllowance = await checkTokenAllowance(
-        groupData.originCurrency,
-        address,
-        groupData.escrowId,
-        // groupData.escrowId,
-      );
-      console.log(currentAllowance);
-      console.log(parsedAmount);
-
-      if (currentAllowance <= parsedAmount) {
-        // Need to approve first
-        const approvalSuccess = await approveTokens(
-          walletClient,
-          groupData.originCurrency,
-          groupData.escrowId,
-          parsedAmount,
-        );
-        console.log(approvalSuccess);
-
-        if (!approvalSuccess) {
-          throw new Error("Failed to approve tokens for escrow contract");
-        }
-      }
 
       // Perform topup
       const result = await topUpFunds(
         walletClient,
-        groupData.escrowId,
+        escrowData.escrowId,
         parsedAmount,
-        groupData.originCurrency,
+        tokenType,
       );
 
       if (result.success) {
-        setMessage({
-          type: "success",
-          text: `Topup successful! Added ${topupAmount} ${groupData.originCurrency} to escrow. Transaction: ${result.transactionHash}`,
-        });
-
+        // Show custom success popup instead of browser alert
+        setShowSuccessPopup(true);
+        
         // Reset form and refresh data
         setTopupAmount("");
+        setIsApproved(false);
+        
+        // Refresh the escrow data after successful topup
+        const refreshData = async () => {
+          const escrowResult = await getEscrowDetails(escrowId);
+          if (escrowResult) {
+            setEscrowData(escrowResult);
+          }
+        };
+        refreshData();
+        checkTokenInfo();
+        
+        // Close the modal immediately after showing success popup
         setTimeout(() => {
-          // Refresh the group data after successful topup
-          const refreshData = async () => {
-            if (!user) return;
-            const groupResult = await loadSpecifiedGroup(user._id, groupId);
-            if (groupResult) {
-              setGroupData(groupResult);
-            }
-          };
-          refreshData();
-          checkTokenInfo();
-        }, 2000);
+          onClose();
+        }, 100);
+        
+        // Auto close success popup after 3 seconds
+        setTimeout(() => {
+          setShowSuccessPopup(false);
+        }, 3000);
       } else {
         throw new Error(result.error || "Failed to topup funds");
       }
@@ -240,7 +342,10 @@ export default function TopupFundModal({
   const handleClose = () => {
     setTopupAmount("");
     setMessage(null);
-    setGroupData(null);
+    setEscrowData(null);
+    setIsApproved(false);
+    setEscrowContractAddress("");
+    setShowSuccessPopup(false);
     onClose();
   };
 
@@ -253,11 +358,8 @@ export default function TopupFundModal({
         <div className="flex justify-between items-center p-6 border-b border-white/10">
           <div>
             <h3 className="text-white text-xl font-semibold">
-              Topup Fund to Escrow
+              Topup Fund
             </h3>
-            <p className="text-white/60 text-sm mt-1">
-              Add funds to your escrow for receiver withdrawals
-            </p>
           </div>
           <button
             onClick={handleClose}
@@ -273,69 +375,16 @@ export default function TopupFundModal({
             {isLoadingData && (
               <div className="flex items-center justify-center py-8">
                 <RefreshCw className="w-6 h-6 animate-spin text-cyan-400 mr-2" />
-                <span className="text-white/60">Loading group data...</span>
+                <span className="text-white/60">Loading escrow data...</span>
               </div>
             )}
 
-            {/* No Escrow Message */}
-            {!isLoadingData &&
-              (!groupData ||
-                !groupData.escrowId ||
-                !groupData.escrowId ||
-                "") && (
-                <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-6">
-                  <div className="flex items-center space-x-3 text-yellow-300 mb-4">
-                    <AlertCircle className="w-5 h-5" />
-                    <span className="font-medium">
-                      {!groupData
-                        ? "No group data found"
-                        : !groupData.escrowId
-                          ? "No escrow found for this group"
-                          : "Invalid escrow contract address"}
-                    </span>
-                  </div>
-                  <div className="p-4 bg-white/5 rounded-lg">
-                    {!groupData || !groupData.escrowId ? (
-                      <>
-                        <p className="text-white/60 text-sm mb-3">
-                          To enable topup functionality, you need to:
-                        </p>
-                        <ol className="text-white/60 text-sm space-y-2 list-decimal list-inside">
-                          <li>Enter the group by clicking on the group row</li>
-                          <li>Click "Create Escrow Streams" button</li>
-                          <li>Fill in receiver details and create escrow</li>
-                          <li>Come back here to topup funds</li>
-                        </ol>
-                      </>
-                    ) : (
-                      <>
-                        <p className="text-white/60 text-sm mb-3">
-                          The escrow contract address is invalid:
-                        </p>
-                        <p className="text-white/80 text-xs font-mono bg-white/10 p-2 rounded break-all">
-                          {groupData.escrowId}
-                        </p>
-                        <p className="text-white/60 text-sm mt-3">
-                          Please contact support or recreate the escrow with a
-                          valid contract address.
-                        </p>
-                      </>
-                    )}
-                  </div>
-                  <button
-                    onClick={onClose}
-                    className="mt-4 px-4 py-2 bg-yellow-500/20 border border-yellow-500/30 rounded-lg text-yellow-300 hover:bg-yellow-500/30 transition-colors"
-                  >
-                    Close
-                  </button>
-                </div>
-              )}
 
             {/* Escrow Information - Only show if escrow exists */}
             {!isLoadingData &&
-              groupData &&
-              groupData.escrowId &&
-              groupData.escrowId && (
+              escrowData &&
+              escrowData.escrowId &&
+              escrowData.escrowId && (
                 <div className="bg-gradient-to-r from-cyan-500/10 to-blue-500/10 border border-cyan-500/20 rounded-xl p-4">
                   <h4 className="text-cyan-300 font-medium mb-3">
                     Escrow Details
@@ -344,25 +393,31 @@ export default function TopupFundModal({
                     <div>
                       <p className="text-white/60">Token Type</p>
                       <p className="text-white font-medium">
-                        {groupData.originCurrency}
+                        {tokenType}
                       </p>
                     </div>
                     <div>
                       <p className="text-white/60">Escrow ID</p>
                       <p className="text-white font-mono text-xs break-all">
-                        {groupData.escrowId}
+                        {escrowData.escrowId}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-white/60">Escrow Contract</p>
+                      <p className="text-white font-mono text-xs break-all">
+                        {escrowContractAddress}
                       </p>
                     </div>
                     <div>
                       <p className="text-white/60">Total Allocated</p>
                       <p className="text-white font-medium">
-                        {groupData.totalAmount} {groupData.originCurrency}
+                        {escrowData.totalAmount} {tokenType}
                       </p>
                     </div>
                     <div>
                       <p className="text-white/60">Receivers</p>
                       <p className="text-white font-medium">
-                        {groupData.Receivers?.length || 0} addresses
+                        {escrowData.recipients?.length || 0} addresses
                       </p>
                     </div>
                   </div>
@@ -371,12 +426,12 @@ export default function TopupFundModal({
 
             {/* Topup Amount Input - Only show if escrow exists */}
             {!isLoadingData &&
-              groupData &&
-              groupData.escrowId &&
-              groupData.escrowId && (
+              escrowData &&
+              escrowData.escrowId &&
+              escrowData.escrowId && (
                 <div>
                   <label className="block text-white/80 text-sm font-medium mb-2">
-                    Topup Amount ({groupData?.originCurrency || "Token"})
+                    Topup Amount ({tokenType || "Token"})
                   </label>
                   <div className="relative">
                     <input
@@ -390,7 +445,7 @@ export default function TopupFundModal({
                       disabled={isLoading}
                     />
                     <div className="absolute right-3 top-1/2 transform -translate-y-1/2 text-white/60 text-sm">
-                      {groupData?.originCurrency || "Token"}
+                      {tokenType || "Token"}
                     </div>
                   </div>
                 </div>
@@ -400,19 +455,19 @@ export default function TopupFundModal({
             {!isLoadingData &&
               isConnected &&
               address &&
-              groupData &&
-              groupData.escrowId && (
+              escrowData &&
+              escrowData.escrowId && (
                 <div className="grid grid-cols-2 gap-4 p-4 bg-white/5 border border-white/10 rounded-lg">
                   <div>
                     <p className="text-white/60 text-xs mb-1">Your Balance</p>
                     <p className="text-white font-medium">
-                      {tokenBalance} {groupData.originCurrency}
+                      {tokenBalance} {tokenType}
                     </p>
                   </div>
                   <div>
                     <p className="text-white/60 text-xs mb-1">Allowance</p>
                     <p className="text-white font-medium">
-                      {tokenAllowance} {groupData.originCurrency}
+                      {tokenAllowance} {tokenType}
                     </p>
                   </div>
                 </div>
@@ -441,58 +496,158 @@ export default function TopupFundModal({
               </div>
             )}
 
-            {/* Submit Button - Only show if escrow exists */}
+            {/* Action Buttons - Only show if escrow exists */}
             {!isLoadingData &&
-              groupData &&
-              groupData.escrowId &&
-              groupData.escrowId && (
-                <button
-                  type="button"
-                  onClick={handleTopup}
-                  disabled={
-                    isLoading ||
-                    !walletClient ||
-                    !groupData ||
-                    !groupData.escrowId
-                  }
-                  className={`w-full py-4 px-6 rounded-xl font-medium transition-all duration-300 flex items-center justify-center space-x-2 ${
-                    isLoading ||
-                    !walletClient ||
-                    !groupData ||
-                    !groupData.escrowId
-                      ? "bg-gray-500/50 text-gray-300 cursor-not-allowed"
-                      : "bg-gradient-to-r from-blue-500 to-cyan-600 text-white hover:shadow-lg hover:shadow-blue-500/25 hover:scale-105"
-                  }`}
-                >
-                  {isLoading ? (
-                    <>
-                      <RefreshCw className="w-5 h-5 animate-spin" />
-                      <span>Processing Topup...</span>
-                    </>
-                  ) : !walletClient ? (
-                    <>
-                      <AlertCircle className="w-5 h-5" />
-                      <span>
-                        Wallet client not ready. Please try reconnecting your
-                        wallet.
-                      </span>
-                    </>
-                  ) : !groupData || !groupData.escrowId ? (
-                    <>
-                      <AlertCircle className="w-5 h-5" />
-                      <span>Loading escrow data...</span>
-                    </>
-                  ) : (
-                    <>
-                      <DollarSign className="w-5 h-5" />
-                      <span>Topup Fund to Escrow</span>
-                    </>
+              escrowData &&
+              escrowData.escrowId &&
+              escrowData.escrowId && (
+                <div className="space-y-3">
+                  {/* Approve Button */}
+                  {!isApproved && (
+                    <button
+                      type="button"
+                      onClick={handleApprove}
+                      disabled={
+                        isLoading ||
+                        !walletClient ||
+                        !escrowData ||
+                        !escrowData.escrowId ||
+                        !topupAmount ||
+                        parseFloat(topupAmount) <= 0
+                      }
+                      className={`w-full py-4 px-6 rounded-xl font-medium transition-all duration-300 flex items-center justify-center space-x-2 ${
+                        isLoading ||
+                        !walletClient ||
+                        !escrowData ||
+                        !escrowData.escrowId ||
+                        !topupAmount ||
+                        parseFloat(topupAmount) <= 0
+                          ? "bg-gray-500/50 text-gray-300 cursor-not-allowed"
+                          : "bg-gradient-to-r from-orange-500 to-red-600 text-white hover:shadow-lg hover:shadow-orange-500/25 hover:scale-105"
+                      }`}
+                    >
+                      {isLoading ? (
+                        <>
+                          <RefreshCw className="w-5 h-5 animate-spin" />
+                          <span>Approving Tokens...</span>
+                        </>
+                      ) : !walletClient ? (
+                        <>
+                          <AlertCircle className="w-5 h-5" />
+                          <span>
+                            Wallet client not ready. Please try reconnecting your
+                            wallet.
+                          </span>
+                        </>
+                      ) : !escrowData || !escrowData.escrowId ? (
+                        <>
+                          <AlertCircle className="w-5 h-5" />
+                          <span>Loading escrow data...</span>
+                        </>
+                      ) : !topupAmount || parseFloat(topupAmount) <= 0 ? (
+                        <>
+                          <AlertCircle className="w-5 h-5" />
+                          <span>Please enter a valid amount</span>
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle className="w-5 h-5" />
+                          <span>Approve {topupAmount} {tokenType}</span>
+                        </>
+                      )}
+                    </button>
                   )}
-                </button>
+
+                  {/* Topup Button */}
+                  {isApproved && (
+                    <button
+                      type="button"
+                      onClick={handleTopup}
+                      disabled={
+                        isLoading ||
+                        !walletClient ||
+                        !escrowData ||
+                        !escrowData.escrowId
+                      }
+                      className={`w-full py-4 px-6 rounded-xl font-medium transition-all duration-300 flex items-center justify-center space-x-2 ${
+                        isLoading ||
+                        !walletClient ||
+                        !escrowData ||
+                        !escrowData.escrowId
+                          ? "bg-gray-500/50 text-gray-300 cursor-not-allowed"
+                          : "bg-gradient-to-r from-blue-500 to-cyan-600 text-white hover:shadow-lg hover:shadow-blue-500/25 hover:scale-105"
+                      }`}
+                    >
+                      {isLoading ? (
+                        <>
+                          <RefreshCw className="w-5 h-5 animate-spin" />
+                          <span>Processing Topup...</span>
+                        </>
+                      ) : !walletClient ? (
+                        <>
+                          <AlertCircle className="w-5 h-5" />
+                          <span>
+                            Wallet client not ready. Please try reconnecting your
+                            wallet.
+                          </span>
+                        </>
+                      ) : !escrowData || !escrowData.escrowId ? (
+                        <>
+                          <AlertCircle className="w-5 h-5" />
+                          <span>Loading escrow data...</span>
+                        </>
+                      ) : (
+                        <>
+                          <DollarSign className="w-5 h-5" />
+                          <span>Topup {topupAmount} {tokenType} to Escrow</span>
+                        </>
+                      )}
+                    </button>
+                  )}
+
+                  {/* Status Message */}
+                  {isApproved && (
+                    <div className="bg-green-500/20 border border-green-500/30 rounded-lg p-3">
+                      <div className="flex items-center space-x-2 text-green-300">
+                        <CheckCircle className="w-4 h-4" />
+                        <span className="text-sm font-medium">
+                          Tokens approved! You can now proceed with topup.
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </div>
               )}
           </div>
         </div>
       </div>
+
+      {/* Custom Success Popup */}
+      {showSuccessPopup && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
+          <div className="bg-gradient-to-r from-green-500/20 to-emerald-500/20 border border-green-500/30 rounded-2xl p-8 max-w-md w-full text-center animate-pulse">
+            <div className="flex flex-col items-center space-y-4">
+              <div className="w-16 h-16 bg-green-500/20 rounded-full flex items-center justify-center">
+                <CheckCircle className="w-8 h-8 text-green-400" />
+              </div>
+              <div>
+                <h3 className="text-white text-xl font-semibold mb-2">
+                  Topup Successfully!
+                </h3>
+                <p className="text-white/80 text-sm">
+                  {topupAmount} {tokenType} has been added to your escrow
+                </p>
+              </div>
+              <button
+                onClick={() => setShowSuccessPopup(false)}
+                className="px-6 py-2 bg-green-500/20 border border-green-500/30 rounded-lg text-green-300 hover:bg-green-500/30 transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
