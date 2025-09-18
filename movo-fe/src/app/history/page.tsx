@@ -21,14 +21,18 @@ function HistoryContent() {
   useEffect(() => {
     if (loading) return;
 
+    // If view parameter is explicitly set, use it
     if (viewParam === "receiver") {
       router.replace("/history/receiver");
     } else if (viewParam === "sender") {
       router.replace("/history/sender");
-    } else if (currentRole === "receiver") {
-      router.replace("/history/receiver");
-    } else if (currentRole === "sender" || currentRole === "none") {
-      router.replace("/history/sender");
+    } else {
+      // Otherwise, redirect based on current role
+      if (currentRole === "receiver") {
+        router.replace("/history/receiver");
+      } else {
+        router.replace("/history/sender");
+      }
     }
   }, [loading, viewParam, currentRole, router]);
 

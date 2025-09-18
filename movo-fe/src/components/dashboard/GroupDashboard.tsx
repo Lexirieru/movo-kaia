@@ -54,10 +54,8 @@ export default function GroupDashboard({ onRoleChange }: GroupDashboardProps) {
 
     const fetchEscrows = async () => {
       try {
-        console.log("🔍 Fetching escrows from indexer...");
-        const escrowsData: EscrowData[] = await fetchEscrowsFromIndexer(
-          "0xfa128bbd1846c19025c7428aee403fc06f0a9e38",
-        );
+        console.log("🔍 Fetching escrows from indexer for address:", address);
+        const escrowsData: EscrowData[] = await fetchEscrowsFromIndexer(address);
         console.log("📊 Received escrows data:", escrowsData);
         setEscrows(escrowsData);
         setHasFetched(true);

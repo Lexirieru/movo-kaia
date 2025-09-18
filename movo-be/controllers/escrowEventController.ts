@@ -67,20 +67,81 @@ export async function saveEscrowEvent(req: Request, res: Response) {
       return;
     }
 
-    // Get user information
-    const user = await UserModel.findOne({
+    // Get user information - try multiple approaches
+    let user = await UserModel.findOne({
       "WalletAddresses.walletAddress": new RegExp(
         `^${initiatorWalletAddress}$`,
         "i"
       ),
     });
 
+    // If not found with regex, try exact match
     if (!user) {
-      res.status(404).json({
-        message: "User not found for the provided wallet address",
-        statusCode: 404,
+      user = await UserModel.findOne({
+        "WalletAddresses.walletAddress": initiatorWalletAddress,
       });
-      return;
+    }
+
+    // If still not found, try case-insensitive exact match
+    if (!user) {
+      user = await UserModel.findOne({
+        "WalletAddresses.walletAddress": { $regex: `^${initiatorWalletAddress}$`, $options: 'i' },
+      });
+    }
+
+    if (!user) {
+      console.log(`❌ User not found for wallet address: ${initiatorWalletAddress}`);
+      console.log(`🔍 Searching for users with similar addresses...`);
+      
+      // Debug: Find users with similar addresses
+      const similarUsers = await UserModel.find({
+        "WalletAddresses.walletAddress": { $exists: true }
+      }).limit(5);
+      
+      console.log(`📋 Found ${similarUsers.length} users with wallet addresses:`);
+      similarUsers.forEach(u => {
+        u.WalletAddresses?.forEach((wallet: any) => {
+          console.log(`  - ${wallet.walletAddress} (role: ${wallet.role})`);
+        });
+      });
+
+      // Instead of failing, create a temporary user record for tracking
+      console.log(`⚠️ Creating temporary user record for wallet: ${initiatorWalletAddress}`);
+      
+      // Create a temporary user record for this wallet address
+      const tempUser = new UserModel({
+        idrxId: `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        email: `temp_${initiatorWalletAddress}@temp.movo.com`,
+        hashedPassword: 'temp_password',
+        fullname: 'Temporary User',
+        idFile: 'temp_id_file',
+        apiKey: `temp_api_${Date.now()}`,
+        secretKey: `temp_secret_${Date.now()}`,
+        WalletAddresses: [{
+          walletAddress: initiatorWalletAddress,
+          role: 'sender',
+          availableBalance: 0
+        }]
+      });
+
+      try {
+        await tempUser.save();
+        console.log(`✅ Temporary user created: ${tempUser._id}`);
+        user = tempUser;
+      } catch (tempUserError) {
+        console.error(`❌ Failed to create temporary user:`, tempUserError);
+        
+        res.status(404).json({
+          message: "User not found for the provided wallet address",
+          statusCode: 404,
+          debug: {
+            searchedAddress: initiatorWalletAddress,
+            addressLength: initiatorWalletAddress.length,
+            addressFormat: initiatorWalletAddress.startsWith('0x') ? 'valid' : 'invalid'
+          }
+        });
+        return;
+      }
     }
 
     // Create event record

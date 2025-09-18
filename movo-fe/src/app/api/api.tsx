@@ -3,7 +3,40 @@ import axios, { AxiosError } from "axios";
 interface ErrorResponse {
   message?: string;
 }
-const GOLDSKY_API_URL = process.env.NEXT_PUBLIC_GOLDSKY_API_URL!;
+const GOLDSKY_API_URL = process.env.NEXT_PUBLIC_GOLDSKY_API_URL || "https://api.goldsky.com/api/public/project_cmfnod75l9o1r01xy81lz52hq/subgraphs/test-escrow-movo/1.0.0/gn";
+
+console.log("🔧 Goldsky API URL:", GOLDSKY_API_URL);
+
+// Test function to verify Goldsky API is working
+export const testGoldskyConnection = async () => {
+  try {
+    console.log("🧪 Testing Goldsky connection...");
+    
+    const testQuery = `
+      query TestQuery {
+        escrowCreateds(first: 1) {
+          escrowId
+          sender
+        }
+      }
+    `;
+    
+    const response = await axios.post(GOLDSKY_API_URL, {
+      query: testQuery,
+    }, {
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      timeout: 10000,
+    });
+    
+    console.log("✅ Goldsky connection test successful:", response.data);
+    return { success: true, data: response.data };
+  } catch (error) {
+    console.error("❌ Goldsky connection test failed:", error);
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+  }
+};
 
 export const api = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_BASE_URL,
@@ -506,6 +539,12 @@ export const checkWalletAddressesRegistration = async (
 export const fetchEscrowsFromIndexer = async (userAddress: string) => {
   try {
     console.log("🔍 Fetching escrows for address:", userAddress);
+    console.log("🔍 Address validation:", {
+      address: userAddress,
+      length: userAddress?.length,
+      startsWith0x: userAddress?.startsWith('0x'),
+      isLowerCase: userAddress === userAddress?.toLowerCase()
+    });
 
     const query = `
       query GetUserEscrows($userAddress: String!) {
@@ -515,45 +554,78 @@ export const fetchEscrowsFromIndexer = async (userAddress: string) => {
           receivers
           totalAmount
           amounts
+          block_number
+          timestamp_
+          transactionHash_
         }
       }
     `;
+    
     console.log("📤 Sending GraphQL query to Goldsky...");
+    console.log("📤 Query variables:", { userAddress });
+    
     const response = await axios.post(GOLDSKY_API_URL, {
       query,
-      variables: { userAddress },
+      variables: { userAddress: userAddress.toLowerCase() }, // Ensure lowercase
+    }, {
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      timeout: 10000, // 10 second timeout
     });
 
     console.log("📥 Goldsky API response:", response.data);
+    console.log("📥 Response status:", response.status);
+
+    // Check for GraphQL errors
+    if (response.data.errors) {
+      console.error("❌ GraphQL errors:", response.data.errors);
+      return [];
+    }
 
     // Transform the data to match our expected format
     const escrows = response.data.data.escrowCreateds || [];
     console.log("📊 Raw escrows from indexer:", escrows);
+    console.log("📊 Number of escrows found:", escrows.length);
 
     if (escrows.length === 0) {
       console.log("⚠️ No escrows found for address:", userAddress);
       return [];
     }
 
-    const transformedEscrows = escrows.map((escrow: any, index: number) => ({
-      id: `escrow-${index}`, // Generate ID since not available in indexer
-      escrowId: escrow.escrowId,
-      sender: escrow.sender,
-      totalAmount: escrow.totalAmount || "0",
-      createdAt: Math.floor(Date.now() / 1000).toString(), // Current timestamp as fallback
-      receivers: escrow.receivers
-        ? escrow.receivers.split(",").map((addr: string) => addr.trim())
-        : [],
-      amounts: escrow.amounts
-        ? escrow.amounts.split(",").map((amount: string) => amount.trim())
-        : [],
-      tokenAddress: "0xf9D5a610fe990bfCdF7dd9FD64bdfe89D6D1eb4c", // Default to USDC for now
-    }));
+    const transformedEscrows = escrows.map((escrow: any, index: number) => {
+      // Parse timestamp if available
+      const createdAt = escrow.timestamp_ 
+        ? new Date(parseInt(escrow.timestamp_) * 1000).toISOString()
+        : new Date().toISOString();
+
+      return {
+        id: `escrow-${index}`, // Generate ID since not available in indexer
+        escrowId: escrow.escrowId,
+        sender: escrow.sender,
+        totalAmount: escrow.totalAmount || "0",
+        createdAt: createdAt,
+        receivers: escrow.receivers
+          ? escrow.receivers.split(",").map((addr: string) => addr.trim())
+          : [],
+        amounts: escrow.amounts
+          ? escrow.amounts.split(",").map((amount: string) => amount.trim())
+          : [],
+        tokenAddress: "0xf9D5a610fe990bfCdF7dd9FD64bdfe89D6D1eb4c", // Default to USDC for now
+        blockNumber: escrow.block_number,
+        transactionHash: escrow.transactionHash_,
+      };
+    });
 
     console.log("✅ Transformed escrows:", transformedEscrows);
     return transformedEscrows;
   } catch (error) {
     console.error("❌ Error fetching escrows from indexer:", error);
+    console.error("❌ Error details:", {
+      message: error instanceof Error ? error.message : 'Unknown error',
+      userAddress,
+      GOLDSKY_API_URL
+    });
     return [];
   }
 };
@@ -577,27 +649,75 @@ const fetchReceiverEscrowsFromIndexer = async (receiverAddress: string) => {
         }
       }
     `;
+    
+    console.log("🔍 Receiver query variables:", { 
+      receiverAddress: receiverAddress.toLowerCase(),
+      originalAddress: receiverAddress 
+    });
 
     const response = await axios.post(GOLDSKY_API_URL, {
       query,
       variables: {
         receiverAddress: receiverAddress.toLowerCase(),
       },
+    }, {
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      timeout: 10000,
     });
 
     console.log("📥 Goldsky receiver API response:", response.data);
+    console.log("📥 Receiver response status:", response.status);
+
+    // Check for GraphQL errors
+    if (response.data.errors) {
+      console.error("❌ GraphQL errors in receiver query:", response.data.errors);
+      return [];
+    }
 
     // Transform the data to match our expected format
     const escrows = response.data.data.escrowCreateds || [];
     console.log("📊 Raw receiver escrows from indexer:", escrows);
+    console.log("📊 Number of receiver escrows found:", escrows.length);
 
     if (escrows.length === 0) {
       console.log("⚠️ No receiver escrows found for address:", receiverAddress);
+      console.log("🔍 Trying to debug - let's check all escrows...");
+      
+      // Debug: Get all escrows to see what's available
+      const debugQuery = `
+        query DebugAllEscrows {
+          escrowCreateds(first: 5) {
+            escrowId
+            sender
+            receivers
+            amounts
+          }
+        }
+      `;
+      
+      try {
+        const debugResponse = await axios.post(GOLDSKY_API_URL, {
+          query: debugQuery,
+        });
+        console.log("🔍 Debug - Sample escrows:", debugResponse.data.data.escrowCreateds);
+      } catch (debugError) {
+        console.error("❌ Debug query failed:", debugError);
+      }
+      
       return [];
     }
 
     const transformedEscrows = escrows
       .map((escrow: any, index: number) => {
+        console.log(`🔍 Processing escrow ${index}:`, {
+          escrowId: escrow.escrowId,
+          receivers: escrow.receivers,
+          amounts: escrow.amounts,
+          receiverAddress: receiverAddress.toLowerCase()
+        });
+
         // Parse receivers and amounts arrays
         const receivers = escrow.receivers
           ? escrow.receivers
@@ -608,16 +728,26 @@ const fetchReceiverEscrowsFromIndexer = async (receiverAddress: string) => {
           ? escrow.amounts.split(",").map((amount: string) => amount.trim())
           : [];
 
+        console.log(`🔍 Parsed data:`, {
+          receivers,
+          amounts,
+          receiverAddress: receiverAddress.toLowerCase()
+        });
+
         // Find the index of the current receiver
         const receiverIndex = receivers.findIndex(
           (addr: string) => addr === receiverAddress.toLowerCase(),
         );
+
+        console.log(`🔍 Receiver index:`, receiverIndex);
 
         // Get the amount allocated to this specific receiver
         const receiverAmount =
           receiverIndex >= 0 && amounts[receiverIndex]
             ? amounts[receiverIndex]
             : "0";
+
+        console.log(`🔍 Receiver amount:`, receiverAmount);
 
         // Convert timestamp to proper date
         const createdDate = escrow.timestamp_
@@ -659,6 +789,9 @@ const fetchReceiverEscrowsFromIndexer = async (receiverAddress: string) => {
       .filter((escrow: any) => parseFloat(escrow.availableAmount) > 0); // Only return escrows with available amounts
 
     console.log("✅ Transformed receiver escrows:", transformedEscrows);
+    console.log("✅ Number of transformed escrows:", transformedEscrows.length);
+    console.log("✅ Available amounts:", transformedEscrows.map((e: any) => e.availableAmount));
+    
     return transformedEscrows;
   } catch (error) {
     console.error("❌ Error fetching receiver escrows from indexer:", error);
@@ -693,7 +826,7 @@ const fetchReceiverWithdrawEvents = async (receiverAddress: string) => {
 
     console.log("📥 Goldsky withdraw events response:", response.data);
 
-    const withdrawEvents = response.data.data.withdrawFundss || [];
+    const withdrawEvents = response.data.data.withdrawFunds || [];
     console.log("📊 Raw withdraw events:", withdrawEvents);
 
     return withdrawEvents.map((withdraw: any) => ({
@@ -724,6 +857,8 @@ const calculateAvailableWithdrawals = async (receiverAddress: string) => {
     ]);
 
     console.log("📊 Processing escrow vs withdraw data...");
+    console.log("📊 Escrow events:", escrowEvents.length);
+    console.log("📊 Withdraw events:", withdrawEvents.length);
 
     // Create a map of withdrawn amounts per escrow
     const withdrawnAmounts: { [escrowId: string]: number } = {};
@@ -734,12 +869,21 @@ const calculateAvailableWithdrawals = async (receiverAddress: string) => {
       withdrawnAmounts[withdraw.escrowId] += parseFloat(withdraw.amount || "0");
     });
 
+    console.log("📊 Withdrawn amounts map:", withdrawnAmounts);
+
     // Calculate available amounts
     const availableWithdrawals = escrowEvents
       .map((escrow: any) => {
         const allocatedAmount = parseFloat(escrow.availableAmount || "0");
         const withdrawnAmount = withdrawnAmounts[escrow.escrowId] || 0;
         const availableAmount = allocatedAmount - withdrawnAmount;
+
+        console.log(`🔍 Processing withdrawal for escrow ${escrow.escrowId}:`, {
+          allocatedAmount,
+          withdrawnAmount,
+          availableAmount,
+          availableAmountString: escrow.availableAmount
+        });
 
         return {
           ...escrow,
@@ -750,6 +894,9 @@ const calculateAvailableWithdrawals = async (receiverAddress: string) => {
         };
       })
       .filter((escrow: any) => parseFloat(escrow.availableAmount) > 0);
+
+    console.log("📊 Available withdrawals after filtering:", availableWithdrawals.length);
+    console.log("📊 Available withdrawals data:", availableWithdrawals);
 
     const totalAvailable = availableWithdrawals.reduce(
       (sum: number, withdrawal: any) =>

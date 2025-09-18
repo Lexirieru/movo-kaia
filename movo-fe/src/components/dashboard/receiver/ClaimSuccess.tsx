@@ -3,10 +3,17 @@ import { CheckCircle, Wallet, DollarSign, ArrowRight } from "lucide-react";
 interface ClaimSuccessProps {
   amount: number;
   claimType: "crypto" | "fiat";
+  tokenType?: string;
   onClose?: () => void;
 }
 
-export default function ClaimSuccess({ amount, claimType, onClose }: ClaimSuccessProps) {
+export default function ClaimSuccess({ amount, claimType, tokenType = "USDC", onClose }: ClaimSuccessProps) {
+  // Helper function to format amount based on token type
+  const formatTokenAmount = (amount: number, tokenType: string) => {
+    // USDC and USDT use 6 decimals, IDRX uses 2 decimals
+    const decimals = tokenType === "IDRX" ? 2 : 6;
+    return amount.toFixed(decimals === 6 ? 4 : 2); // Show 4 decimal places for USDC/USDT, 2 for IDRX
+  };
   const fiatAmount = amount * 15850; // Mock exchange rate
 
   return (
@@ -30,7 +37,7 @@ export default function ClaimSuccess({ amount, claimType, onClose }: ClaimSucces
                 </div>
                 <div>
                   <div className="text-2xl font-bold text-white">
-                    {amount.toFixed(4)} USDC
+                    {formatTokenAmount(amount, tokenType)} {tokenType}
                   </div>
                   <div className="text-white/60 text-sm">
                     ≈ Rp {fiatAmount.toLocaleString('id-ID')}
@@ -53,7 +60,7 @@ export default function ClaimSuccess({ amount, claimType, onClose }: ClaimSucces
                     Rp {fiatAmount.toLocaleString('id-ID')}
                   </div>
                   <div className="text-white/60 text-sm">
-                    From {amount.toFixed(4)} USDC
+                    From {formatTokenAmount(amount, tokenType)} {tokenType}
                   </div>
                 </div>
               </div>

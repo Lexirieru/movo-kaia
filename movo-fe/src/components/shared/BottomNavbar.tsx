@@ -14,16 +14,12 @@ export default function BottomNavbar() {
   };
 
   const handleDashboardClick = () => {
-    // Navigate based on user role
-    if (currentRole === "receiver") {
-      router.push("/dashboard?view=receiver");
-    } else {
-      router.push("/dashboard?view=sender");
-    }
+    // Navigate to unified dashboard
+    router.push("/dashboard");
   };
 
   const handleHistoryClick = () => {
-    // Navigate based on user role
+    // Navigate based on user role for history
     if (currentRole === "receiver") {
       router.push("/history?view=receiver");
     } else {

@@ -394,9 +394,16 @@ export const saveEscrowEventWithContext = async (
 ) => {
   try {
     console.log(`📝 Saving ${eventType} event for wallet: ${walletAddress}`);
+    console.log(`🔍 Wallet address validation:`, {
+      original: walletAddress,
+      length: walletAddress.length,
+      startsWith0x: walletAddress.startsWith('0x'),
+      isValidFormat: /^0x[a-fA-F0-9]{40}$/.test(walletAddress)
+    });
 
     // Validate wallet address format
     const validatedWalletAddress = validateAddress(walletAddress);
+    console.log(`✅ Validated wallet address: ${validatedWalletAddress}`);
 
     // Resolve groupId if userId is available
     let groupId = "unknown";
@@ -639,6 +646,7 @@ export const createEscrowOnchain = async (
   walletClient: any,
   tokenType: "USDC" | "USDT" | "IDRX",
   escrowData: EscrowData,
+  userId?: string,
 ): Promise<CreateEscrowResult> => {
   try {
     // Verify network first
@@ -924,6 +932,7 @@ export const createEscrowOnchain = async (
     };
 
     console.log(`💾 Saving ESCROW_CREATED event with enhanced data`);
+    console.log(`🔍 Wallet address being sent: ${walletClient.account.address}`);
 
     const eventResult = await saveEscrowEventWithContext(
       "ESCROW_CREATED",
@@ -934,6 +943,7 @@ export const createEscrowOnchain = async (
       eventData,
       receipt,
       contract.address,
+      userId, // Pass userId if available
     );
 
     if (!eventResult.success) {

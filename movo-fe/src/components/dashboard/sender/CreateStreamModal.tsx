@@ -252,6 +252,7 @@ export default function CreateStreamModal({
               ? (formData.vestingUnit === "weeks" ? formData.vestingDuration * 7 : formData.vestingDuration)
               : 0,
           },
+          user?._id, // Pass userId to help backend find user
         );
 
         // ini escrowIdnya harusnya ngambil dari BE

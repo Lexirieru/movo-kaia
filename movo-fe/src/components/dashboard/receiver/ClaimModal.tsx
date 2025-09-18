@@ -21,6 +21,15 @@ export default function ClaimModal({
   selectedStreams,
   totalAmount,
 }: ClaimModalProps) {
+  // Helper function to format amount based on token type
+  const formatTokenAmount = (amount: number, tokenType: string) => {
+    // USDC and USDT use 6 decimals, IDRX uses 2 decimals
+    const decimals = tokenType === "IDRX" ? 2 : 6;
+    return amount.toFixed(decimals === 6 ? 4 : 2); // Show 4 decimal places for USDC/USDT, 2 for IDRX
+  };
+
+  // Get token type from selected streams (assuming all selected streams have the same token type)
+  const tokenType = selectedStreams.length > 0 ? selectedStreams[0].originCurrency : "USDC";
   const [step, setStep] = useState<"claim" | "selectBank" | "success">("claim");
   const [claimType, setClaimType] = useState<"crypto" | "fiat">("crypto");
   const [isProcessing, setIsProcessing] = useState(false);
@@ -174,6 +183,7 @@ export default function ClaimModal({
           <ClaimSuccess
             amount={netAmount}
             claimType={claimType}
+            tokenType={tokenType}
             onClose={handleModalClose}
           />
         ) : (
@@ -234,10 +244,10 @@ export default function ClaimModal({
                     <div className="mt-2 flex items-center text-red-400 text-sm">
                       <Info className="w-4 h-4 mr-2" />
                       {claimAmount < MIN_PAYOUT_AMOUNT
-                        ? `Minimum payout amount is ${MIN_PAYOUT_AMOUNT} USDC`
+                        ? `Minimum payout amount is ${MIN_PAYOUT_AMOUNT} ${tokenType}`
                         : claimAmount > totalAmount
-                          ? `Amount exceeds your available balance of ${totalAmount.toFixed(4)} USDC`
-                          : `Maximum payout amount is ${MAX_PAYOUT_AMOUNT} USDC`}
+                          ? `Amount exceeds your available balance of ${formatTokenAmount(totalAmount, tokenType)} ${tokenType}`
+                          : `Maximum payout amount is ${MAX_PAYOUT_AMOUNT} ${tokenType}`}
                     </div>
                   )}
 
@@ -246,7 +256,7 @@ export default function ClaimModal({
                     onClick={() => setCustomAmount(maxClaimAmount.toString())}
                     className="text-blue-400 hover:text-blue-300 text-sm font-medium transition-colors"
                   >
-                    Max: {maxClaimAmount.toFixed(4)} USDC
+                    Max: {formatTokenAmount(maxClaimAmount, tokenType)} {tokenType}
                   </button>
 
                   <div className="flex items-center justify-between mb-4">
@@ -277,7 +287,7 @@ export default function ClaimModal({
                     <div>
                       <div className="text-2xl font-bold text-white">
                         {claimType === "crypto"
-                          ? `${netAmount.toFixed(4)} USDC`
+                          ? `${formatTokenAmount(netAmount, tokenType)} ${tokenType}`
                           : `${
                               rate
                                 ? `Rp ${(claimAmount * rate).toLocaleString("id-ID")}`
@@ -291,7 +301,7 @@ export default function ClaimModal({
                                 ? `≈ Rp ${(netAmount * rate).toLocaleString("id-ID")}`
                                 : "Loading..."
                             }`
-                          : `From ${claimAmount.toFixed(4)} USDC`}
+                          : `From ${formatTokenAmount(claimAmount, tokenType)} ${tokenType}`}
                       </div>
                     </div>
                   </div>

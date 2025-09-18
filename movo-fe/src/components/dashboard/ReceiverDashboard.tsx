@@ -21,12 +21,16 @@ import {
 
 interface ReceiverDashboardProps {
   onDropdownOpen?: () => void;
+  incomingTransactions?: any[];
+  isLoading?: boolean;
 }
 
 type SortOption = "newest" | "oldest" | "highest" | "lowest";
 
 export default function ReceiverDashboard({
   onDropdownOpen,
+  incomingTransactions: propIncomingTransactions,
+  isLoading: propIsLoading = false,
 }: ReceiverDashboardProps) {
   const { user, loading, currentWalletAddress } = useAuth();
   const [searchTerm, setSearchTerm] = useState("");
@@ -42,75 +46,115 @@ export default function ReceiverDashboard({
   const [receiverStats, setReceiverStats] = useState<any>(null);
   const [isLoadingStats, setIsLoadingStats] = useState(false);
 
+  // Use data from props if available, otherwise fetch from API
   useEffect(() => {
-    if (loading || !user?._id || !currentWalletAddress || hasFetched) return;
+    if (propIncomingTransactions && propIncomingTransactions.length > 0) {
+      // Use data from parent dashboard
+      console.log("🔄 Using data from parent dashboard:", propIncomingTransactions);
+      
+      // Map onchain data to IncomingTransaction interface
+      const mappedTransactions: IncomingTransaction[] = propIncomingTransactions
+        .map((withdrawal: any) => ({
+          receiverWalletAddress: currentWalletAddress || "",
+          receiverId: user?._id || "",
+          totalAmount: withdrawal.totalAmount?.toString() || "0",
+          availableAmount: withdrawal.availableAmount?.toString() || "0",
+          originCurrency: withdrawal.originCurrency || "USDC",
+          senderWalletAddress: withdrawal.senderWalletAddress || "",
+          senderName: withdrawal.senderName || "Unknown Sender",
+          createdAt: withdrawal.createdAt ? new Date(withdrawal.createdAt) : new Date(),
+          // Additional onchain metadata
+          escrowId: withdrawal.escrowId,
+          transactionHash: withdrawal.transactionHash,
+          blockNumber: withdrawal.blockNumber,
+          allocatedAmount: withdrawal.allocatedAmount,
+          withdrawnAmount: withdrawal.withdrawnAmount,
+          hasWithdrawn: withdrawal.hasWithdrawn || false,
+        }))
+        .filter((transaction) => parseFloat(transaction.availableAmount) > 0);
 
-    const fetchIncomingTransactions = async () => {
-      try {
-        console.log(
-          "🔄 Fetching receiver dashboard data for:",
-          currentWalletAddress,
-        );
+      console.log("✅ Mapped incoming transactions from props:", mappedTransactions);
+      setIncomingTransactions(mappedTransactions);
+      setHasFetched(true);
+      
+      // Fetch additional statistics
+      if (currentWalletAddress) {
+        setIsLoadingStats(true);
+        getReceiverTransactionStats(currentWalletAddress)
+          .then(stats => {
+            setReceiverStats(stats);
+          })
+          .catch(statsErr => {
+            console.error("❌ Failed to fetch receiver stats:", statsErr);
+          })
+          .finally(() => {
+            setIsLoadingStats(false);
+          });
+      }
+    } else if (!propIncomingTransactions && !propIsLoading && currentWalletAddress && !hasFetched) {
+      // Fallback to API fetch if no props provided
+      const fetchIncomingTransactions = async () => {
+        try {
+          console.log("🔄 Fallback: Fetching receiver dashboard data for:", currentWalletAddress);
 
-        const dashboardData = await fetchReceiverDashboardData(
-          "0x95fa3a2376e47025e58133a5e2bf112d1bbbbc70",
-        );
-        console.log(dashboardData);
-        if (!dashboardData) {
-          console.warn("Receiver dashboard data not found.");
+          const dashboardData = await fetchReceiverDashboardData(currentWalletAddress);
+          console.log(dashboardData);
+          if (!dashboardData) {
+            console.warn("Receiver dashboard data not found.");
+            setIncomingTransactions([]);
+            setHasFetched(true);
+            return;
+          }
+
+          // Use availableWithdrawals from onchain data as the main source
+          const withdrawals = dashboardData.availableWithdrawals || [];
+
+          // Map onchain data to IncomingTransaction interface
+          const mappedTransactions: IncomingTransaction[] = withdrawals
+            .map((withdrawal: any) => ({
+              receiverWalletAddress: currentWalletAddress,
+              receiverId: user?._id || "",
+              totalAmount: withdrawal.totalAmount?.toString() || "0",
+              availableAmount: withdrawal.availableAmount?.toString() || "0",
+              originCurrency: withdrawal.originCurrency || "USDC",
+              senderWalletAddress: withdrawal.senderWalletAddress || "",
+              senderName: withdrawal.senderName || "Unknown Sender",
+              createdAt: withdrawal.createdAt ? new Date(withdrawal.createdAt) : new Date(),
+              // Additional onchain metadata
+              escrowId: withdrawal.escrowId,
+              transactionHash: withdrawal.transactionHash,
+              blockNumber: withdrawal.blockNumber,
+              allocatedAmount: withdrawal.allocatedAmount,
+              withdrawnAmount: withdrawal.withdrawnAmount,
+              hasWithdrawn: withdrawal.hasWithdrawn || false,
+            }))
+            .filter((transaction) => parseFloat(transaction.availableAmount) > 0);
+
+          console.log("✅ Mapped incoming transactions from API:", mappedTransactions);
+          setIncomingTransactions(mappedTransactions);
+
+          // Fetch additional statistics
+          setIsLoadingStats(true);
+          try {
+            const stats = await getReceiverTransactionStats(currentWalletAddress);
+            setReceiverStats(stats);
+          } catch (statsErr) {
+            console.error("❌ Failed to fetch receiver stats:", statsErr);
+          } finally {
+            setIsLoadingStats(false);
+          }
+
+          setHasFetched(true);
+        } catch (err) {
+          console.error("❌ Failed to fetch receiver dashboard data:", err);
           setIncomingTransactions([]);
           setHasFetched(true);
-          return;
         }
+      };
 
-        // Use availableWithdrawals from onchain data as the main source
-        const withdrawals = dashboardData.availableWithdrawals || [];
-
-        // Map onchain data to IncomingTransaction interface
-        const mappedTransactions: IncomingTransaction[] = withdrawals
-          .map((withdrawal: any) => ({
-            receiverWalletAddress: currentWalletAddress,
-            receiverId: user._id,
-            totalAmount: withdrawal.totalAmount?.toString() || "0",
-            availableAmount: withdrawal.availableAmount?.toString() || "0",
-            originCurrency: withdrawal.originCurrency || "USDC",
-            senderWalletAddress: withdrawal.senderWalletAddress || "",
-            senderName: withdrawal.senderName || "Unknown Sender",
-            createdAt: withdrawal.createdAt || new Date(),
-            // Additional onchain metadata
-            escrowId: withdrawal.escrowId,
-            transactionHash: withdrawal.transactionHash,
-            blockNumber: withdrawal.blockNumber,
-            allocatedAmount: withdrawal.allocatedAmount,
-            withdrawnAmount: withdrawal.withdrawnAmount,
-            hasWithdrawn: withdrawal.hasWithdrawn || false,
-          }))
-          .filter((transaction) => parseFloat(transaction.availableAmount) > 0);
-
-        console.log("✅ Mapped incoming transactions:", mappedTransactions);
-        setIncomingTransactions(mappedTransactions);
-
-        // Fetch additional statistics
-        setIsLoadingStats(true);
-        try {
-          const stats = await getReceiverTransactionStats(currentWalletAddress);
-          setReceiverStats(stats);
-        } catch (statsErr) {
-          console.error("❌ Failed to fetch receiver stats:", statsErr);
-        } finally {
-          setIsLoadingStats(false);
-        }
-
-        setHasFetched(true);
-      } catch (err) {
-        console.error("❌ Failed to fetch receiver dashboard data:", err);
-        setIncomingTransactions([]);
-        setHasFetched(true);
-      }
-    };
-
-    fetchIncomingTransactions();
-  }, [loading, user, currentWalletAddress, hasFetched]);
+      fetchIncomingTransactions();
+    }
+  }, [propIncomingTransactions, propIsLoading, currentWalletAddress, user?._id, hasFetched]);
 
   // Reset hasFetched ketika currentWalletAddress berubah
   useEffect(() => {
@@ -165,8 +209,25 @@ export default function ReceiverDashboard({
     }),
   );
 
+  // Helper function to format amount based on token type
+  const formatTokenAmount = (amount: string, tokenType: string) => {
+    const amountNumber = parseFloat(amount);
+    if (isNaN(amountNumber)) return "0.00";
+    
+    // USDC and USDT use 6 decimals, IDRX uses 2 decimals
+    const decimals = tokenType === "IDRX" ? 2 : 6;
+    const divisor = Math.pow(10, decimals);
+    const formattedAmount = amountNumber / divisor;
+    
+    return formattedAmount.toFixed(decimals === 6 ? 2 : 2); // Show 2 decimal places for display
+  };
+
   const totalAvailableAmount = incomingTransactions.reduce(
-    (sum, t) => sum + parseFloat(t.availableAmount),
+    (sum, t) => {
+      const decimals = t.originCurrency === "IDRX" ? 2 : 6;
+      const divisor = Math.pow(10, decimals);
+      return sum + (parseFloat(t.availableAmount) / divisor);
+    },
     0,
   );
 
@@ -206,7 +267,11 @@ export default function ReceiverDashboard({
     (acc, transactionKey) => {
       const index = parseInt(transactionKey);
       const transaction = filteredTransactions[index];
-      return transaction ? acc + parseFloat(transaction.availableAmount) : acc;
+      if (!transaction) return acc;
+      
+      const decimals = transaction.originCurrency === "IDRX" ? 2 : 6;
+      const divisor = Math.pow(10, decimals);
+      return acc + (parseFloat(transaction.availableAmount) / divisor);
     },
     0,
   );
@@ -260,12 +325,26 @@ export default function ReceiverDashboard({
     return <SortAsc className="w-4 h-4 text-white/60" />;
   };
 
-  if (loading || !hasFetched) {
+  // Debug loading state
+  console.log("🔍 ReceiverDashboard loading state:", {
+    loading,
+    hasFetched,
+    currentWalletAddress,
+    incomingTransactionsLength: incomingTransactions.length,
+    propIsLoading,
+    propIncomingTransactionsLength: propIncomingTransactions?.length || 0
+  });
+
+  // Show loading if parent is loading or if we're still fetching data
+  if (propIsLoading || (!propIncomingTransactions && (loading || !hasFetched))) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-black flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-cyan-400 mx-auto mb-4"></div>
           <p className="text-gray-400">Loading incoming transactions...</p>
+          <p className="text-gray-500 text-sm mt-2">
+            Loading: {propIsLoading || loading ? 'Yes' : 'No'} | Fetched: {hasFetched ? 'Yes' : 'No'}
+          </p>
         </div>
       </div>
     );
@@ -436,7 +515,7 @@ export default function ReceiverDashboard({
                         {transaction.senderName}
                       </div>
                       <div className="text-white/60 text-sm">
-                        ${parseFloat(transaction.availableAmount).toFixed(2)}{" "}
+                        ${formatTokenAmount(transaction.availableAmount, transaction.originCurrency)}{" "}
                         available
                       </div>
                     </div>
@@ -478,7 +557,7 @@ export default function ReceiverDashboard({
                   }}
                   className="w-full mt-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white py-2 rounded-lg text-sm font-medium hover:shadow-lg transition-all"
                 >
-                  Claim ${parseFloat(transaction.availableAmount).toFixed(2)}
+                  Claim ${formatTokenAmount(transaction.availableAmount, transaction.originCurrency)}
                 </button>
               </div>
             );
@@ -566,7 +645,7 @@ export default function ReceiverDashboard({
 
                       <td className="p-4">
                         <div className="text-white font-medium">
-                          ${parseFloat(transaction.availableAmount).toFixed(2)}
+                          ${formatTokenAmount(transaction.availableAmount, transaction.originCurrency)}
                         </div>
                       </td>
                       <td className="p-4">
@@ -637,7 +716,11 @@ export default function ReceiverDashboard({
               </div>
               <div className="text-white">
                 <span className="font-medium">${formattedSelectedAmount}</span>
-                <span className="text-white/60 ml-1">USDC</span>
+                <span className="text-white/60 ml-1">
+                  {selectedTransactionsData.length > 0 
+                    ? selectedTransactionsData[0].originCurrency 
+                    : "USD"}
+                </span>
               </div>
               <button
                 onClick={handleClaim}
