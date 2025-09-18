@@ -17,7 +17,6 @@ import MainLayout from "../layout/MainLayout";
 import {
   fetchReceiverDashboardData,
   getReceiverTransactionStats,
-  fetchOnchainReceiverDashboardData,
 } from "@/app/api/api";
 
 interface ReceiverDashboardProps {

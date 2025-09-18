@@ -502,6 +502,7 @@ export const checkWalletAddressesRegistration = async (
   }
 };
 
+// buat senderdashboard
 export const fetchEscrowsFromIndexer = async (userAddress: string) => {
   try {
     console.log("🔍 Fetching escrows for address:", userAddress);
@@ -557,9 +558,7 @@ export const fetchEscrowsFromIndexer = async (userAddress: string) => {
   }
 };
 
-export const fetchReceiverEscrowsFromIndexer = async (
-  receiverAddress: string,
-) => {
+const fetchReceiverEscrowsFromIndexer = async (receiverAddress: string) => {
   try {
     console.log("🔍 Fetching receiver escrows for address:", receiverAddress);
 
@@ -668,7 +667,7 @@ export const fetchReceiverEscrowsFromIndexer = async (
 };
 
 // Get withdraw events for a specific receiver from onchain data
-export const fetchReceiverWithdrawEvents = async (receiverAddress: string) => {
+const fetchReceiverWithdrawEvents = async (receiverAddress: string) => {
   try {
     console.log("💸 Fetching withdraw events for receiver:", receiverAddress);
 
@@ -714,9 +713,7 @@ export const fetchReceiverWithdrawEvents = async (receiverAddress: string) => {
 };
 
 // Calculate available withdrawals by comparing escrow created vs withdraw events
-export const calculateAvailableWithdrawals = async (
-  receiverAddress: string,
-) => {
+const calculateAvailableWithdrawals = async (receiverAddress: string) => {
   try {
     console.log("💰 Calculating available withdrawals for:", receiverAddress);
 
@@ -799,9 +796,7 @@ export const calculateAvailableWithdrawals = async (
 };
 
 // Get comprehensive receiver dashboard data from onchain sources only
-export const fetchOnchainReceiverDashboardData = async (
-  receiverAddress: string,
-) => {
+const fetchOnchainReceiverDashboardData = async (receiverAddress: string) => {
   try {
     console.log(
       "📋 Fetching comprehensive onchain receiver data for:",
@@ -845,48 +840,48 @@ export const fetchOnchainReceiverDashboardData = async (
   }
 };
 
-export const fetchEscrowDetailsFromIndexer = async (escrowId: string) => {
-  try {
-    const query = `
-      query GetEscrowDetails($escrowId: String!) {
-        escrowCreateds(where: { escrowId: $escrowId }) {
-          escrowId
-          sender
-          receivers
-          totalAmount
-          amounts
-        }
-      }
-    `;
+// export const fetchEscrowDetailsFromIndexer = async (escrowId: string) => {
+//   try {
+//     const query = `
+//       query GetEscrowDetails($escrowId: String!) {
+//         escrowCreateds(where: { escrowId: $escrowId }) {
+//           escrowId
+//           sender
+//           receivers
+//           totalAmount
+//           amounts
+//         }
+//       }
+//     `;
 
-    const response = await axios.post(GOLDSKY_API_URL, {
-      query,
-      variables: { escrowId },
-    });
+//     const response = await axios.post(GOLDSKY_API_URL, {
+//       query,
+//       variables: { escrowId },
+//     });
 
-    const escrow = response.data.data.escrowCreateds[0];
-    if (!escrow) return null;
+//     const escrow = response.data.data.escrowCreateds[0];
+//     if (!escrow) return null;
 
-    // Transform the data to match our expected format
-    return {
-      id: `escrow-${escrowId}`, // Generate ID since not available in indexer
-      escrowId: escrow.escrowId,
-      sender: escrow.sender,
-      totalAmount: escrow.totalAmount || "0",
-      createdAt: Math.floor(Date.now() / 1000).toString(), // Current timestamp as fallback
-      receivers: escrow.receivers
-        ? escrow.receivers.split(",").map((addr: string) => addr.trim())
-        : [],
-      amounts: escrow.amounts
-        ? escrow.amounts.split(",").map((amount: string) => amount.trim())
-        : [],
-      tokenAddress: "0xf9D5a610fe990bfCdF7dd9FD64bdfe89D6D1eb4c", // Default to USDC for now
-    };
-  } catch (error) {
-    console.error("Error fetching escrow details from indexer:", error);
-    return null;
-  }
-};
+//     // Transform the data to match our expected format
+//     return {
+//       id: `escrow-${escrowId}`, // Generate ID since not available in indexer
+//       escrowId: escrow.escrowId,
+//       sender: escrow.sender,
+//       totalAmount: escrow.totalAmount || "0",
+//       createdAt: Math.floor(Date.now() / 1000).toString(), // Current timestamp as fallback
+//       receivers: escrow.receivers
+//         ? escrow.receivers.split(",").map((addr: string) => addr.trim())
+//         : [],
+//       amounts: escrow.amounts
+//         ? escrow.amounts.split(",").map((amount: string) => amount.trim())
+//         : [],
+//       tokenAddress: "0xf9D5a610fe990bfCdF7dd9FD64bdfe89D6D1eb4c", // Default to USDC for now
+//     };
+//   } catch (error) {
+//     console.error("Error fetching escrow details from indexer:", error);
+//     return null;
+//   }
+// };
 
 // ============= ESCROW EVENT TRACKING API FUNCTIONS =============
 
@@ -970,47 +965,7 @@ export const getEscrowEventStatistics = async (
   }
 };
 
-// ============= LEGACY BACKEND FUNCTIONS (DEPRECATED) =============
-// These functions are kept for backward compatibility but should not be used
-// All receiver functionality now uses onchain data only
-
-export const getReceiverEscrowEvents_DEPRECATED = async (
-  walletAddress: string,
-): Promise<any> => {
-  console.warn(
-    "⚠️ Using deprecated backend API. Switch to onchain data fetching.",
-  );
-  try {
-    const response = await api.post("/getReceiverEscrowEvents", {
-      walletAddress,
-    });
-    return response.data;
-  } catch (error) {
-    console.error("❌ Error getting receiver escrow events:", error);
-    throw error;
-  }
-};
-
-export const getAvailableWithdrawals_DEPRECATED = async (
-  walletAddress: string,
-): Promise<any> => {
-  console.warn(
-    "⚠️ Using deprecated backend API. Switch to onchain data fetching.",
-  );
-  try {
-    const response = await api.post("/getAvailableWithdrawals", {
-      walletAddress,
-    });
-    return response.data;
-  } catch (error) {
-    console.error("❌ Error getting available withdrawals:", error);
-    throw error;
-  }
-};
-
-// ============= RECEIVER DASHBOARD API FUNCTIONS (ONCHAIN ONLY) =============
-
-// Get receiver transaction statistics from onchain data
+// buat receiverDashboard
 export const getReceiverTransactionStats = async (receiverAddress: string) => {
   try {
     const onchainData =
@@ -1123,7 +1078,7 @@ export const getEscrowDetails = async (escrowId: string) => {
   }
 };
 
-// Enhanced receiver dashboard data fetcher - now uses onchain data only
+// buat receiverDashboard
 export const fetchReceiverDashboardData = async (
   walletAddress: string,
 ): Promise<{
