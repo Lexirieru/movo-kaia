@@ -11,7 +11,12 @@ import EscrowList from "./EscrowList";
 import { Plus } from "lucide-react";
 import CreateStreamModal from "./sender/CreateStreamModal";
 import TopupFundModal from "./groups/TopupFundModal";
-import { loadAllGroup, addGroup, updateWalletAddressRole, fetchEscrowsFromIndexer } from "@/app/api/api";
+import {
+  loadAllGroup,
+  addGroup,
+  updateWalletAddressRole,
+  fetchEscrowsFromIndexer,
+} from "@/app/api/api";
 
 interface GroupDashboardProps {
   onRoleChange?: () => void;
@@ -42,15 +47,17 @@ export default function GroupDashboard({ onRoleChange }: GroupDashboardProps) {
 
   useEffect(() => {
     if (loading || !isConnected || !address || hasFetched) return;
-    
+
     console.log("🚀 Starting escrow fetch process...");
     console.log("📱 Connected wallet address:", address);
     console.log("🔗 Wallet connected:", isConnected);
-    
+
     const fetchEscrows = async () => {
       try {
         console.log("🔍 Fetching escrows from indexer...");
-        const escrowsData: EscrowData[] = await fetchEscrowsFromIndexer(address);
+        const escrowsData: EscrowData[] = await fetchEscrowsFromIndexer(
+          "0xfa128bbd1846c19025c7428aee403fc06f0a9e38",
+        );
         console.log("📊 Received escrows data:", escrowsData);
         setEscrows(escrowsData);
         setHasFetched(true);
@@ -164,7 +171,9 @@ export default function GroupDashboard({ onRoleChange }: GroupDashboardProps) {
           <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-4">
             <Plus className="w-8 h-8 text-white/40" />
           </div>
-          <h3 className="text-xl font-semibold text-white mb-2">Connect Your Wallet</h3>
+          <h3 className="text-xl font-semibold text-white mb-2">
+            Connect Your Wallet
+          </h3>
           <p className="text-white/60 mb-6">
             Please connect your wallet to view your escrows.
           </p>
