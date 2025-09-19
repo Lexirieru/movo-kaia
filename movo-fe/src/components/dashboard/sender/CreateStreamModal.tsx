@@ -529,7 +529,7 @@ export default function CreateStreamModal({
           </div>
         )}
 
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="flex-1 overflow-y-auto p-6 scrollbar-hide">
           <div className="space-y-6">
             {/* Token Selection - Hide for add receiver mode */}
             {!isAddReceiverMode && (
@@ -729,7 +729,7 @@ export default function CreateStreamModal({
                               ? "IDRX"
                               : formData.token || "Token"
                         })`}
-                        className="w-full p-2 bg-white/5 border border-white/10 rounded-lg text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-cyan-400/50 focus:border-cyan-400/50 text-sm"
+                        className="w-full p-2 bg-white/5 border border-white/10 rounded-lg text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-cyan-400/50 focus:border-cyan-400/50 text-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                       />
                     </div>
                     {!isAddReceiverMode && formData.receivers.length > 1 && (
