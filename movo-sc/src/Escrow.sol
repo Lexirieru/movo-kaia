@@ -693,7 +693,6 @@ contract Escrow is ReentrancyGuard, Ownable, Pausable {
         if (receiver.receiverAddress != msg.sender) revert("Not authorized receiver");
         if (!receiver.isActive) revert("Receiver is not active");
         if (_amount == 0) revert("Amount must be greater than 0");
-        if (_amount < 3 * 10**6) revert("Minimum withdrawal amount is 3 USDT");
         
         // Check vesting - VESTING IS MANDATORY
         (uint256 vestedAmount,) = calculateVestedAmount(_escrowId, msg.sender);

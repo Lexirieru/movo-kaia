@@ -34,18 +34,18 @@ contract DeployMockTokens is Script {
         vm.startBroadcast(deployerPrivateKey);
         
         // Deploy MockUSDC (6 decimals)
-        // MockUSDC mockUSDC = new MockUSDC();
+        MockUSDC mockUSDC = new MockUSDC();
         // vm.stopBroadcast();
         // logTokenDetails("MockUSDC", address(mockUSDC), mockUSDC.name(), mockUSDC.symbol(), mockUSDC.decimals(), mockUSDC.totalSupply(), "USDC (6 decimals)");
         
         // Deploy MockUSDT (6 decimals)
         MockUSDT mockUSDT = new MockUSDT();
-        vm.stopBroadcast();
-        logTokenDetails("MockUSDT", address(mockUSDT), mockUSDT.name(), mockUSDT.symbol(), mockUSDT.decimals(), mockUSDT.totalSupply(), "USDT (6 decimals)");
+        // vm.stopBroadcast();
+        // logTokenDetails("MockUSDT", address(mockUSDT), mockUSDT.name(), mockUSDT.symbol(), mockUSDT.decimals(), mockUSDT.totalSupply(), "USDT (6 decimals)");
         
         // Deploy MockIDRX (2 decimals)
-        // MockIDRX mockIDRX = new MockIDRX();
-        // vm.stopBroadcast();
+        MockIDRX mockIDRX = new MockIDRX();
+        vm.stopBroadcast();
         // logTokenDetails("MockIDRX", address(mockIDRX), mockIDRX.name(), mockIDRX.symbol(), mockIDRX.decimals(), mockIDRX.totalSupply(), "IDRX (2 decimals)");
     }
     
