@@ -854,6 +854,7 @@ export const checkWalletAddressesRegistration = async (
 };
 
 // buat senderdashboard
+// buat senderdashboard - UPDATED to combine responses from both API URLs
 export const fetchEscrowsFromIndexer = async (userAddress: string) => {
   try {
     const cacheKey = `sender_${userAddress.toLowerCase()}`;
@@ -870,20 +871,6 @@ export const fetchEscrowsFromIndexer = async (userAddress: string) => {
       isLowerCase: userAddress === userAddress?.toLowerCase(),
     });
 
-    // const query = `
-    //   query GetUserEscrows($userAddress: String!) {
-    //     escrowCreateds(where: { sender: $userAddress }) {
-    //       escrowId
-    //       sender
-    //       receivers
-    //       totalAmount
-    //       amounts
-    //       block_number
-    //       timestamp_
-    //       transactionHash_
-    //     }
-    //   }
-    // `;
     const query = `
       query GetUserEscrows($userAddress: String!) {
         escrowCreateds(
@@ -906,39 +893,137 @@ export const fetchEscrowsFromIndexer = async (userAddress: string) => {
       }
     `;
 
-    console.log("📤 Sending GraphQL query to Goldsky...");
+    console.log("📤 Sending GraphQL query to both Goldsky APIs...");
     console.log("📤 Query variables:", { userAddress });
 
-    const response = await axios.post(
-      process.env.NEXT_PUBLIC_GOLDSKY_ESCROW_IDRX_API_URL!,
-      {
-        query,
-        variables: { userAddress: userAddress.toLowerCase() }, // Ensure lowercase
-      },
-      {
-        headers: {
-          "Content-Type": "application/json",
-        },
-        timeout: 15000, // 15 second timeout for better reliability
-      },
-    );
+    // Fetch from both API URLs in parallel
+    const [responseIdrx, responseUsdc] = await Promise.all([
+      // IDRX API
+      axios
+        .post(
+          process.env.NEXT_PUBLIC_GOLDSKY_ESCROW_IDRX_API_URL!,
+          {
+            query,
+            variables: { userAddress: userAddress.toLowerCase() },
+          },
+          {
+            headers: {
+              "Content-Type": "application/json",
+            },
+            timeout: 15000,
+          },
+        )
+        .catch((error) => {
+          console.warn("⚠️ IDRX API request failed:", error.message);
+          return { data: { data: { escrowCreateds: [] }, errors: null } };
+        }),
 
-    console.log("📥 Goldsky API response:", response.data);
-    console.log("📥 Response status:", response.status);
+      // USDC/USDT API
+      axios
+        .post(
+          process.env.NEXT_PUBLIC_GOLDSKY_ESCROW_API_URL!,
+          {
+            query,
+            variables: { userAddress: userAddress.toLowerCase() },
+          },
+          {
+            headers: {
+              "Content-Type": "application/json",
+            },
+            timeout: 15000,
+          },
+        )
+        .catch((error) => {
+          console.warn("⚠️ USDC API request failed:", error.message);
+          return { data: { data: { escrowCreateds: [] }, errors: null } };
+        }),
+    ]);
 
-    // Check for GraphQL errors
-    if (response.data.errors) {
-      console.error("❌ GraphQL errors:", response.data.errors);
-      return [];
+    console.log("📥 IDRX API Response:", {
+      status: responseIdrx.status || "failed",
+      escrows: responseIdrx.data?.data?.escrowCreateds?.length || 0,
+      errors: responseIdrx.data?.errors || null,
+    });
+
+    console.log("📥 USDC API Response:", {
+      status: responseUsdc.status || "failed",
+      escrows: responseUsdc.data?.data?.escrowCreateds?.length || 0,
+      errors: responseUsdc.data?.errors || null,
+    });
+
+    // Handle errors from both APIs
+    if (responseIdrx.data?.errors) {
+      console.error("❌ GraphQL errors in IDRX API:", responseIdrx.data.errors);
     }
 
-    // Transform the data to match our expected format
-    const escrows = response.data.data.escrowCreateds || [];
-    console.log("📊 Raw escrows from indexer:", escrows);
-    console.log("📊 Number of escrows found:", escrows.length);
+    if (responseUsdc.data?.errors) {
+      console.error("❌ GraphQL errors in USDC API:", responseUsdc.data.errors);
+    }
+
+    // Combine escrows from both APIs
+    const idrxEscrows = responseIdrx.data?.data?.escrowCreateds || [];
+    const usdcEscrows = responseUsdc.data?.data?.escrowCreateds || [];
+
+    // Combine and deduplicate by escrowId
+    const allEscrowsMap = new Map();
+
+    // Add IDRX escrows
+    idrxEscrows.forEach((escrow: any) => {
+      if (escrow.escrowId) {
+        allEscrowsMap.set(escrow.escrowId, {
+          ...escrow,
+          source: "IDRX_API",
+        });
+      }
+    });
+
+    // Add USDC escrows (will overwrite if same escrowId exists)
+    usdcEscrows.forEach((escrow: any) => {
+      if (escrow.escrowId) {
+        allEscrowsMap.set(escrow.escrowId, {
+          ...escrow,
+          source: "USDC_API",
+        });
+      }
+    });
+
+    const allEscrows = Array.from(allEscrowsMap.values());
+
+    console.log("✅ Combined sender escrow data:", {
+      idrxEscrows: idrxEscrows.length,
+      usdcEscrows: usdcEscrows.length,
+      totalUnique: allEscrows.length,
+      deduplicatedCount:
+        idrxEscrows.length + usdcEscrows.length - allEscrows.length,
+    });
+
+    // Filter escrows that belong to the sender
+    const escrows = allEscrows
+      .filter((escrow: any) => {
+        return (
+          escrow.sender &&
+          escrow.sender.toLowerCase() === userAddress.toLowerCase()
+        );
+      })
+      .sort((a: any, b: any) => {
+        // Sort by timestamp descending (newest first)
+        const timestampA = parseInt(a.timestamp_) || 0;
+        const timestampB = parseInt(b.timestamp_) || 0;
+        return timestampB - timestampA;
+      })
+      .slice(0, 100); // Limit to 100 most recent escrows
+
+    console.log("📊 Raw combined escrows from indexer:", escrows);
+    console.log("📊 Number of combined escrows found:", escrows.length);
+    console.log("📊 Sources breakdown:", {
+      sources: escrows.reduce((acc: any, escrow: any) => {
+        acc[escrow.source] = (acc[escrow.source] || 0) + 1;
+        return acc;
+      }, {}),
+    });
 
     if (escrows.length === 0) {
-      console.log("⚠️ No escrows found for address:", userAddress);
+      console.log("⚠️ No escrows found for sender address:", userAddress);
       return [];
     }
 
@@ -950,8 +1035,16 @@ export const fetchEscrowsFromIndexer = async (userAddress: string) => {
           escrow.tokenAddress ||
           mapContractIdToTokenAddress(escrow.contractId_);
 
-        // Determine token type from tokenAddress
-        const tokenType = getTokenType(tokenAddress);
+        // Determine token type from tokenAddress or source
+        let tokenType: "USDC" | "USDT" | "IDRX" = "USDC";
+
+        if (escrow.tokenAddress) {
+          tokenType = getTokenType(escrow.tokenAddress);
+        } else if (escrow.contractId_) {
+          tokenType = determineTokenTypeFromContract(escrow.contractId_);
+        } else if (escrow.source === "IDRX_API") {
+          tokenType = "IDRX";
+        }
 
         // Parse timestamp if available
         const createdAt = escrow.timestamp_
@@ -979,10 +1072,13 @@ export const fetchEscrowsFromIndexer = async (userAddress: string) => {
           amounts: escrow.amounts
             ? escrow.amounts.split(",").map((amount: string) => amount.trim())
             : [],
-          tokenAddress: tokenAddress, // ini yang diedit tadinya pake address usdc langsung
-          tokenType: tokenType, // Dynamic token type based on tokenAddress
+          tokenAddress: tokenAddress,
+          tokenType: tokenType, // Dynamic token type based on source and tokenAddress
           blockNumber: escrow.block_number,
           transactionHash: escrow.transactionHash_,
+
+          // Source tracking
+          dataSource: escrow.source,
 
           // Additional contract data
           allocatedAmount: contractDetails?.totalAllocatedAmount || "0",
@@ -996,22 +1092,43 @@ export const fetchEscrowsFromIndexer = async (userAddress: string) => {
       }),
     );
 
-    console.log("✅ Transformed escrows:", transformedEscrows);
+    console.log("✅ Transformed combined sender escrows:", {
+      totalTransformed: transformedEscrows.length,
+      sources: transformedEscrows.reduce((acc: any, escrow: any) => {
+        acc[escrow.dataSource] = (acc[escrow.dataSource] || 0) + 1;
+        return acc;
+      }, {}),
+      tokenTypes: transformedEscrows.reduce((acc: any, escrow: any) => {
+        acc[escrow.tokenType] = (acc[escrow.tokenType] || 0) + 1;
+        return acc;
+      }, {}),
+    });
+
+    console.log("✅ Performance summary for sender:", {
+      totalEscrowsFetched: allEscrows.length,
+      idrxEscrowsFetched: idrxEscrows.length,
+      usdcEscrowsFetched: usdcEscrows.length,
+      filteredEscrows: escrows.length,
+      finalTransformedEscrows: transformedEscrows.length,
+      senderAddress: userAddress,
+    });
 
     // Cache the result
     setCachedData(cacheKey, transformedEscrows);
 
     return transformedEscrows;
   } catch (error) {
-    console.error("❌ Error fetching escrows from indexer:", error);
+    console.error("❌ Error fetching combined escrows from indexer:", error);
     console.error("❌ Error details:", {
       message: error instanceof Error ? error.message : "Unknown error",
       userAddress,
       GOLDSKY_ESCROW_API_URL,
+      GOLDSKY_ESCROW_IDRX_API_URL,
     });
     return [];
   }
 };
+
 //ini kali aja kepake
 function mapContractIdToTokenAddress(contractId: string): string {
   console.log("🔍 Mapping contractId:", contractId);
@@ -1440,7 +1557,8 @@ const fetchReceiverDataOptimized = async (receiverAddress: string) => {
   }
 };
 
-// Simplified function to get receiver escrows without withdraw calculation
+// receiverDashboard
+// receiverDashboard - UPDATED to combine responses from both API URLs
 const fetchReceiverEscrowsSimple = async (receiverAddress: string) => {
   try {
     console.log(
@@ -1464,33 +1582,113 @@ const fetchReceiverEscrowsSimple = async (receiverAddress: string) => {
           totalAmount
           amounts
           timestamp_
+          transactionHash_
+          block_number
+          contractId_
         }
       }
     `;
 
-    const response = await axios.post(
-      process.env.NEXT_PUBLIC_GOLDSKY_ESCROW_IDRX_API_URL,
-      {
-        query,
-      },
-      {
-        headers: {
-          "Content-Type": "application/json",
-        },
-        timeout: 15000, // 15 second timeout for better reliability
-      },
-    );
+    console.log("📤 Fetching from both Goldsky API URLs...");
 
-    if (response.data.errors) {
-      console.error(
-        "❌ GraphQL errors in simplified receiver query:",
-        response.data.errors,
-      );
-      return [];
+    // Fetch from both API URLs in parallel
+    const [responseIdrx, responseUsdc] = await Promise.all([
+      // IDRX API
+      axios
+        .post(
+          process.env.NEXT_PUBLIC_GOLDSKY_ESCROW_IDRX_API_URL!,
+          {
+            query,
+          },
+          {
+            headers: {
+              "Content-Type": "application/json",
+            },
+            timeout: 15000,
+          },
+        )
+        .catch((error) => {
+          console.warn("⚠️ IDRX API request failed:", error.message);
+          return { data: { data: { escrowCreateds: [] }, errors: null } };
+        }),
+
+      // USDC/USDT API
+      axios
+        .post(
+          process.env.NEXT_PUBLIC_GOLDSKY_ESCROW_API_URL!,
+          {
+            query,
+          },
+          {
+            headers: {
+              "Content-Type": "application/json",
+            },
+            timeout: 15000,
+          },
+        )
+        .catch((error) => {
+          console.warn("⚠️ USDC API request failed:", error.message);
+          return { data: { data: { escrowCreateds: [] }, errors: null } };
+        }),
+    ]);
+
+    console.log("📥 IDRX API Response:", {
+      status: responseIdrx.status || "failed",
+      escrows: responseIdrx.data?.data?.escrowCreateds?.length || 0,
+      errors: responseIdrx.data?.errors || null,
+    });
+
+    console.log("📥 USDC API Response:", {
+      status: responseUsdc.status || "failed",
+      escrows: responseUsdc.data?.data?.escrowCreateds?.length || 0,
+      errors: responseUsdc.data?.errors || null,
+    });
+
+    // Handle errors from both APIs
+    if (responseIdrx.data?.errors) {
+      console.error("❌ GraphQL errors in IDRX API:", responseIdrx.data.errors);
     }
 
-    const allEscrows = response.data.data.escrowCreateds || [];
-    console.log("✅ All escrows fetched:", allEscrows.length);
+    if (responseUsdc.data?.errors) {
+      console.error("❌ GraphQL errors in USDC API:", responseUsdc.data.errors);
+    }
+
+    // Combine escrows from both APIs
+    const idrxEscrows = responseIdrx.data?.data?.escrowCreateds || [];
+    const usdcEscrows = responseUsdc.data?.data?.escrowCreateds || [];
+
+    // Combine and deduplicate by escrowId
+    const allEscrowsMap = new Map();
+
+    // Add IDRX escrows
+    idrxEscrows.forEach((escrow: any) => {
+      if (escrow.escrowId) {
+        allEscrowsMap.set(escrow.escrowId, {
+          ...escrow,
+          source: "IDRX_API",
+        });
+      }
+    });
+
+    // Add USDC escrows (will overwrite if same escrowId exists)
+    usdcEscrows.forEach((escrow: any) => {
+      if (escrow.escrowId) {
+        allEscrowsMap.set(escrow.escrowId, {
+          ...escrow,
+          source: "USDC_API",
+        });
+      }
+    });
+
+    const allEscrows = Array.from(allEscrowsMap.values());
+
+    console.log("✅ Combined escrow data:", {
+      idrxEscrows: idrxEscrows.length,
+      usdcEscrows: usdcEscrows.length,
+      totalUnique: allEscrows.length,
+      deduplicatedCount:
+        idrxEscrows.length + usdcEscrows.length - allEscrows.length,
+    });
 
     // Filter escrows that contain the receiver address
     const escrows = allEscrows
@@ -1509,13 +1707,20 @@ const fetchReceiverEscrowsSimple = async (receiverAddress: string) => {
       })
       .slice(0, 100); // Limit to 100 most recent escrows
 
-    console.log("✅ Filtered and sorted receiver escrows:", escrows.length);
+    console.log("✅ Filtered and sorted receiver escrows:", {
+      totalFiltered: escrows.length,
+      sources: escrows.reduce((acc: any, escrow: any) => {
+        acc[escrow.source] = (acc[escrow.source] || 0) + 1;
+        return acc;
+      }, {}),
+    });
 
     // Transform the data to match our expected format
     const transformedEscrows = await Promise.all(
       escrows.map(async (escrow: any, index: number) => {
-        console.log(`🔍 Processing escrow ${index}:`, {
+        console.log(`🔍 Processing combined escrow ${index}:`, {
           escrowId: escrow.escrowId,
+          source: escrow.source,
           receivers: escrow.receivers,
           amounts: escrow.amounts,
           tokenAddress: escrow.tokenAddress,
@@ -1532,18 +1737,10 @@ const fetchReceiverEscrowsSimple = async (receiverAddress: string) => {
           ? escrow.amounts.split(",").map((amount: string) => amount.trim())
           : [];
 
-        console.log(`🔍 Parsed data:`, {
-          receivers,
-          amounts,
-          receiverAddress: receiverAddress.toLowerCase(),
-        });
-
         // Find the index of the current receiver
         const receiverIndex = receivers.findIndex(
           (addr: string) => addr === receiverAddress.toLowerCase(),
         );
-
-        console.log(`🔍 Receiver index:`, receiverIndex);
 
         // Get the amount allocated to this specific receiver
         const receiverAmount =
@@ -1551,15 +1748,21 @@ const fetchReceiverEscrowsSimple = async (receiverAddress: string) => {
             ? amounts[receiverIndex]
             : "0";
 
-        console.log(`🔍 Receiver amount:`, receiverAmount);
-
         // Convert timestamp to proper date
         const createdDate = escrow.timestamp_
           ? new Date(parseInt(escrow.timestamp_) * 1000)
           : new Date();
 
-        // Determine token type from tokenAddress
-        const tokenType = getTokenType(escrow.tokenAddress);
+        // Determine token type from tokenAddress or contractId
+        let tokenType: "USDC" | "USDT" | "IDRX" = "USDC";
+
+        if (escrow.tokenAddress) {
+          tokenType = getTokenType(escrow.tokenAddress);
+        } else if (escrow.contractId_) {
+          tokenType = determineTokenTypeFromContract(escrow.contractId_);
+        } else if (escrow.source === "IDRX_API") {
+          tokenType = "IDRX";
+        }
 
         // Get contract address based on token type
         const contractAddress = getContractAddressByTokenType(tokenType);
@@ -1575,18 +1778,23 @@ const fetchReceiverEscrowsSimple = async (receiverAddress: string) => {
           id: `receiver-escrow-${index}`,
           escrowId: escrow.escrowId,
 
+          // Source tracking
+          dataSource: escrow.source,
+
           // Transaction data for receiver dashboard
           receiverWalletAddress: receiverAddress,
           senderWalletAddress: escrow.sender,
-          senderName: `${escrow.sender.slice(0, 6)}...${escrow.sender.slice(-4)}`, // Shortened sender address as name
+          senderName: `${escrow.sender.slice(0, 6)}...${escrow.sender.slice(-4)}`,
 
           // Amount data
           totalAmount: escrow.totalAmount || "0",
-          availableAmount: receiverAmount, // Amount specifically for this receiver
-          originCurrency: tokenType, // Dynamic token type based on tokenAddress
+          availableAmount: receiverAmount,
+          originCurrency: tokenType,
 
           // Token data
-          tokenAddress: escrow.tokenAddress,
+          tokenAddress:
+            escrow.tokenAddress ||
+            mapContractIdToTokenAddress(escrow.contractId_ || ""),
 
           // Transaction metadata
           transactionHash: escrow.transactionHash_,
@@ -1597,7 +1805,7 @@ const fetchReceiverEscrowsSimple = async (receiverAddress: string) => {
           createdAt: createdDate,
 
           // Status
-          status: "AVAILABLE", // Default status for incoming transactions
+          status: "AVAILABLE",
 
           // Additional receiver data
           receiverIndex,
@@ -1614,19 +1822,26 @@ const fetchReceiverEscrowsSimple = async (receiverAddress: string) => {
           lastTopUpAt: contractDetails?.lastTopUpAt || "0",
         };
       }),
-    ).then(
-      (results) =>
-        results.filter((escrow: any) => parseFloat(escrow.availableAmount) > 0), // Only return escrows with available amounts
+    ).then((results) =>
+      results.filter((escrow: any) => parseFloat(escrow.availableAmount) > 0),
     );
 
-    console.log("✅ Transformed receiver escrows:", transformedEscrows);
-    console.log("✅ Number of transformed escrows:", transformedEscrows.length);
-    console.log(
-      "✅ Available amounts:",
-      transformedEscrows.map((e: any) => e.availableAmount),
-    );
+    console.log("✅ Final combined and transformed receiver escrows:", {
+      totalTransformed: transformedEscrows.length,
+      sources: transformedEscrows.reduce((acc: any, escrow: any) => {
+        acc[escrow.dataSource] = (acc[escrow.dataSource] || 0) + 1;
+        return acc;
+      }, {}),
+      tokenTypes: transformedEscrows.reduce((acc: any, escrow: any) => {
+        acc[escrow.originCurrency] = (acc[escrow.originCurrency] || 0) + 1;
+        return acc;
+      }, {}),
+    });
+
     console.log("✅ Performance summary:", {
       totalEscrowsFetched: allEscrows.length,
+      idrxEscrowsFetched: idrxEscrows.length,
+      usdcEscrowsFetched: usdcEscrows.length,
       filteredEscrows: escrows.length,
       finalTransformedEscrows: transformedEscrows.length,
       receiverAddress: receiverAddress,
@@ -1637,7 +1852,10 @@ const fetchReceiverEscrowsSimple = async (receiverAddress: string) => {
 
     return transformedEscrows;
   } catch (error) {
-    console.error("❌ Error fetching simplified receiver escrows:", error);
+    console.error(
+      "❌ Error fetching combined simplified receiver escrows:",
+      error,
+    );
     return [];
   }
 };
