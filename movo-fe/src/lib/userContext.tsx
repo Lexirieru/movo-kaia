@@ -37,7 +37,6 @@ interface GetMeResponse {
   authenticated: boolean;
   user: User;
   currentWalletAddress: string;
-  currentRole: "sender" | "receiver" | "none";
 }
 
 // Tipe state auth
@@ -46,7 +45,6 @@ interface AuthContextType {
   loading: boolean;
   authenticated: boolean;
   currentWalletAddress: string;
-  currentRole: "sender" | "receiver" | "none";
   isRefreshing: boolean; // NEW: Track ketika data user sedang di-refresh
   refreshUser: () => Promise<void>; // biar bisa reload user dari luar
   checkAuth: () => Promise<void>; // Export checkAuth function
@@ -61,9 +59,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false); // NEW: Track refresh state
   const [currentWalletAddress, setCurrentWalletAddress] = useState<string>("");
-  const [currentRole, setCurrentRole] = useState<
-    "sender" | "receiver" | "none"
-  >("none");
 
   // cek auth pertama kali
   const checkAuth = async () => {
@@ -76,18 +71,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (data && data.authenticated) {
         setUser(data.user);
         setCurrentWalletAddress(data.currentWalletAddress || "");
-        setCurrentRole(data.currentRole || "none");
       } else {
         console.log("❌ User not authenticated");
         setUser(null);
         setCurrentWalletAddress("");
-        setCurrentRole("none");
       }
     } catch (error) {
       console.error("❌ Error checking auth:", error);
       setUser(null);
       setCurrentWalletAddress("");
-      setCurrentRole("none");
     } finally {
       setLoading(false);
     }
@@ -105,18 +97,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         console.log("✅ User data refreshed:", data.user._id);
         setUser(data.user);
         setCurrentWalletAddress(data.currentWalletAddress || "");
-        setCurrentRole(data.currentRole || "none");
       } else {
         console.log("❌ User not authenticated after refresh");
         setUser(null);
         setCurrentWalletAddress("");
-        setCurrentRole("none");
       }
     } catch (error) {
       console.error("❌ Error refreshing user:", error);
       setUser(null);
       setCurrentWalletAddress("");
-      setCurrentRole("none");
     } finally {
       setIsRefreshing(false);
     }
@@ -152,7 +141,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const clearUser = () => {
     setUser(null);
     setCurrentWalletAddress("");
-    setCurrentRole("none");
     // Clear any stored auth tokens if you have them
     if (typeof window !== "undefined") {
       localStorage.removeItem("authToken");
@@ -168,7 +156,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     loading,
     isRefreshing, // NEW: Add refreshing state
     currentWalletAddress,
-    currentRole,
     authenticated: !!user,
     refreshUser,
     checkAuth, // Export checkAuth function

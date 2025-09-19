@@ -290,8 +290,7 @@ function DynamicDashboard({
 }
 
 function DashboardContent() {
-  const { user, loading, authenticated, currentWalletAddress, currentRole } =
-    useAuth();
+  const { user, loading, authenticated, currentWalletAddress } = useAuth();
   const { isConnected, address } = useWallet();
 
   const [userRole, setUserRole] = useState<"sender" | "receiver" | "none">(
@@ -307,30 +306,14 @@ function DashboardContent() {
   useEffect(() => {
     const determineRole = async () => {
       if (!user?._id || !effectiveWalletAddress) {
-        setUserRole("none");
         return;
       }
 
       setRoleLoading(true);
-      try {
-        // Use currentRole from context if available
-        if (currentRole && currentRole !== "none") {
-          setUserRole(currentRole);
-        } else {
-          // If no role in context, check if user has any escrows as sender or receiver
-          // This will be determined by the dashboard components themselves
-          setUserRole("none");
-        }
-      } catch (error) {
-        console.error("Error determining user role:", error);
-        setUserRole("none");
-      } finally {
-        setRoleLoading(false);
-      }
     };
 
     determineRole();
-  }, [user?._id, effectiveWalletAddress, currentRole]);
+  }, [user?._id, effectiveWalletAddress]);
 
   // Fetch withdraw history untuk receiver
   useEffect(() => {
@@ -392,26 +375,10 @@ function DashboardContent() {
     setWithdrawHistory([]);
   }, [currentWalletAddress]);
 
-  const handleRoleChange = (newRole: "sender" | "receiver" | "none") => {
-    setUserRole(newRole);
-  };
-
   const refreshUserRole = async () => {
     if (!user?._id || !effectiveWalletAddress) return;
 
     setRoleLoading(true);
-    try {
-      const roleResult = await currentRole;
-      if (roleResult) {
-        setUserRole(roleResult);
-      } else {
-        setUserRole("none");
-      }
-    } catch (error) {
-      console.error("Error refreshing user role:", error);
-    } finally {
-      setRoleLoading(false);
-    }
   };
 
   // Show loading state

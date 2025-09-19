@@ -11,7 +11,7 @@ interface NavbarProps {
 }
 
 export default function Navbar({ showRoleBadge = true }: NavbarProps) {
-  const { currentWalletAddress, currentRole } = useAuth();
+  const { currentWalletAddress } = useAuth();
   const { isConnected, address } = useWallet();
   const effectiveWalletAddress = currentWalletAddress || address || "";
 
@@ -32,20 +32,8 @@ export default function Navbar({ showRoleBadge = true }: NavbarProps) {
 
         {/* Role badge and wallet controls */}
         <div className="flex items-center space-x-4">
-          {showRoleBadge && effectiveWalletAddress && currentRole && (
-            <div className="flex items-center space-x-2">
-              <div
-                className={`px-3 py-1 rounded-full text-xs font-medium ${
-                  currentRole === "sender"
-                    ? "bg-blue-500/20 text-blue-300 border border-blue-500/30"
-                    : currentRole === "receiver"
-                      ? "bg-green-500/20 text-green-300 border border-green-500/30"
-                      : "bg-gray-500/20 text-gray-300 border border-gray-500/30"
-                }`}
-              >
-                {currentRole.charAt(0).toUpperCase() + currentRole.slice(1)}
-              </div>
-            </div>
+          {showRoleBadge && effectiveWalletAddress && (
+            <div className="flex items-center space-x-2"></div>
           )}
           {isConnected && <NetworkSwitch />}
           <WalletConnectButton />

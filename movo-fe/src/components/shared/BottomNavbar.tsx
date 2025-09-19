@@ -7,7 +7,6 @@ import { useAuth } from "@/lib/userContext";
 export default function BottomNavbar() {
   const pathname = usePathname();
   const router = useRouter();
-  const { currentRole } = useAuth();
 
   const handleNavigation = (path: string) => {
     router.push(path);
@@ -20,11 +19,11 @@ export default function BottomNavbar() {
 
   const handleHistoryClick = () => {
     // Navigate based on user role for history
-    if (currentRole === "receiver") {
-      router.push("/history?view=receiver");
-    } else {
-      router.push("/history?view=sender");
-    }
+    // if (currentRole === "receiver") {
+    //   router.push("/history?view=receiver");
+    // } else {
+    //   router.push("/history?view=sender");
+    // }
   };
 
   const navItems = [

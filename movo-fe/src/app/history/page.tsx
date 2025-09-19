@@ -8,7 +8,7 @@ import MainLayout from "@/components/layout/MainLayout";
 import WalletWarning from "@/components/dashboard/WalletWarning";
 
 function HistoryContent() {
-  const { loading, currentWalletAddress, currentRole } = useAuth();
+  const { loading, currentWalletAddress } = useAuth();
   const { isConnected, address } = useWallet();
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -16,25 +16,6 @@ function HistoryContent() {
 
   // Get view parameter from URL
   const viewParam = searchParams.get("view");
-
-  // Redirect based on role or view parameter
-  useEffect(() => {
-    if (loading) return;
-
-    // If view parameter is explicitly set, use it
-    if (viewParam === "receiver") {
-      router.replace("/history/receiver");
-    } else if (viewParam === "sender") {
-      router.replace("/history/sender");
-    } else {
-      // Otherwise, redirect based on current role
-      if (currentRole === "receiver") {
-        router.replace("/history/receiver");
-      } else {
-        router.replace("/history/sender");
-      }
-    }
-  }, [loading, viewParam, currentRole, router]);
 
   if (loading) {
     return (
