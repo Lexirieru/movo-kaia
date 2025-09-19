@@ -9,10 +9,10 @@ interface ErrorResponse {
 }
 // Goldsky API URLs for different escrow contracts
 const GOLDSKY_ESCROW_API_URL =
-  process.env.NEXT_PUBLIC_ESCROW_USDC_API_URL ||
+  process.env.NEXT_PUBLIC_GOLDSKY_ESCROW_API_URL ||
   "https://api.goldsky.com/api/public/project_cmf7w213gukw101tb0u5m7760/subgraphs/movo-basesepolia-escrow/1.0.0/gn";
 const GOLDSKY_ESCROW_IDRX_API_URL =
-  process.env.NEXT_PUBLIC_ESCROW_IDRX_API_URL ||
+  process.env.NEXT_PUBLIC_GOLDSKY_ESCROW_IDRX_API_URL ||
   "https://api.goldsky.com/api/public/project_cmf7w213gukw101tb0u5m7760/subgraphs/movo-basesepolia-escrowIdrx/1.0.0/gn";
 
 // Simple in-memory cache for API responses

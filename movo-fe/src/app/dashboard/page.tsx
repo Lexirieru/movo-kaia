@@ -67,67 +67,41 @@ function DynamicDashboard({
 
         console.log("✅ Goldsky connection successful");
 
-        // Fetch all data in parallel - FIXED: Use actual wallet address
+        // Fetch all data in parallel
         console.log("🔍 Fetching all escrow data...");
         const [senderEscrowsData, receiverDataResult] = await Promise.all([
-          fetchEscrowsFromIndexer("0xfa128bbd1846c19025c7428aee403fc06f0a9e38"), // FIXED: Use actual wallet address instead of hardcoded
+          fetchEscrowsFromIndexer(effectiveWalletAddress),
           fetchReceiverDashboardData(effectiveWalletAddress),
         ]);
 
-        console.log("📊 Raw senderEscrowsData:", senderEscrowsData);
-        console.log("📊 Raw receiverDataResult:", receiverDataResult);
-
-        // FIXED: Process and map sender escrows data properly
-        const processedSenderEscrows = Array.isArray(senderEscrowsData)
-          ? senderEscrowsData.map((escrow: any, index: number) => ({
-              id: escrow.id || `escrow_${index}`,
-              escrowId: escrow.escrowId || escrow.id,
-              contractId: escrow.contractId_ || escrow.contractId,
-              totalAmount: escrow.totalAmount || escrow.amount || "0",
-              tokenType: escrow.tokenType || "USDC",
-              recipients: escrow.recipients || [],
-              recipientCount: escrow.recipients?.length || 0,
-              blockNumber: escrow.block_number || escrow.blockNumber,
-              timestamp: escrow.timestamp_ || escrow.timestamp,
-              transactionHash:
-                escrow.transactionHash_ || escrow.transactionHash,
-              creator: escrow.creator || effectiveWalletAddress,
-              type: "created",
-              status: "active",
-            }))
-          : [];
-
-        console.log("📊 Processed sender escrows:", processedSenderEscrows);
-
         console.log("📊 Data fetched:", {
-          senderEscrows: processedSenderEscrows.length,
-          receiverWithdrawals:
-            receiverDataResult.availableWithdrawals?.length || 0,
+          senderEscrows: senderEscrowsData.length,
+          receiverWithdrawals: receiverDataResult.availableWithdrawals.length,
         });
 
-        // Set sender data - FIXED: Use processed data
-        setSenderEscrows(processedSenderEscrows);
+        // Set sender data
+        setSenderEscrows(senderEscrowsData);
 
         // Set receiver data
         setReceiverData(receiverDataResult);
 
-        // Combine all escrows for "all" filter - FIXED: Use processed data
+        // Combine all escrows for "all" filter
         const combinedEscrows = [
-          ...processedSenderEscrows,
-          ...(receiverDataResult.availableWithdrawals || []).map(
-            (escrow: any) => ({
-              ...escrow,
-              type: "claimable",
-            }),
-          ),
+          ...senderEscrowsData.map((escrow: any) => ({
+            ...escrow,
+            type: "created",
+          })),
+          ...receiverDataResult.availableWithdrawals.map((escrow: any) => ({
+            ...escrow,
+            type: "claimable",
+          })),
         ];
         setAllEscrows(combinedEscrows);
 
-        console.log("📊 Final combined data:", {
+        console.log("📊 Combined data:", {
           walletAddress: effectiveWalletAddress,
-          senderEscrows: processedSenderEscrows.length,
-          receiverWithdrawals:
-            receiverDataResult.availableWithdrawals?.length || 0,
+          senderEscrows: senderEscrowsData.length,
+          receiverWithdrawals: receiverDataResult.availableWithdrawals.length,
           totalEscrows: combinedEscrows.length,
         });
       } catch (error) {
@@ -230,101 +204,7 @@ function DynamicDashboard({
 
         {/* Content based on filter */}
         {activeFilter === "created" && (
-          <>
-            {senderEscrows.length > 0 ? (
-              <>
-                {/* FIXED: Show escrow cards directly instead of GroupDashboard */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {senderEscrows.map((escrow, index) => (
-                    <div
-                      key={escrow.id || index}
-                      className="bg-white/5 border border-white/10 rounded-xl p-6 hover:bg-white/10 transition-colors"
-                    >
-                      <div className="flex items-center justify-between mb-4">
-                        <div className="flex items-center space-x-2">
-                          <span className="w-3 h-3 bg-cyan-400 rounded-full"></span>
-                          <span className="text-sm text-cyan-400 font-medium">
-                            ESCROW
-                          </span>
-                        </div>
-                        <span className="px-2 py-1 bg-green-500/20 text-green-400 text-xs rounded-full">
-                          {escrow.status || "Active"}
-                        </span>
-                      </div>
-
-                      <div className="space-y-3">
-                        <div>
-                          <p className="text-white/60 text-sm">Total Amount</p>
-                          <p className="text-white text-lg font-semibold">
-                            {parseFloat(escrow.totalAmount).toLocaleString()}{" "}
-                            {escrow.tokenType}
-                          </p>
-                        </div>
-
-                        <div>
-                          <p className="text-white/60 text-sm">Recipients</p>
-                          <p className="text-white">
-                            {escrow.recipientCount} recipient(s)
-                          </p>
-                        </div>
-
-                        <div>
-                          <p className="text-white/60 text-sm">Escrow ID</p>
-                          <p className="text-white text-sm font-mono">
-                            {escrow.escrowId?.slice(0, 10)}...
-                            {escrow.escrowId?.slice(-6)}
-                          </p>
-                        </div>
-
-                        {escrow.timestamp && (
-                          <div>
-                            <p className="text-white/60 text-sm">Created</p>
-                            <p className="text-white text-sm">
-                              {new Date(
-                                escrow.timestamp * 1000,
-                              ).toLocaleDateString()}
-                            </p>
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="mt-4 pt-4 border-t border-white/10">
-                        <button className="w-full py-2 px-4 bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-400 rounded-lg text-sm font-medium transition-colors">
-                          View Details
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Also show GroupDashboard for additional functionality */}
-                <div className="mt-8">
-                  <h3 className="text-lg font-medium text-white mb-4">
-                    Manage Escrows
-                  </h3>
-                  <GroupDashboard onRoleChange={onRoleChange} />
-                </div>
-              </>
-            ) : (
-              <div className="text-center py-12">
-                <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <span className="text-2xl">📋</span>
-                </div>
-                <h3 className="text-xl font-semibold text-white mb-2">
-                  No Escrows Created
-                </h3>
-                <p className="text-white/60 mb-4">
-                  You haven't created any escrows yet.
-                </p>
-                <button
-                  onClick={onRoleChange}
-                  className="px-6 py-2 bg-cyan-500 hover:bg-cyan-600 text-white rounded-lg font-medium transition-colors"
-                >
-                  Create Your First Escrow
-                </button>
-              </div>
-            )}
-          </>
+          <GroupDashboard onRoleChange={onRoleChange} />
         )}
 
         {activeFilter === "claimable" && (
@@ -342,52 +222,23 @@ function DynamicDashboard({
         )}
 
         {activeFilter === "all" && (
-          <div className="space-y-6">
+          <div className="space-y-4">
             {/* Created Escrows Section */}
             {senderEscrows.length > 0 && (
               <div>
-                <h3 className="text-lg font-medium text-white mb-4 flex items-center">
+                <h3 className="text-lg font-medium text-white mb-3 flex items-center">
                   <span className="w-1.5 h-1.5 bg-cyan-400 rounded-full mr-2"></span>
                   Created by You ({senderEscrows.length})
                 </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {senderEscrows.slice(0, 3).map((escrow, index) => (
-                    <div
-                      key={escrow.id || index}
-                      className="bg-white/5 border border-white/10 rounded-lg p-4"
-                    >
-                      <div className="flex items-center justify-between mb-3">
-                        <span className="text-xs text-cyan-400 font-medium">
-                          CREATED
-                        </span>
-                        <span className="text-xs text-white/60">
-                          {parseFloat(escrow.totalAmount).toLocaleString()}{" "}
-                          {escrow.tokenType}
-                        </span>
-                      </div>
-                      <p className="text-white text-sm mb-2">
-                        {escrow.recipientCount} recipient(s)
-                      </p>
-                      <p className="text-white/60 text-xs">
-                        ID: {escrow.escrowId?.slice(0, 8)}...
-                      </p>
-                    </div>
-                  ))}
+                <div className="bg-white/5 rounded-lg p-4">
+                  <GroupDashboard onRoleChange={onRoleChange} />
                 </div>
-                {senderEscrows.length > 3 && (
-                  <button
-                    onClick={() => setActiveFilter("created")}
-                    className="mt-3 text-cyan-400 text-sm hover:text-cyan-300 transition-colors"
-                  >
-                    View all {senderEscrows.length} created escrows →
-                  </button>
-                )}
               </div>
             )}
 
             {/* Claimable Escrows Section */}
             <div>
-              <h3 className="text-lg font-medium text-white mb-4 flex items-center">
+              <h3 className="text-lg font-medium text-white mb-3 flex items-center">
                 <span className="w-1.5 h-1.5 bg-green-400 rounded-full mr-2"></span>
                 Available to Claim (
                 {receiverData?.availableWithdrawals?.length || 0})
@@ -411,15 +262,9 @@ function DynamicDashboard({
                 <h3 className="text-xl font-semibold text-white mb-2">
                   No Escrows Found
                 </h3>
-                <p className="text-white/60 mb-4">
+                <p className="text-white/60">
                   You haven't created any escrows or received any payments yet.
                 </p>
-                <button
-                  onClick={onRoleChange}
-                  className="px-6 py-2 bg-cyan-500 hover:bg-cyan-600 text-white rounded-lg font-medium transition-colors"
-                >
-                  Get Started
-                </button>
               </div>
             )}
           </div>
@@ -438,17 +283,12 @@ function DynamicDashboard({
           </div>
           <div>Total Escrows: {allEscrows.length}</div>
           <div>Filtered Results: {filteredEscrows.length}</div>
-          <div>
-            Raw Sender Data:{" "}
-            {JSON.stringify(senderEscrows.slice(0, 1), null, 2)}
-          </div>
         </div>
       )}
     </div>
   );
 }
 
-// ... rest of the component remains the same
 function DashboardContent() {
   const { user, loading, authenticated, currentWalletAddress, currentRole } =
     useAuth();
