@@ -8,12 +8,9 @@ interface ErrorResponse {
   message?: string;
 }
 // Goldsky API URLs for different escrow contracts
-const GOLDSKY_ESCROW_API_URL =
-  process.env.NEXT_PUBLIC_GOLDSKY_ESCROW_API_URL ||
-  "https://api.goldsky.com/api/public/project_cmf7w213gukw101tb0u5m7760/subgraphs/movo-basesepolia-escrow/1.0.0/gn";
+const GOLDSKY_ESCROW_API_URL = process.env.NEXT_PUBLIC_GOLDSKY_ESCROW_API_URL;
 const GOLDSKY_ESCROW_IDRX_API_URL =
-  process.env.NEXT_PUBLIC_GOLDSKY_ESCROW_IDRX_API_URL ||
-  "https://api.goldsky.com/api/public/project_cmf7w213gukw101tb0u5m7760/subgraphs/movo-basesepolia-escrowIdrx/1.0.0/gn";
+  process.env.NEXT_PUBLIC_GOLDSKY_ESCROW_IDRX_API_URL;
 
 // Simple in-memory cache for API responses
 const cache = new Map<string, { data: any; timestamp: number }>();
@@ -913,7 +910,7 @@ export const fetchEscrowsFromIndexer = async (userAddress: string) => {
     console.log("📤 Query variables:", { userAddress });
 
     const response = await axios.post(
-      GOLDSKY_ESCROW_API_URL,
+      process.env.NEXT_PUBLIC_GOLDSKY_ESCROW_IDRX_API_URL!,
       {
         query,
         variables: { userAddress: userAddress.toLowerCase() }, // Ensure lowercase
@@ -1472,7 +1469,7 @@ const fetchReceiverEscrowsSimple = async (receiverAddress: string) => {
     `;
 
     const response = await axios.post(
-      GOLDSKY_ESCROW_API_URL,
+      process.env.NEXT_PUBLIC_GOLDSKY_ESCROW_IDRX_API_URL,
       {
         query,
       },
