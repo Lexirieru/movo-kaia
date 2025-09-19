@@ -9,25 +9,28 @@ import {
   parseTokenAmount,
   addReceiver,
 } from "@/lib/smartContract";
-const Modal = ({ isOpen, onClose, children }: { 
-  isOpen: boolean; 
-  onClose: () => void; 
-  children: React.ReactNode 
+
+const Modal = ({
+  isOpen,
+  onClose,
+  children,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  children: React.ReactNode;
 }) => {
   if (!isOpen) return null;
-  
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       {/* Backdrop */}
-      <div 
+      <div
         className="absolute inset-0 bg-black/50 backdrop-blur-sm"
         onClick={onClose}
       />
-      
+
       {/* Modal Content */}
-      <div className="relative z-10 w-full max-w-2xl mx-4">
-        {children}
-      </div>
+      <div className="relative z-10 w-full max-w-2xl mx-4">{children}</div>
     </div>
   );
 };
@@ -129,14 +132,6 @@ export default function CreateStreamModal({
     : "Create Escrow Stream";
   const loadingText = isAddReceiverMode ? "Adding Receiver" : "Creating Escrow";
 
-  const canSubmit = isAddReceiverMode
-    ? formData.receivers.length === 1 &&
-      formData.receivers[0].address &&
-      formData.receivers[0].amount &&
-      !isLoading
-    : formData.receivers.length > 0 &&
-      formData.receivers.every((r) => r.address && r.amount) &&
-      !isLoading;
   const handleTokenSelect = (token: "USDC" | "IDRX") => {
     setFormData({ ...formData, token });
   };
@@ -176,173 +171,318 @@ export default function CreateStreamModal({
     });
   };
 
-  const handleSubmit = async () => {
-    if (!walletClient) {
-      setMessage({
-        type: "error",
-        text: "Wallet client not ready. Please try reconnecting your wallet.",
+  // const handleSubmit = async () => {
+  //   if (!walletClient) {
+  //     setMessage({
+  //       type: "error",
+  //       text: "Wallet client not ready. Please try reconnecting your wallet.",
+  //     });
+  //     return;
+  //   }
+
+  //   // Validate all receivers have data
+  //   const isValid = formData.receivers.every(
+  //     (r) => r.address.trim() && r.amount.trim() && parseFloat(r.amount) > 0,
+  //   );
+
+  //   if (!isValid) {
+  //     setMessage({
+  //       type: "error",
+  //       text: "Please fill in all receiver information and ensure amounts are greater than 0",
+  //     });
+  //     return;
+  //   }
+
+  //   if (!formData.token && !isAddReceiverMode) {
+  //     setMessage({ type: "error", text: "Please select a token type" });
+  //     return;
+  //   }
+
+  //   setIsLoading(true);
+  //   setMessage(null);
+
+  //   try {
+  //     if (isAddReceiverMode) {
+  //       const receiver = formData.receivers[0];
+  //       const tokenType = existingEscrow!.tokenType;
+  //       const parsedAmount = parseTokenAmount(
+  //         receiver.amount,
+  //         formData.token === "USDC" || formData.token === "USDT" ? 6 : 2,
+  //       );
+
+  //       let escrowIdBytes = existingEscrow!.escrowId;
+
+  //       // Remove 0x prefix if it exists
+  //       if (escrowIdBytes.startsWith("0x")) {
+  //         escrowIdBytes = escrowIdBytes.slice(2);
+  //       }
+
+  //       // Ensure it's exactly 32 bytes (64 hex characters)
+  //       if (escrowIdBytes.length < 64) {
+  //         escrowIdBytes = escrowIdBytes.padEnd(64, "0");
+  //       } else if (escrowIdBytes.length > 64) {
+  //         escrowIdBytes = escrowIdBytes.slice(0, 64);
+  //       }
+
+  //       // Add single 0x prefix
+  //       const formattedEscrowId = `0x${escrowIdBytes}` as `0x${string}`;
+
+  //       console.log("🔍 EscrowId formatting:", {
+  //         original: existingEscrow!.escrowId,
+  //         cleaned: escrowIdBytes,
+  //         formatted: formattedEscrowId,
+  //         length: formattedEscrowId.length,
+  //         isBytes32: formattedEscrowId.length === 66, // 0x + 64 chars = 66 total
+  //       });
+
+  //       const addReceiverResult = await addReceiver(
+  //         walletClient,
+  //         tokenType,
+  //         formattedEscrowId,
+  //         receiver.address as `0x${string}`,
+  //         parsedAmount,
+  //       );
+
+  //       if (!addReceiverResult.success) {
+  //         throw new Error(
+  //           addReceiverResult.error ||
+  //             "Failed to add receiver to escrow onchain",
+  //         );
+  //       }
+
+  //       const newStream: ReceiverInGroup = {
+  //         _id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+  //         groupId: existingEscrow!.escrowId,
+  //         originCurrency: tokenType, // Use existingEscrow.tokenType
+  //         tokenIcon:
+  //           tokenType === "USDC" ? "💵" : tokenType === "USDT" ? "💰" : "🇮🇩",
+  //         depositWalletAddress: receiver.address,
+  //         amount: parseFloat(receiver.amount),
+  //       };
+
+  //       onCreateStream(newStream);
+
+  //       // Receiver added successfully onchain - no database calls needed
+  //       setMessage({
+  //         type: "success",
+  //         text: `Receiver addedd successfully! Transaction: ${addReceiverResult.transactionHash}`,
+  //       });
+  //     } else {
+  //       // Prepare escrow data for onchain creation
+  //       const receivers = formData.receivers.map(
+  //         (r) => r.address as `0x${string}`,
+  //       );
+  //       const amounts = formData.receivers.map((r) =>
+  //         parseTokenAmount(
+  //           r.amount,
+  //           formData.token === "USDC" || formData.token === "USDT" ? 6 : 2,
+  //         ),
+  //       );
+  //       const totalAmount = amounts.reduce(
+  //         (acc, amount) => acc + amount,
+  //         BigInt(0),
+  //       );
+
+  //       // Debug logging
+  //       console.log("Escrow data prepared:", {
+  //         receivers,
+  //         amounts: amounts.map((a) => a.toString()),
+  //         totalAmount: totalAmount.toString(),
+  //         tokenType: formData.token,
+  //       });
+
+  //       // Create escrow onchain first
+  //       const escrowResult = await createEscrowOnchain(
+  //         walletClient,
+  //         formData.token!,
+  //         {
+  //           receivers,
+  //           amounts,
+  //           totalAmount,
+  //           vestingEnabled: formData.vestingEnabled,
+  //           vestingDuration: formData.vestingEnabled
+  //             ? formData.vestingUnit === "weeks"
+  //               ? formData.vestingDuration * 7
+  //               : formData.vestingDuration
+  //             : 0,
+  //         },
+  //         undefined, // No userId needed for wallet-only authentication
+  //       );
+
+  //       // ini escrowIdnya harusnya ngambil dari BE
+
+  //       if (!escrowResult.success) {
+  //         throw new Error(
+  //           escrowResult.error || "Failed to create escrow onchain",
+  //         );
+  //       }
+
+  //       // Generate escrowId from transaction hash or use a unique identifier
+  //       const escrowId =
+  //         escrowResult.escrowId ||
+  //         `escrow_${walletClient.account.address}_${Date.now()}`;
+
+  //       console.log("escrowId", escrowId);
+  //       const escrowIdBytes = `0x${escrowId}` as `0x${string}`;
+
+  //       for (const receiver of formData.receivers) {
+  //         const newStream: ReceiverInGroup = {
+  //           _id:
+  //             Date.now().toString() + Math.random().toString(36).substr(2, 9),
+  //           groupId: escrowResult.escrowId!, // Use actual escrow ID from blockchain
+  //           originCurrency: formData.token!,
+  //           tokenIcon:
+  //             formData.token === "USDC"
+  //               ? "💵"
+  //               : formData.token === "USDT"
+  //                 ? "💰"
+  //                 : "🇮🇩",
+  //           depositWalletAddress: receiver.address,
+  //           amount: parseFloat(receiver.amount),
+  //         };
+
+  //         onCreateStream(newStream);
+  //       }
+
+  //       // Escrow created successfully onchain - no database calls needed
+  //       // Data will be available through Goldsky indexer
+
+  //       setMessage({
+  //         type: "success",
+  //         text: `Escrow created successfully onchain! Transaction: ${escrowResult.transactionHash}`,
+  //       });
+
+  //       // Auto refresh parent data
+  //       if (onEscrowCreated) {
+  //         setTimeout(() => {
+  //           onEscrowCreated();
+  //         }, 1000); // Wait 1 second for blockchain confirmation
+  //       }
+  //     }
+
+  //     // Close modal after a delay to show success message
+  //     setTimeout(() => {
+  //       onClose();
+  //       resetForm();
+  //     }, 2000); // Reduced delay since no animation
+  //   } catch (e) {
+  //     console.error("Error creating escrow:", e);
+  //     setMessage({
+  //       type: "error",
+  //       text:
+  //         e instanceof Error
+  //           ? e.message
+  //           : "Failed to create escrow streams. Please try again.",
+  //     });
+  //   } finally {
+  //     setIsLoading(false);
+  //   }
+  // };
+const handleSubmit = async () => {
+  // ... existing validation code ...
+
+  try {
+    if (isAddReceiverMode) {
+      const receiver = formData.receivers[0];
+      const tokenType = existingEscrow!.tokenType;
+      
+      console.log("🔍 Adding receiver with details:", {
+        escrowId: existingEscrow!.escrowId,
+        tokenType,
+        receiverAddress: receiver.address,
+        amount: receiver.amount,
+        contractType: tokenType === "IDRX" ? "escrowIdrx" : "escrow"
       });
-      return;
-    }
 
-    // Validate all receivers have data
-    const isValid = formData.receivers.every(
-      (r) => r.address.trim() && r.amount.trim() && parseFloat(r.amount) > 0,
-    );
+      const parsedAmount = parseTokenAmount(
+        receiver.amount,
+        tokenType === "USDC" || tokenType === "USDT" ? 6 : 2,
+      );
 
-    if (!isValid) {
-      setMessage({
-        type: "error",
-        text: "Please fill in all receiver information and ensure amounts are greater than 0",
-      });
-      return;
-    }
+      // Format escrowId properly based on contract type
+      let escrowIdBytes = existingEscrow!.escrowId;
 
-    if (!formData.token) {
-      setMessage({ type: "error", text: "Please select a token type" });
-      return;
-    }
-
-    setIsLoading(true);
-    setMessage(null);
-
-    try {
-      if (isAddReceiverMode) {
-        const receiver = formData.receivers[0];
-        const parsedAmount = parseTokenAmount(
-          receiver.amount,
-          formData.token === "USDC" || formData.token === "USDT" ? 6 : 2,
-        );
-
-        const escrowIdBytes = `0x${existingEscrow.escrowId}` as `0x${string}`;
-        const addReceiverResult = await addReceiver(
-          walletClient,
-          formData.token,
-          escrowIdBytes,
-          receiver.address as `0x${string}`,
-          parsedAmount,
-        );
-
-        if (!addReceiverResult.success) {
-          throw new Error(
-            addReceiverResult.error ||
-              "Failed to add receiver to escrow onchain",
-          );
-        }
-
-        // Receiver added successfully onchain - no database calls needed
-        setMessage({
-          type: "success",
-          text: `Receiver addedd successfully! Transaction: ${addReceiverResult.transactionHash}`,
-        });
-      } else {
-        // Prepare escrow data for onchain creation
-        const receivers = formData.receivers.map(
-          (r) => r.address as `0x${string}`,
-        );
-        const amounts = formData.receivers.map((r) =>
-          parseTokenAmount(
-            r.amount,
-            formData.token === "USDC" || formData.token === "USDT" ? 6 : 2,
-          ),
-        );
-        const totalAmount = amounts.reduce(
-          (acc, amount) => acc + amount,
-          BigInt(0),
-        );
-
-        // Debug logging
-        console.log("Escrow data prepared:", {
-          receivers,
-          amounts: amounts.map((a) => a.toString()),
-          totalAmount: totalAmount.toString(),
-          tokenType: formData.token,
-        });
-
-        // Create escrow onchain first
-        const escrowResult = await createEscrowOnchain(
-          walletClient,
-          formData.token,
-          {
-            receivers,
-            amounts,
-            totalAmount,
-            vestingEnabled: formData.vestingEnabled,
-            vestingDuration: formData.vestingEnabled
-              ? formData.vestingUnit === "weeks"
-                ? formData.vestingDuration * 7
-                : formData.vestingDuration
-              : 0,
-          },
-          undefined, // No userId needed for wallet-only authentication
-        );
-
-        // ini escrowIdnya harusnya ngambil dari BE
-
-        if (!escrowResult.success) {
-          throw new Error(
-            escrowResult.error || "Failed to create escrow onchain",
-          );
-        }
-
-        // Generate escrowId from transaction hash or use a unique identifier
-        const escrowId =
-          escrowResult.escrowId ||
-          `escrow_${walletClient.account.address}_${Date.now()}`;
-
-        console.log("escrowId", escrowId);
-        const escrowIdBytes = `0x${escrowId}` as `0x${string}`;
-
-        const escrowData = {
-          groupId: groupId,
-          escrowId: escrowIdBytes,
-          originCurrency: formData.token,
-          walletAddress: walletClient.account.address,
-          totalAmount: totalAmount.toString(),
-          receivers: formData.receivers.map((r) => ({
-            address: r.address,
-            amount: r.amount,
-          })),
-          transactionHash: escrowResult.transactionHash ?? "",
-          status: "active",
-          createdAt: new Date().toISOString(),
-        };
-
-        // Escrow created successfully onchain - no database calls needed
-        // Data will be available through Goldsky indexer
-
-        setMessage({
-          type: "success",
-          text: `Escrow created successfully onchain! Transaction: ${escrowResult.transactionHash}`,
-        });
-
-        // Auto refresh parent data
-        if (onEscrowCreated) {
-          setTimeout(() => {
-            onEscrowCreated();
-          }, 1000); // Wait 1 second for blockchain confirmation
-        }
+      // Remove 0x prefix if it exists
+      if (escrowIdBytes.startsWith("0x")) {
+        escrowIdBytes = escrowIdBytes.slice(2);
       }
 
-      // Close modal after a delay to show success message
-      setTimeout(() => {
-        onClose();
-        resetForm();
-      }, 2000); // Reduced delay since no animation
-    } catch (e) {
-      console.error("Error creating escrow:", e);
-      setMessage({
-        type: "error",
-        text:
-          e instanceof Error
-            ? e.message
-            : "Failed to create escrow streams. Please try again.",
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
+      // Ensure it's exactly 32 bytes (64 hex characters)
+      if (escrowIdBytes.length < 64) {
+        escrowIdBytes = escrowIdBytes.padEnd(64, "0");
+      } else if (escrowIdBytes.length > 64) {
+        escrowIdBytes = escrowIdBytes.slice(0, 64);
+      }
 
+      // Add single 0x prefix
+      const formattedEscrowId = `0x${escrowIdBytes}` as `0x${string}`;
+
+      console.log("🔍 EscrowId formatting for addReceiver:", {
+        original: existingEscrow!.escrowId,
+        cleaned: escrowIdBytes,
+        formatted: formattedEscrowId,
+        length: formattedEscrowId.length,
+        isBytes32: formattedEscrowId.length === 66,
+        tokenType: tokenType
+      });
+
+      const addReceiverResult = await addReceiver(
+        walletClient,
+        tokenType,
+        formattedEscrowId,
+        receiver.address as `0x${string}`,
+        parsedAmount,
+      );
+
+      if (!addReceiverResult.success) {
+        throw new Error(
+          addReceiverResult.error ||
+            "Failed to add receiver to escrow onchain",
+        );
+      }
+
+      const newStream: ReceiverInGroup = {
+        _id: `${existingEscrow!.escrowId}-${receiver.address}-${Date.now()}`,
+        groupId: existingEscrow!.escrowId,
+        originCurrency: tokenType,
+        tokenIcon:
+          tokenType === "USDC" ? "💵" : tokenType === "USDT" ? "💰" : "🇮🇩",
+        depositWalletAddress: receiver.address,
+        amount: parseFloat(receiver.amount),
+      };
+
+      onCreateStream(newStream);
+
+      setMessage({
+        type: "success",
+        text: `Receiver added successfully! Transaction: ${addReceiverResult.transactionHash}`,
+      });
+
+      console.log("✅ Add receiver completed:", {
+        transactionHash: addReceiverResult.transactionHash,
+        newReceiver: newStream
+      });
+
+    } else {
+      // ... existing create escrow logic ...
+    }
+
+    // Close modal after success
+    setTimeout(() => {
+      onClose();
+      resetForm();
+    }, 2000);
+
+  } catch (e) {
+    console.error("❌ Error in escrow operation:", e);
+    setMessage({
+      type: "error",
+      text: e instanceof Error ? e.message : "Transaction failed. Please try again.",
+    });
+  } finally {
+    setIsLoading(false);
+  }
+};
   const resetForm = () => {
     setFormData({
       token: null,
@@ -378,25 +518,70 @@ export default function CreateStreamModal({
           </button>
         </div>
 
-        {isAddReceiverMode && (
-          <div className="bg-cyan-500/10 border border-cyan-500/20 rounded-lg p-4 mb-6">
-            <div className="flex items-center space-x-3">
-              <div className="w-8 h-8 bg-cyan-500/20 rounded-full flex items-center justify-center">
-                <span>
-                  {existingEscrow.tokenType === "USDC"
+        {/* {isAddReceiverMode && (
+          <div className="bg-cyan-500/10 border border-cyan-500/20 rounded-lg p-3 ">
+            <div className="flex items-center space-x-2">
+              <div className="text-2xl">
+                {isAddReceiverMode
+                  ? existingEscrow!.tokenType === "USDC"
                     ? "💵"
-                    : existingEscrow.tokenType === "USDT"
+                    : existingEscrow!.tokenType === "USDT"
+                      ? "💰"
+                      : "🇮🇩"
+                  : formData.token === "USDC"
+                    ? "💵"
+                    : formData.token === "USDT"
                       ? "💰"
                       : "🇮🇩"}
-                </span>
               </div>
               <div>
                 <p className="text-cyan-300 font-medium">
-                  Adding to existing {existingEscrow.tokenType} escrow
+                  {isAddReceiverMode
+                    ? `Existing Escrow: ${existingEscrow!.tokenType}`
+                    : `Selected Token: ${formData.token}`}
                 </p>
-                <p className="text-cyan-400/80 text-sm">
-                  ID: {existingEscrow.escrowId}
+                {isAddReceiverMode && (
+                  <p className="text-cyan-400/80 text-sm">
+                    ID: {existingEscrow!.escrowId}
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        )} */}
+        {(formData.token || isAddReceiverMode) && (
+          <div className="p-3 bg-cyan-500/10 border border-cyan-500/20 rounded-lg mb-6">
+            <div className="flex items-center space-x-2">
+              <div className="text-2xl">
+                {isAddReceiverMode
+                  ? existingEscrow!.tokenType === "USDC"
+                    ? "💵"
+                    : existingEscrow!.tokenType === "USDT"
+                      ? "💰"
+                      : "🇮🇩"
+                  : formData.token === "USDC"
+                    ? "💵"
+                    : formData.token === "USDT"
+                      ? "💰"
+                      : "🇮🇩"}
+              </div>
+              <div>
+                <p className="text-cyan-300 font-medium">
+                  {isAddReceiverMode
+                    ? `Existing Escrow: ${existingEscrow!.tokenType}`
+                    : `Selected Token: ${formData.token}`}
                 </p>
+                {isAddReceiverMode && (
+                  <>
+                    <p className="text-cyan-400/80 text-sm">
+                      ID: {existingEscrow!.escrowId.slice(0, 10)}...
+                      {existingEscrow!.escrowId.slice(-8)}
+                    </p>
+                    <p className="text-cyan-400/60 text-xs">
+                      Token type is fixed for this escrow
+                    </p>
+                  </>
+                )}
               </div>
             </div>
           </div>
@@ -588,7 +773,11 @@ export default function CreateStreamModal({
                         onChange={(e) =>
                           updateReceiver(receiver.id, "amount", e.target.value)
                         }
-                        placeholder={`Amount (${formData.token || "Token"})`}
+                        placeholder={`Amount (${
+                          isAddReceiverMode
+                            ? existingEscrow!.tokenType
+                            : formData.token || "Token"
+                        })`}
                         className="w-full p-2 bg-white/5 border border-white/10 rounded-lg text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-cyan-400/50 focus:border-cyan-400/50 text-sm"
                       />
                     </div>

@@ -6,6 +6,10 @@ import { baseSepolia, kaiaTestnet } from "./smartContract";
 export const useWalletClientHook = () => {
   const { isConnected, address } = useWallet();
 
+  const publicClient = createPublicClient({
+    chain: baseSepolia,
+    transport: http(),
+  })
   // Detect which wallet is actually being used
   const detectActualWallet = () => {
     if (typeof window === 'undefined') return 'unknown';
@@ -64,10 +68,10 @@ export const useWalletClientHook = () => {
       });
       
       // Create public client for simulation
-      const publicClient = createPublicClient({
-        chain: baseSepolia,
-        transport: http(),
-      });
+      // const publicClient = createPublicClient({
+      //   chain: baseSepolia,
+      //   transport: http(),
+      // });
       
       return {
         _isEthereumWallet: true,

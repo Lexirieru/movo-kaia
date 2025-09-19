@@ -182,10 +182,10 @@ export const getEscrowDetailsWithTokenDetection = async (escrowId: string) => {
           continue;
         }
       }
-      if (!found) {
-        contractAddress = getContractAddressByTokenType("USDC");
-        console.log("⚠️ Could not detect token type, defaulting to USDC");
-      }
+      // if (!found) {
+      //   contractAddress = getContractAddressByTokenType("USDC");
+      //   console.log("⚠️ Could not detect token type, defaulting to USDC");
+      // }
     }
 
     const contractDetails = await getEscrowDetailsFromContract(
@@ -259,6 +259,8 @@ export const getEscrowDetailsWithTokenDetection = async (escrowId: string) => {
   }
 };
 
+
+
 export const fetchEscrowDetailsFromGoldsky = async (escrowId: string) => {
   try {
     console.log("🔍 Fetching escrow details from Goldsky:", escrowId);
@@ -302,6 +304,11 @@ export const fetchEscrowDetailsFromGoldsky = async (escrowId: string) => {
     return null;
   }
 };
+
+
+
+
+
 
 // Function to get contract address based on token type
 const getContractAddressByTokenType = (tokenType: string): string => {
@@ -1245,6 +1252,7 @@ const fetchReceiverEscrowsFromIndexer = async (receiverAddress: string) => {
       originalAddress: receiverAddress,
     });
 
+
     const response = await axios.post(
       GOLDSKY_ESCROW_API_URL,
       {
@@ -1260,6 +1268,7 @@ const fetchReceiverEscrowsFromIndexer = async (receiverAddress: string) => {
         timeout: 15000, // 15 second timeout for better reliability
       },
     );
+    
 
     console.log("📥 Goldsky receiver API response:", response.data);
     console.log("📥 Receiver response status:", response.status);

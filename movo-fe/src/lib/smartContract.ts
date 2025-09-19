@@ -893,59 +893,209 @@ export const createEscrowOnchain = async (
   }
 };
 
-export async function addReceiver(
+// export const createEscrowOnchain = async (
+//   walletClient: any,
+//   tokenType: string,
+//   escrowData: any,
+//   userId?: string
+// ) => {
+//   try {
+//     console.log("🔄 Creating escrow onchain:", {
+//       tokenType,
+//       escrowData: {
+//         ...escrowData,
+//         amounts: escrowData.amounts.map((a: bigint) => a.toString()),
+//         totalAmount: escrowData.totalAmount.toString()
+//       }
+//     });
+
+//     // Get the correct contract and token address
+//     let contract, tokenAddress;
+//     if (tokenType === "IDRX") {
+//       contract = escrowIdrxContract;
+//       tokenAddress = getTokenAddress("IDRX")
+//     } else if (tokenType === "USDT") {
+//       contract = escrowContract;
+//       tokenAddress = getTokenAddress("USDT")
+//     } else {
+//       contract = escrowContract;
+//       tokenAddress = getTokenAddress("USDC")
+//     }
+
+//     if (!contract || !tokenAddress) {
+//       throw new Error(`Contract or token address not found for ${tokenType}`);
+//     }
+
+//     console.log("📋 Using contract:", {
+//       contractAddress: contract.address,
+//       tokenAddress,
+//       tokenType
+//     });
+
+//     // Write transaction
+//     const hash = await walletClient.writeContract({
+//       address: contract.address,
+//       abi: contract.abi,
+//       functionName: 'createEscrow',
+//       args: [
+//         escrowData.receivers,
+//         escrowData.amounts,
+//         escrowData.totalAmount,
+//         escrowData.vestingEnabled || false,
+//         BigInt(escrowData.vestingDuration || 0)
+//       ],
+//     });
+
+//     console.log("✅ Create escrow transaction sent:", hash);
+
+//     // Fix: Use walletClient.waitForTransactionReceipt
+//     const receipt = await publicClient.waitForTransactionReceipt({
+//       hash,
+//     });
+
+//     console.log("✅ Create escrow transaction confirmed:", receipt);
+
+//     // Extract escrowId from transaction logs
+//     let escrowId = null;
+//     if (receipt.logs && receipt.logs.length > 0) {
+//       // Look for EscrowCreated event log
+//       const escrowCreatedLog = receipt.logs.find((log: any) => 
+//         log.topics && log.topics.length > 1
+//       );
+//       if (escrowCreatedLog && escrowCreatedLog.topics[1]) {
+//         escrowId = escrowCreatedLog.topics[1];
+//       }
+//     }
+
+//     return {
+//       success: true,
+//       transactionHash: hash,
+//       escrowId: escrowId,
+//       receipt
+//     };
+
+//   } catch (error) {
+//     console.error("❌ Error creating escrow:", error);
+//     return {
+//       success: false,
+//       error: error instanceof Error ? error.message : "Unknown error"
+//     };
+//   }
+// };
+
+// export async function addReceiver(
+//   walletClient: any,
+//   tokenType: "USDC" | "USDT" | "IDRX",
+//   escrowId: string,
+//   receiverAddress: `0x${string}`,
+//   amount: bigint,
+// ): Promise<AddReceiverResult> {
+//   try {
+//     console.log("Adding receiver to escrow:", {
+//       tokenType,
+//       escrowId,
+//       receiverAddress,
+//       amount: amount.toString(),
+//     });
+
+//     const contractAddress =
+//       tokenType === "IDRX" ? escrowIdrxContract : escrowContract;
+
+//     const txHash = await walletClient.writeContract({
+//       address: contractAddress.address,
+//       abi: tokenType === "IDRX" ? escrowIdrxAbis : escrowAbis,
+//       functionName: "addReceiver",
+//       args: [escrowId, receiverAddress, amount],
+//     });
+
+//     console.log("Add receiver transaction sent: ", txHash);
+
+//     const receipt = await walletClient.waitForTransactionReceipt(txHash);
+
+//     if (receipt.status == "success") {
+//       console.log("Receiver added successfully:", receipt);
+
+//       // Receiver added successfully onchain
+//       console.log(`✅ Receiver added successfully to escrow ${escrowId}`);
+
+//       return {
+//         success: true,
+//         transactionHash: txHash,
+//       };
+//     } else {
+//       return {
+//         success: false,
+//         error: "Transaction failed",
+//       };
+//     }
+//   } catch (error) {
+//     console.error("Error adding receiver to escrow:", error);
+//     return {
+//       success: false,
+//       error: error instanceof Error ? error.message : "Unknown error occured",
+//     };
+//   }
+// }
+
+export const addReceiver = async (
   walletClient: any,
-  tokenType: "USDC" | "USDT" | "IDRX",
-  escrowId: string,
+  tokenType: string,
+  escrowId: `0x${string}`,
   receiverAddress: `0x${string}`,
-  amount: bigint,
-): Promise<AddReceiverResult> {
+  amount: bigint
+) => {
   try {
-    console.log("Adding receiver to escrow:", {
+    console.log("🔄 Adding receiver to escrow:", {
       tokenType,
       escrowId,
       receiverAddress,
-      amount: amount.toString(),
+      amount: amount.toString()
     });
 
-    const contractAddress =
-      tokenType === "IDRX" ? escrowIdrxContract : escrowContract;
+    // Get the correct contract based on token type
+    let contract;
+    if (tokenType === "IDRX") {
+      contract = escrowIdrxContract;
+    } else {
+      contract = escrowContract; // USDC and USDT use same contract
+    }
 
-    const txHash = await walletClient.writeContract({
-      address: contractAddress.address,
-      abi: tokenType === "IDRX" ? escrowIdrxAbis : escrowAbis,
-      functionName: "addReceiver",
+    if (!contract) {
+      throw new Error(`Contract not found for token type: ${tokenType}`);
+    }
+
+    // Write transaction
+    const hash = await walletClient.writeContract({
+      address: contract.address,
+      abi: contract.abi,
+      functionName: 'addReceiver',
       args: [escrowId, receiverAddress, amount],
     });
 
-    console.log("Add receiver transaction sent: ", txHash);
+    console.log("✅ Add receiver transaction sent:", hash);
 
-    const receipt = await walletClient.waitForTransactionReceipt(txHash);
+    // Fix: Use walletClient.waitForTransactionReceipt instead of publicClient
+    const receipt = await publicClient.waitForTransactionReceipt({
+      hash,
+    });
 
-    if (receipt.status == "success") {
-      console.log("Receiver added successfully:", receipt);
+    console.log("✅ Add receiver transaction confirmed:", receipt);
 
-      // Receiver added successfully onchain
-      console.log(`✅ Receiver added successfully to escrow ${escrowId}`);
+    return {
+      success: true,
+      transactionHash: hash,
+      receipt
+    };
 
-      return {
-        success: true,
-        transactionHash: txHash,
-      };
-    } else {
-      return {
-        success: false,
-        error: "Transaction failed",
-      };
-    }
   } catch (error) {
-    console.error("Error adding receiver to escrow:", error);
+    console.error("❌ Error adding receiver:", error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : "Unknown error occured",
+      error: error instanceof Error ? error.message : "Unknown error"
     };
   }
-}
+};
+
 
 // Topup funds to escrow
 export const topUpFunds = async (
