@@ -85,9 +85,12 @@ const formatAmount = (amount: string, tokenAddress: string) => {
   }
   
   // Determine token type based on address
-  const usdcAddress = getTokenAddress("USDC");
-  const usdtAddress = getTokenAddress("USDT");
-  const idrxAddress = getTokenAddress("IDRX");
+  // const usdcAddress = getTokenAddress("USDC");
+  // const usdtAddress = getTokenAddress("USDT");
+  // const idrxAddress = getTokenAddress("IDRX");
+  const usdcAddress = (process.env.NEXT_PUBLIC_USDC_ADDRESS || "0xf9D5a610fe990bfCdF7dd9FD64bdfe89D6D1eb4c").toLowerCase();
+  const usdtAddress = (process.env.NEXT_PUBLIC_USDT_ADDRESS || "0x80327544e61e391304ad16f0BAFb2C5c7A76dfB3").toLowerCase();
+  const idrxAddress = (process.env.NEXT_PUBLIC_IDRX_ADDRESS || "0x77fEa84656B5EF40BF33e3835A9921dAEAadb976").toLowerCase();
   
   let tokenSymbol = "USDC"; // Default to USDC
   let decimals = 6;
@@ -140,7 +143,18 @@ export default function EscrowList({
     const usdcAddress = getTokenAddress("USDC");
     const usdtAddress = getTokenAddress("USDT");
     const idrxAddress = getTokenAddress("IDRX");
-    
+      const addr = tokenAddress.toLowerCase();
+
+      console.log("🔍 Token type detection:", {
+    inputAddress: addr,
+    usdtAddress,
+    usdcAddress,
+    idrxAddress,
+    isUSDT: addr === usdtAddress,
+    isUSDC: addr === usdcAddress,
+    isIDRX: addr === idrxAddress
+  });
+
     if (tokenAddress.toLowerCase() === usdcAddress.toLowerCase()) {
       return "USDC";
     } else if (tokenAddress.toLowerCase() === usdtAddress.toLowerCase()) {
@@ -178,11 +192,21 @@ export default function EscrowList({
     const tokenType = getTokenType(tokenAddress);
     let contract;
     
-    if (tokenType === "USDC") {
+    if (tokenType === "USDC" || tokenType === "USDT") {
       contract = escrowContract;
     } else {
       contract = escrowIdrxContract;
     }
+
+      if (!contract) {
+    console.error("❌ Contract not found for token type:", tokenType);
+    setLoadingDetails(prev => {
+      const newSet = new Set(prev);
+      newSet.delete(escrowId);
+      return newSet;
+    });
+    return;
+  }
 
     // Ensure escrowId is properly formatted as bytes32
     let formattedEscrowId = escrowId;

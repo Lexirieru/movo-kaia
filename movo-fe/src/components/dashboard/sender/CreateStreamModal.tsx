@@ -9,7 +9,28 @@ import {
   parseTokenAmount,
   addReceiver,
 } from "@/lib/smartContract";
-
+const Modal = ({ isOpen, onClose, children }: { 
+  isOpen: boolean; 
+  onClose: () => void; 
+  children: React.ReactNode 
+}) => {
+  if (!isOpen) return null;
+  
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      {/* Backdrop */}
+      <div 
+        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+        onClick={onClose}
+      />
+      
+      {/* Modal Content */}
+      <div className="relative z-10 w-full max-w-2xl mx-4">
+        {children}
+      </div>
+    </div>
+  );
+};
 interface CreateStreamModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -107,6 +128,15 @@ export default function CreateStreamModal({
     ? "Add Receiver to Escrow"
     : "Create Escrow Stream";
   const loadingText = isAddReceiverMode ? "Adding Receiver" : "Creating Escrow";
+
+  const canSubmit = isAddReceiverMode
+    ? formData.receivers.length === 1 &&
+      formData.receivers[0].address &&
+      formData.receivers[0].amount &&
+      !isLoading
+    : formData.receivers.length > 0 &&
+      formData.receivers.every((r) => r.address && r.amount) &&
+      !isLoading;
   const handleTokenSelect = (token: "USDC" | "IDRX") => {
     setFormData({ ...formData, token });
   };
@@ -157,10 +187,7 @@ export default function CreateStreamModal({
 
     // Validate all receivers have data
     const isValid = formData.receivers.every(
-      (r) =>
-        r.address.trim() &&
-        r.amount.trim() &&
-        parseFloat(r.amount) > 0,
+      (r) => r.address.trim() && r.amount.trim() && parseFloat(r.amount) > 0,
     );
 
     if (!isValid) {
@@ -214,7 +241,10 @@ export default function CreateStreamModal({
           (r) => r.address as `0x${string}`,
         );
         const amounts = formData.receivers.map((r) =>
-          parseTokenAmount(r.amount, formData.token === "USDC" || formData.token === "USDT" ? 6 : 2),
+          parseTokenAmount(
+            r.amount,
+            formData.token === "USDC" || formData.token === "USDT" ? 6 : 2,
+          ),
         );
         const totalAmount = amounts.reduce(
           (acc, amount) => acc + amount,
@@ -238,8 +268,10 @@ export default function CreateStreamModal({
             amounts,
             totalAmount,
             vestingEnabled: formData.vestingEnabled,
-            vestingDuration: formData.vestingEnabled 
-              ? (formData.vestingUnit === "weeks" ? formData.vestingDuration * 7 : formData.vestingDuration)
+            vestingDuration: formData.vestingEnabled
+              ? formData.vestingUnit === "weeks"
+                ? formData.vestingDuration * 7
+                : formData.vestingDuration
               : 0,
           },
           undefined, // No userId needed for wallet-only authentication
@@ -254,7 +286,9 @@ export default function CreateStreamModal({
         }
 
         // Generate escrowId from transaction hash or use a unique identifier
-        const escrowId = escrowResult.escrowId || `escrow_${walletClient.account.address}_${Date.now()}`;
+        const escrowId =
+          escrowResult.escrowId ||
+          `escrow_${walletClient.account.address}_${Date.now()}`;
 
         console.log("escrowId", escrowId);
         const escrowIdBytes = `0x${escrowId}` as `0x${string}`;
@@ -328,7 +362,7 @@ export default function CreateStreamModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <Modal isOpen={isOpen} onClose={onClose}>
       <div className="bg-gray-900/95 border border-cyan-400/20 rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden">
         {/* Header */}
         <div className="flex justify-between items-center p-6 border-b border-white/10">
@@ -344,6 +378,29 @@ export default function CreateStreamModal({
           </button>
         </div>
 
+        {isAddReceiverMode && (
+          <div className="bg-cyan-500/10 border border-cyan-500/20 rounded-lg p-4 mb-6">
+            <div className="flex items-center space-x-3">
+              <div className="w-8 h-8 bg-cyan-500/20 rounded-full flex items-center justify-center">
+                <span>
+                  {existingEscrow.tokenType === "USDC"
+                    ? "💵"
+                    : existingEscrow.tokenType === "USDT"
+                      ? "💰"
+                      : "🇮🇩"}
+                </span>
+              </div>
+              <div>
+                <p className="text-cyan-300 font-medium">
+                  Adding to existing {existingEscrow.tokenType} escrow
+                </p>
+                <p className="text-cyan-400/80 text-sm">
+                  ID: {existingEscrow.escrowId}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="flex-1 overflow-y-auto p-6">
           <div className="space-y-6">
@@ -411,12 +468,17 @@ export default function CreateStreamModal({
                       setFormData({
                         ...formData,
                         vestingEnabled: e.target.checked,
-                        vestingDuration: e.target.checked ? formData.vestingDuration : 0,
+                        vestingDuration: e.target.checked
+                          ? formData.vestingDuration
+                          : 0,
                       })
                     }
                     className="w-4 h-4 text-cyan-600 bg-white/10 border-white/20 rounded focus:ring-cyan-500 focus:ring-2"
                   />
-                  <label htmlFor="vestingEnabled" className="text-white/80 text-sm font-medium">
+                  <label
+                    htmlFor="vestingEnabled"
+                    className="text-white/80 text-sm font-medium"
+                  >
                     Enable Vesting (Optional)
                   </label>
                 </div>
@@ -453,17 +515,29 @@ export default function CreateStreamModal({
                         }
                         className="px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-purple-400/50 focus:border-purple-400/50 text-sm"
                       >
-                        <option value="days" className="bg-gray-800 text-white">Days</option>
-                        <option value="weeks" className="bg-gray-800 text-white">Weeks</option>
+                        <option value="days" className="bg-gray-800 text-white">
+                          Days
+                        </option>
+                        <option
+                          value="weeks"
+                          className="bg-gray-800 text-white"
+                        >
+                          Weeks
+                        </option>
                       </select>
                     </div>
                     <p className="text-purple-300/80 text-xs mt-2">
-                      Tokens will be gradually released over the specified duration. 
-                      Receivers can claim their proportional share at any time during the vesting period.
+                      Tokens will be gradually released over the specified
+                      duration. Receivers can claim their proportional share at
+                      any time during the vesting period.
                       {formData.vestingDuration > 0 && (
                         <span className="block mt-1 font-medium">
-                          Total duration: {formData.vestingDuration} {formData.vestingUnit} 
-                          ({formData.vestingUnit === "weeks" ? formData.vestingDuration * 7 : formData.vestingDuration} days)
+                          Total duration: {formData.vestingDuration}{" "}
+                          {formData.vestingUnit}(
+                          {formData.vestingUnit === "weeks"
+                            ? formData.vestingDuration * 7
+                            : formData.vestingDuration}{" "}
+                          days)
                         </span>
                       )}
                     </p>
@@ -582,6 +656,6 @@ export default function CreateStreamModal({
           </div>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }

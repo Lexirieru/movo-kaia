@@ -126,6 +126,152 @@ const getEscrowDetailsFromContract = async (escrowId: string, contractAddress: s
   }
 };
 
+export const getEscrowDetailsWithTokenDetection = async (escrowId: string) => {
+  try{
+    console.log("Getting escrow details with doken detection for:", escrowId);
+
+    const goldskyDetails = await fetchEscrowDetailsFromGoldsky(escrowId);
+
+    let tokenType: "USDC" | "USDT" | "IDRX" = "USDC"; // Default to USDC
+    let contractAddress: string
+
+    if(goldskyDetails && goldskyDetails.contractId_){
+      tokenType = determineTokenTypeFromContract(goldskyDetails.contractId_);
+      contractAddress = getContractAddressByTokenType(tokenType);
+      console.log("Token type detected")
+    } else {
+        console.log("Token type could not be determined from Goldsky, defaulting to USDC");
+
+        const tokenTypes: ("USDC" | "USDT" | "IDRX")[] = ["USDC", "USDT", "IDRX"];
+        for(const type of tokenTypes){
+          try{
+            const testContractAddress = getContractAddressByTokenType(type);
+            const contractDetails = await getEscrowDetailsFromContract(escrowId, testContractAddress);
+  
+            if(contractDetails && contractDetails.sender && contractDetails.sender !== "0x0000000000000000000000000000000000000000" ){
+              tokenType = type;
+              contractAddress = testContractAddress;
+              console.log(`Token type determined by contract read: ${tokenType}`);
+              break
+            }
+
+          }catch (error){
+          console.error("Error determining token type by contract read:", error);
+          continue
+        } 
+        }
+        if(!found){
+                  contractAddress = getContractAddressByTokenType("USDC");
+        console.log("⚠️ Could not detect token type, defaulting to USDC");
+              }
+    }
+
+    const contractDetails = await getEscrowDetailsFromContract(escrowId, contractAddress);
+    if(!contractDetails){
+      throw new Error("Could not fetch contract details");
+    }
+
+    const enhancedDetails = {
+      // Basic escrow info
+      escrowId: escrowId,
+      tokenType: tokenType,
+      contractAddress: contractAddress,
+      
+      // From contract
+      creator: contractDetails.sender,
+      tokenAddress: contractDetails.tokenAddress,
+      totalAllocatedAmount: contractDetails.totalAllocatedAmount,
+      totalDepositedAmount: contractDetails.totalDepositedAmount,
+      totalWithdrawnAmount: contractDetails.totalWithdrawnAmount,
+      availableBalance: contractDetails.availableBalance,
+      createdAt: contractDetails.createdAt,
+      lastTopUpAt: contractDetails.lastTopUpAt,
+      receiverCount: contractDetails.receiverCount,
+      activeReceiverCount: contractDetails.activeReceiverCount,
+      receiverAddresses: contractDetails.receiverAddresses,
+      
+      // From Goldsky (if available)
+      goldskyData: goldskyDetails,
+      
+      // Computed fields
+      isActive: parseFloat(contractDetails.availableBalance) > 0,
+      remainingAmount: contractDetails.availableBalance,
+      
+      // Receivers with detailed info
+      receivers: contractDetails.receiverAddresses.map((addr: string, index: number) => ({
+        address: addr,
+        allocation: "0", // Will be filled from Goldsky data if available
+        withdrawn: "0",  // Will be calculated
+        remaining: "0"   // Will be calculated
+      }))
+    };
+
+    if (goldskyDetails) {
+      const receivers = goldskyDetails.receivers ? goldskyDetails.receivers.split(",") : [];
+      const amounts = goldskyDetails.amounts ? goldskyDetails.amounts.split(",") : [];
+      
+      enhancedDetails.receivers = receivers.map((addr: string, index: number) => ({
+        address: addr.trim(),
+        allocation: amounts[index]?.trim() || "0",
+        withdrawn: "0", // TODO: Get from withdraw events
+        remaining: amounts[index]?.trim() || "0" // TODO: Calculate actual remaining
+      }));
+    }
+
+    console.log("✅ Enhanced escrow details:", enhancedDetails);
+    return enhancedDetails;
+  } catch(err){
+    console.error("Error in getEscrowDetailsWithTokenDetection:", err);
+    throw err;
+  }
+}
+
+export const fetchEscrowDetailsFromGoldsky = async (escrowId: string) => {
+  try {
+    console.log("🔍 Fetching escrow details from Goldsky:", escrowId);
+
+    const query = `
+      query GetEscrowDetails($escrowId: String!) {
+        escrowCreateds(where: { escrowId: $escrowId }) {
+          escrowId
+          sender
+          receivers
+          amounts
+          totalAmount
+          timestamp_
+          transactionHash_
+          contractId_
+          tokenAddress
+        }
+      }
+    `;
+
+    const response = await axios.post(GOLDSKY_ESCROW_API_URL, {
+      query,
+      variables: { escrowId },
+    });
+
+    if (response.data.errors) {
+      console.error("❌ GraphQL errors:", response.data.errors);
+      return null;
+    }
+
+    const escrows = response.data.data.escrowCreateds;
+    if (escrows && escrows.length > 0) {
+      console.log("✅ Found escrow details from Goldsky:", escrows[0]);
+      return escrows[0];
+    }
+
+    console.log("⚠️ No escrow found in Goldsky for ID:", escrowId);
+    return null;
+
+  } catch (error) {
+    console.error("❌ Error fetching escrow details from Goldsky:", error);
+    return null;
+  }
+};
+
+
 // Function to get contract address based on token type
 const getContractAddressByTokenType = (tokenType: string): string => {
   const tokenTypeLower = tokenType.toLowerCase();
