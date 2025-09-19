@@ -1455,3 +1455,113 @@ export const withdrawUSDCTofiat = async (
     };
   }
 };
+
+// Withdraw USDC to Crypto (receiver's own wallet)
+export const withdrawUSDCToCrypto = async (
+  walletClient: any,
+  escrowId: string,
+  amount: bigint,
+): Promise<{ success: boolean; transactionHash?: string; error?: string }> => {
+  try {
+    // Send transaction
+    const hash = await walletClient.writeContract({
+      address: getEscrowAddress("USDC"),
+      abi: escrowAbis,
+      functionName: "withdrawTokenToCrypto",
+      args: [escrowId, amount],
+    });
+
+    // Wait for receipt
+    const receipt = await publicClient.waitForTransactionReceipt({ hash });
+
+    if (receipt.status === "success") {
+      console.log("✅ Withdraw to crypto successful:", receipt);
+
+      // Save withdraw funds event for tracking
+      await saveEscrowEventWithContext(
+        "WITHDRAW_FUNDS",
+        escrowId,
+        hash,
+        walletClient.account.address,
+        "USDC", // This function is specifically for USDC
+        {
+          withdrawAmount: formatTokenAmount(amount, 6), // USDC has 6 decimals
+          withdrawTo: walletClient.account.address, // Receiver's own wallet
+        },
+        receipt,
+        getEscrowAddress("USDC"),
+      );
+
+      return {
+        success: true,
+        transactionHash: hash,
+      };
+    } else {
+      return {
+        success: false,
+        error: "Transaction failed",
+      };
+    }
+  } catch (error) {
+    console.error("❌ Error withdrawing USDC to crypto:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+    };
+  }
+};
+
+// Withdraw IDRX to Crypto (receiver's own wallet)
+export const withdrawIDRXToCrypto = async (
+  walletClient: any,
+  escrowId: string,
+  amount: bigint,
+): Promise<{ success: boolean; transactionHash?: string; error?: string }> => {
+  try {
+    // Send transaction
+    const hash = await walletClient.writeContract({
+      address: getEscrowAddress("IDRX"),
+      abi: escrowIdrxAbis,
+      functionName: "withdrawIDRXToCrypto",
+      args: [escrowId, amount],
+    });
+
+    // Wait for receipt
+    const receipt = await publicClient.waitForTransactionReceipt({ hash });
+
+    if (receipt.status === "success") {
+      console.log("✅ Withdraw IDRX to crypto successful:", receipt);
+
+      // Save withdraw funds event for tracking
+      await saveEscrowEventWithContext(
+        "WITHDRAW_FUNDS",
+        escrowId,
+        hash,
+        walletClient.account.address,
+        "IDRX", // This function is specifically for IDRX
+        {
+          withdrawAmount: formatTokenAmount(amount, 2), // IDRX has 2 decimals
+          withdrawTo: walletClient.account.address, // Receiver's own wallet
+        },
+        receipt,
+        getEscrowAddress("IDRX"),
+      );
+
+      return {
+        success: true,
+        transactionHash: hash,
+      };
+    } else {
+      return {
+        success: false,
+        error: "Transaction failed",
+      };
+    }
+  } catch (error) {
+    console.error("❌ Error withdrawing IDRX to crypto:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+    };
+  }
+};

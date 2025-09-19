@@ -1,12 +1,17 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { X, Wallet, DollarSign, Coins, ArrowRight, Info } from "lucide-react";
+import { X, Wallet, DollarSign, Coins, ArrowRight, Info, Clock } from "lucide-react";
 import BankSelector from "./BankSelector";
 import BankForm from "./BankForm";
 import ClaimSuccess from "./ClaimSuccess";
+import VestingInfo from "./VestingInfo";
 import { getUsdcIdrxRate } from "@/app/api/api";
 import { bankDictionary } from "@/lib/dictionary";
+import { useWallet } from "@/lib/walletContext";
+import { useWalletClientHook } from "@/lib/useWalletClient";
+import { withdrawUSDCToCrypto, withdrawIDRXToCrypto, parseTokenAmount } from "@/lib/smartContract";
+import { canReceiverClaim } from "@/lib/escrowReader";
 
 interface ClaimModalProps {
   isOpen: boolean;
@@ -21,6 +26,9 @@ export default function ClaimModal({
   selectedStreams,
   totalAmount,
 }: ClaimModalProps) {
+  const { address, isConnected } = useWallet();
+  const walletClient = useWalletClientHook();
+  
   // Helper function to format amount based on token type
   const formatTokenAmount = (amount: number, tokenType: string) => {
     // USDC and USDT use 6 decimals, IDRX uses 2 decimals
@@ -39,6 +47,9 @@ export default function ClaimModal({
     bankAccountNumber: "",
     bankAccountName: "",
   });
+  const [error, setError] = useState<string | null>(null);
+  const [vestingInfo, setVestingInfo] = useState<any>(null);
+  const [claimStatus, setClaimStatus] = useState<any>(null);
 
   const [rate, setRate] = useState<number | null>(null);
 
@@ -61,6 +72,9 @@ export default function ClaimModal({
       setClaimType('crypto')
       setIsProcessing(false);
       setCustomAmount(totalAmount.toString());
+      setError(null);
+      setVestingInfo(null);
+      setClaimStatus(null);
       setBankForm({
         bankName: "",
         bankAccountNumber: "",
@@ -68,6 +82,29 @@ export default function ClaimModal({
       });
     }
   }, [isOpen, totalAmount])
+
+  // Fetch vesting information when modal opens
+  useEffect(() => {
+    const fetchVestingInfo = async () => {
+      if (!isOpen || !isConnected || !address || selectedStreams.length === 0) return;
+
+      try {
+        const escrowId = selectedStreams[0]?.escrowId;
+        if (!escrowId) return;
+
+        const claimCheck = await canReceiverClaim(escrowId, address, tokenType);
+        setClaimStatus(claimCheck);
+        
+        if (claimCheck.vestingInfo) {
+          setVestingInfo(claimCheck.vestingInfo);
+        }
+      } catch (err) {
+        console.error("Error fetching vesting info:", err);
+      }
+    };
+
+    fetchVestingInfo();
+  }, [isOpen, isConnected, address, selectedStreams, tokenType]);
 
   // Protocol fee and limits calculation
   const PROTOCOL_FEE_PERCENTAGE = 0.25; // 0.25%
@@ -81,7 +118,9 @@ export default function ClaimModal({
 
   // Validation functions
   const isAmountValid =
-    claimAmount >= MIN_PAYOUT_AMOUNT && claimAmount <= maxClaimAmount;
+    claimAmount >= MIN_PAYOUT_AMOUNT && 
+    claimAmount <= maxClaimAmount &&
+    claimStatus?.canClaim === true;
 
   const handleBankSelect = (bankName: string) => {
     setBankForm((prev) => ({ ...prev, bankName }));
@@ -106,13 +145,45 @@ export default function ClaimModal({
   };
 
   const handleClaim = async () => {
-    setIsProcessing(true);
+    if (!isConnected || !address || !walletClient) {
+      setError("Please connect your wallet first");
+      return;
+    }
 
-    // Simulate processing
-    setTimeout(() => {
+    setIsProcessing(true);
+    setError(null);
+
+    try {
+      // Get the escrow ID from the first selected stream
+      const escrowId = selectedStreams[0]?.escrowId;
+      if (!escrowId) {
+        throw new Error("No escrow ID found");
+      }
+
+      // Parse the amount based on token type
+      const decimals = tokenType === "IDRX" ? 2 : 6;
+      const amountParsed = parseTokenAmount(claimAmount.toString(), decimals);
+
+      let result;
+      if (tokenType === "USDC") {
+        result = await withdrawUSDCToCrypto(walletClient, escrowId, amountParsed);
+      } else if (tokenType === "IDRX") {
+        result = await withdrawIDRXToCrypto(walletClient, escrowId, amountParsed);
+      } else {
+        throw new Error("Unsupported token type");
+      }
+
+      if (result.success) {
+        setStep("success");
+      } else {
+        setError(result.error || "Withdrawal failed");
+      }
+    } catch (err) {
+      console.error("Error during withdrawal:", err);
+      setError(err instanceof Error ? err.message : "An unexpected error occurred");
+    } finally {
       setIsProcessing(false);
-      setStep("success");
-    }, 2000);
+    }
   };
 
   const handleConfirmBank = () => {
@@ -206,14 +277,16 @@ export default function ClaimModal({
                   </button>
                   <button
                     onClick={() => setClaimType("fiat")}
+                    disabled={true}
                     className={`flex-1 py-3 px-4 rounded-xl font-medium transition-all duration-300 flex items-center justify-center space-x-2 ${
                       claimType === "fiat"
                         ? "bg-gradient-to-r from-green-500 to-emerald-600 text-white shadow-lg"
-                        : "text-white/60 hover:text-white hover:bg-white/10"
+                        : "text-white/30 cursor-not-allowed bg-white/5"
                     }`}
                   >
                     <DollarSign className="w-5 h-5" />
                     <span>Fiat Currency</span>
+                    <span className="text-xs opacity-60">(Disabled)</span>
                   </button>
                 </div>
               </div>
@@ -291,7 +364,7 @@ export default function ClaimModal({
                           : `${
                               rate
                                 ? `Rp ${(claimAmount * rate).toLocaleString("id-ID")}`
-                                : "Loading..."
+                                : ""
                             }`}
                       </div>
                       <div className="text-white/60 text-sm">
@@ -299,7 +372,7 @@ export default function ClaimModal({
                           ? `${
                               rate
                                 ? `≈ Rp ${(netAmount * rate).toLocaleString("id-ID")}`
-                                : "Loading..."
+                                : ""
                             }`
                           : `From ${formatTokenAmount(claimAmount, tokenType)} ${tokenType}`}
                       </div>
@@ -307,6 +380,21 @@ export default function ClaimModal({
                   </div>
                 </div>
               </div>
+
+              {/* Fee Information */}
+              <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-4">
+                <div className="flex items-center space-x-2 text-blue-400">
+                  <Info className="w-4 h-4" />
+                  <span className="text-sm">
+                    After deducting platform fee (0.25%)
+                  </span>
+                </div>
+              </div>
+
+              {/* Vesting Information */}
+              {vestingInfo && (
+                <VestingInfo vestingInfo={vestingInfo} tokenType={tokenType} />
+              )}
 
               {/* Stream Details */}
               <div className="space-y-3">
@@ -337,13 +425,25 @@ export default function ClaimModal({
                 </div>
               </div>
 
+              {/* Error Display */}
+              {(error || (claimStatus && !claimStatus.canClaim)) && (
+                <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4">
+                  <div className="flex items-center space-x-2 text-red-400">
+                    <Info className="w-4 h-4" />
+                    <span className="text-sm">
+                      {error || claimStatus?.reason || "Unable to claim at this time"}
+                    </span>
+                  </div>
+                </div>
+              )}
+
               {/* Crypto Claim Button */}
               {claimType === "crypto" && (
                 <button
                   onClick={handleClaim}
-                  disabled={isProcessing || !isAmountValid || claimAmount <= 0}
+                  disabled={isProcessing || !isAmountValid || claimAmount <= 0 || !claimStatus?.canClaim}
                   className={`w-full py-4 rounded-xl font-medium transition-all flex items-center justify-center space-x-2 ${
-                    isProcessing || !isAmountValid || claimAmount <= 0
+                    isProcessing || !isAmountValid || claimAmount <= 0 || !claimStatus?.canClaim
                       ? "bg-gray-600 text-white/50 cursor-not-allowed"
                       : "bg-gradient-to-r from-cyan-500 to-blue-600 text-white hover:shadow-lg hover:scale-105"
                   }`}
@@ -352,6 +452,16 @@ export default function ClaimModal({
                     <>
                       <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
                       <span>Processing...</span>
+                    </>
+                  ) : !claimStatus?.canClaim ? (
+                    <>
+                      <Clock className="w-5 h-5" />
+                      <span>
+                        {vestingInfo?.isVestingEnabled 
+                          ? "Vesting in Progress" 
+                          : "Cannot Claim"
+                        }
+                      </span>
                     </>
                   ) : (
                     <>
@@ -363,20 +473,6 @@ export default function ClaimModal({
                 </button>
               )}
 
-              {/* Fiat Bank Form */}
-              {claimType === "fiat" && (
-                <BankForm
-                  bankForm={bankForm}
-                  onChange={handleInputChange}
-                  onSelectBank={() => setStep("selectBank")}
-                  onConfirm={handleConfirmBank}
-                  onCancel={handleBankFormCancel}
-                  isProcessing={isProcessing}
-                  claimAmount={claimAmount}
-                  netAmount={netAmount}
-                  protocolFee={protocolFee}
-                />
-              )}
             </div>
           </div>
         )}

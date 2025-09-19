@@ -29,18 +29,10 @@ const BottomNavbar = memo(() => {
     router.push("/dashboard");
   }, [router]);
 
-  const handleHistoryClick = useCallback(() => {
-    router.push("/history");
-  }, [router]);
 
-  const handleCreateClaimClick = useCallback(() => {
-    // Conditional navigation based on user role
-    if (user?.role === "receiver") {
-      router.push("/claim");
-    } else {
-      router.push("/create-claim");
-    }
-  }, [user?.role, router]);
+  const handleCreateEscrowClick = useCallback(() => {
+    router.push("/create-escrow");
+  }, [router]);
 
   const handleProfileClick = useCallback(() => {
     router.push("/profile");
@@ -48,18 +40,16 @@ const BottomNavbar = memo(() => {
 
   // Memoize middle button to prevent recalculation
   const middleButton = useMemo(() => {
-    const isReceiver = user?.role === "receiver";
-    const isClaim = pathname === "/claim";
-    const isCreate = pathname === "/create-claim";
+    const isCreateEscrow = pathname === "/create-escrow";
 
     return {
-      id: isReceiver ? "claim" : "create-claim",
-      label: isReceiver ? "Claim" : "Create",
-      icon: isReceiver ? Download : Plus,
-      onClick: handleCreateClaimClick,
-      isActive: isReceiver ? isClaim : isCreate,
+      id: "create-escrow",
+      label: "Create",
+      icon: Plus,
+      onClick: handleCreateEscrowClick,
+      isActive: isCreateEscrow,
     };
-  }, [user?.role, pathname, handleCreateClaimClick]);
+  }, [pathname, handleCreateEscrowClick]);
 
   // Memoize nav items array
   const navItems = useMemo(
@@ -70,6 +60,7 @@ const BottomNavbar = memo(() => {
         icon: Home,
         onClick: () => handleNavigation("/home"),
         isActive: pathname === "/home",
+        disabled: false,
       },
       {
         id: "dashboard",
@@ -78,14 +69,19 @@ const BottomNavbar = memo(() => {
         onClick: handleDashboardClick,
         isActive:
           pathname === "/dashboard" || pathname.startsWith("/dashboard"),
+        disabled: false,
       },
-      middleButton,
+      {
+        ...middleButton,
+        disabled: false,
+      },
       {
         id: "history",
         label: "History",
         icon: History,
-        onClick: handleHistoryClick,
-        isActive: pathname === "/history",
+        onClick: () => {}, // Disabled - no action
+        isActive: false,
+        disabled: true,
       },
       {
         id: "profile",
@@ -93,13 +89,13 @@ const BottomNavbar = memo(() => {
         icon: User,
         onClick: handleProfileClick,
         isActive: pathname === "/profile",
+        disabled: false,
       },
     ],
     [
       pathname,
       handleNavigation,
       handleDashboardClick,
-      handleHistoryClick,
       handleProfileClick,
       middleButton,
     ],
@@ -175,6 +171,7 @@ const BottomNavbar = memo(() => {
             {navItems.map((item) => {
               const IconComponent = item.icon;
               const isActive = item.isActive;
+              const isDisabled = item.disabled;
 
               return (
                 <div
@@ -182,10 +179,13 @@ const BottomNavbar = memo(() => {
                   className="relative flex-1 flex justify-center"
                 >
                   <button
-                    onClick={item.onClick}
+                    onClick={isDisabled ? undefined : item.onClick}
+                    disabled={isDisabled}
                     className={`flex flex-col items-center justify-center py-2 px-2 rounded-xl transition-all duration-200 ease-out ${
                       isActive
                         ? "text-transparent opacity-30"
+                        : isDisabled
+                        ? "text-gray-600 cursor-not-allowed opacity-50"
                         : "text-gray-400 hover:text-white hover:bg-white/10 hover:scale-105"
                     }`}
                   >

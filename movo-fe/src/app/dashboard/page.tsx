@@ -8,7 +8,6 @@ import {
   loadAllWithdrawHistory,
   fetchEscrowsFromIndexer,
   fetchReceiverDashboardData,
-  testGoldskyConnection,
 } from "../api/api";
 import { WithdrawHistory } from "@/types/historyTemplate";
 import { useAuth } from "@/lib/userContext";
@@ -53,33 +52,12 @@ function DynamicDashboard({
       setLastCheckedAddress(effectiveWalletAddress);
 
       try {
-        console.log("🔍 Checking data for wallet:", effectiveWalletAddress);
-
-        // First, test Goldsky connection
-        const connectionTest = await testGoldskyConnection();
-        if (!connectionTest.success) {
-          console.error("❌ Goldsky connection failed:", connectionTest.error);
-          setSenderEscrows([]);
-          setReceiverData(null);
-          setAllEscrows([]);
-          return;
-        }
-
-        console.log("✅ Goldsky connection successful");
-
-        // Fetch all data in parallel
-        console.log("🔍 Fetching all escrow data...");
+        // Fetch all data in parallel (no connection test needed)
         const [senderEscrowsData, receiverDataResult] = await Promise.all([
           fetchEscrowsFromIndexer(effectiveWalletAddress),
           fetchReceiverDashboardData(effectiveWalletAddress),
         ]);
 
-        console.log("📊 Data fetched:", {
-          senderEscrows: senderEscrowsData.length,
-          receiverWithdrawals: receiverDataResult.availableWithdrawals.length,
-          receiverDataResult: receiverDataResult,
-          availableWithdrawals: receiverDataResult.availableWithdrawals
-        });
 
         // Set sender data
         setSenderEscrows(senderEscrowsData);
@@ -99,22 +77,9 @@ function DynamicDashboard({
           })),
         ];
         
-        console.log("📊 Combined escrows:", {
-          totalCombined: combinedEscrows.length,
-          createdCount: combinedEscrows.filter(e => e.type === "created").length,
-          claimableCount: combinedEscrows.filter(e => e.type === "claimable").length,
-          claimableEscrows: combinedEscrows.filter(e => e.type === "claimable"),
-          allEscrows: combinedEscrows
-        });
         
         setAllEscrows(combinedEscrows);
 
-        console.log("📊 Combined data:", {
-          walletAddress: effectiveWalletAddress,
-          senderEscrows: senderEscrowsData.length,
-          receiverWithdrawals: receiverDataResult.availableWithdrawals.length,
-          totalEscrows: combinedEscrows.length,
-        });
       } catch (error) {
         console.error("Error checking user data:", error);
         setSenderEscrows([]);

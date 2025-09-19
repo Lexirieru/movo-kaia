@@ -5,11 +5,10 @@ import { useAuth } from "@/lib/userContext";
 import { useWallet } from "@/lib/walletContext";
 import { GroupOfUser } from "@/types/receiverInGroupTemplate";
 import { useRouter } from "next/navigation";
+import { Plus } from "lucide-react";
 import GroupStatsCards from "./groups/GroupsStatsCards";
 import GroupFilterBar from "./groups/GroupFilterBar";
 import EscrowList from "./EscrowList";
-import { Plus } from "lucide-react";
-import CreateStreamModal from "./sender/CreateStreamModal";
 import TopupFundModal from "./groups/TopupFundModal";
 import {
   loadAllGroup,
@@ -41,7 +40,6 @@ export default function GroupDashboard({ onRoleChange }: GroupDashboardProps) {
   const router = useRouter();
   const [searchTerm, setSearchTerm] = useState("");
   const [filterType, setFilterType] = useState<string>("all");
-  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isTopupModalOpen, setIsTopupModalOpen] = useState(false);
   const [selectedEscrowId, setSelectedEscrowId] = useState<string | null>(null);
 
@@ -169,27 +167,24 @@ export default function GroupDashboard({ onRoleChange }: GroupDashboardProps) {
         totalReceiver: 0,
         createdAt: new Date().toString(),
       };
-      // Add to local state immediately for better UX
-      setGroups((prev) => [newGroup, ...prev]);
-      if (!user) throw new Error("User not found");
+      if (!user || !address) throw new Error("User or wallet address not found");
       const response = await addGroup(
         user._id,
         user.email,
         groupId,
         groupData.nameOfGroup,
-        currentWalletAddress,
+        address,
       );
 
       const giveRoleSender = await updateWalletAddressRole(
         user._id,
-        currentWalletAddress,
+        address,
         "sender",
       );
 
       console.log("Role update response:", giveRoleSender);
 
       if (response && response.data) {
-        setIsCreateModalOpen(false);
         if (onRoleChange) {
           onRoleChange();
         }
@@ -245,20 +240,12 @@ export default function GroupDashboard({ onRoleChange }: GroupDashboardProps) {
               Connected: {address.slice(0, 6)}...{address.slice(-4)}
             </p>
           </div>
-
-          <button
-            onClick={() => setIsCreateModalOpen(true)}
-            className="bg-gradient-to-r from-cyan-500 to-blue-600 text-white px-6 py-3 rounded-xl font-medium hover:shadow-lg hover:shadow-cyan-500/25 transition-all duration-300 flex items-center space-x-2 hover:scale-105 group w-fit"
-          >
-            <Plus className="w-5 h-5 group-hover:rotate-90 transition-transform duration-300" />
-            <span>Create Escrow</span>
-          </button>
         </div>
 
         {/* --- RENDER KOMPONEN ANAK --- */}
 
         {/* 1. Kartu Statistik */}
-        <GroupStatsCards groups={escrows} />
+        <GroupStatsCards groups={[]} />
 
         {/* 2. Bar Pencarian dan Filter */}
         <GroupFilterBar
@@ -277,13 +264,6 @@ export default function GroupDashboard({ onRoleChange }: GroupDashboardProps) {
           onTopupFund={handleTopupFund}
         />
 
-        {/* Create Stream Modal */}
-        <CreateStreamModal
-          isOpen={isCreateModalOpen}
-          onClose={() => setIsCreateModalOpen(false)}
-          onCreateStream={handleCreateGroup}
-          onEscrowCreated={refreshEscrows}
-        />
 
         {/* Topup Fund Modal */}
         <TopupFundModal

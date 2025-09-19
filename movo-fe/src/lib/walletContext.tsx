@@ -21,6 +21,8 @@ interface WalletContextType {
   walletAddress: string;
   isWalletConnected: boolean;
   setRefreshUserCallback: (callback: () => Promise<void>) => void; // callaback untuk refresh user
+  disableAutoLogin: boolean; // flag untuk disable auto login
+  setDisableAutoLogin: (disable: boolean) => void; // function untuk set disable auto login
 }
 
 const WalletContext = createContext<WalletContextType | undefined>(undefined);
@@ -35,6 +37,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const [processedAddresses, setProcessedAddresses] = useState<Set<string>>(
     new Set(),
   );
+  const [disableAutoLogin, setDisableAutoLogin] = useState(false);
   const router = useRouter();
 
   // Wagmi hooks
@@ -92,6 +95,11 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
       if (isWalletSyncing) {
         console.log("❌ Already syncing, skipping login");
+        return;
+      }
+
+      if (disableAutoLogin) {
+        console.log("❌ Auto login disabled, skipping login");
         return;
       }
 
@@ -242,6 +250,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     // Aliases for backward compatibility
     walletAddress: address || "",
     isWalletConnected: isConnected && !isWalletSyncing,
+    disableAutoLogin,
+    setDisableAutoLogin,
   };
 
   return (

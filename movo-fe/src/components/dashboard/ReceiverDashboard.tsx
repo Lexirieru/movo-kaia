@@ -605,7 +605,7 @@ export default function ReceiverDashboard({
         </div>
 
         {/* Enhanced Onchain Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {/* Available to Claim */}
           <div className="bg-white/5 rounded-xl p-4 border border-white/10">
             <div className="flex items-center space-x-3">
@@ -618,27 +618,6 @@ export default function ReceiverDashboard({
                 {isLoadingStats && (
                   <div className="text-xs text-cyan-400 animate-pulse">
                     Loading onchain data...
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Total Allocated */}
-          <div className="bg-white/5 rounded-xl p-4 border border-white/10">
-            <div className="flex items-center space-x-3">
-              <DollarSign className="w-8 h-8 text-green-400" />
-              <div>
-                <div className="text-2xl font-bold text-white">
-                  $
-                  {receiverStats
-                    ? receiverStats.totalAllocated.toFixed(2)
-                    : "0.00"}
-                </div>
-                <div className="text-white/60 text-sm">Total Allocated</div>
-                {receiverStats && (
-                  <div className="text-xs text-green-400">
-                    From {receiverStats.totalEscrows} escrows
                   </div>
                 )}
               </div>

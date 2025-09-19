@@ -61,8 +61,13 @@ export const clearContractCache = () => {
   console.log("🗑️ Contract details cache cleared");
 };
 
-console.log("🔧 Goldsky Escrow API URL:", GOLDSKY_ESCROW_API_URL);
-console.log("🔧 Goldsky Escrow IDRX API URL:", GOLDSKY_ESCROW_IDRX_API_URL);
+// Check if URLs are properly defined
+if (!GOLDSKY_ESCROW_API_URL) {
+  console.error("❌ GOLDSKY_ESCROW_API_URL is not defined!");
+}
+if (!GOLDSKY_ESCROW_IDRX_API_URL) {
+  console.error("❌ GOLDSKY_ESCROW_IDRX_API_URL is not defined!");
+}
 
 // Viem client configuration
 const publicClient = createPublicClient({
@@ -263,7 +268,6 @@ export const getEscrowDetailsWithTokenDetection = async (escrowId: string) => {
 
 export const fetchEscrowDetailsFromGoldsky = async (escrowId: string) => {
   try {
-    console.log("🔍 Fetching escrow details from Goldsky:", escrowId);
 
     const query = `
       query GetEscrowDetails($escrowId: String!) {
@@ -293,7 +297,6 @@ export const fetchEscrowDetailsFromGoldsky = async (escrowId: string) => {
 
     const escrows = response.data.data.escrowCreateds;
     if (escrows && escrows.length > 0) {
-      console.log("✅ Found escrow details from Goldsky:", escrows[0]);
       return escrows[0];
     }
 
@@ -325,43 +328,6 @@ const getContractAddressByTokenType = (tokenType: string): string => {
   }
 };
 
-// Test function to verify Goldsky API is working
-export const testGoldskyConnection = async () => {
-  try {
-    console.log("🧪 Testing Goldsky connection...");
-
-    const testQuery = `
-      query TestQuery {
-        escrowCreateds(first: 1) {
-          escrowId
-          sender
-        }
-      }
-    `;
-
-    const response = await axios.post(
-      GOLDSKY_ESCROW_API_URL,
-      {
-        query: testQuery,
-      },
-      {
-        headers: {
-          "Content-Type": "application/json",
-        },
-        timeout: 15000, // 15 second timeout for better reliability
-      },
-    );
-
-    console.log("✅ Goldsky connection test successful:", response.data);
-    return { success: true, data: response.data };
-  } catch (error) {
-    console.error("❌ Goldsky connection test failed:", error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : "Unknown error",
-    };
-  }
-};
 
 export const api = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_BASE_URL,
@@ -371,7 +337,6 @@ export const api = axios.create({
 // Function to query tokenWithdrawnToFiat from Goldsky
 export const fetchTokenWithdrawnToFiat = async (receiver: string) => {
   try {
-    console.log("🔍 Fetching tokenWithdrawnToFiat for receiver:", receiver);
 
     const query = `
       query FetchTokenWithdrawnToFiat($receiver: String!) {
@@ -857,6 +822,352 @@ export const checkWalletAddressesRegistration = async (
   } catch (error) {
     console.error("Error checking wallet addresses registration:", error);
     throw error;
+  }
+};
+
+// Enhanced function to fetch comprehensive receiver events including withdrawals
+export const fetchComprehensiveReceiverEvents = async (receiverAddress: string) => {
+  try {
+    if (!receiverAddress) {
+      console.error("❌ No receiver address provided");
+      return { escrowEvents: [], withdrawEvents: [] };
+    }
+
+    const cacheKey = `receiver_comprehensive_${receiverAddress.toLowerCase()}`;
+    const cachedData = getCachedData(cacheKey);
+    if (cachedData) {
+      return cachedData;
+    }
+
+    if (!GOLDSKY_ESCROW_API_URL) {
+      console.error("❌ Goldsky API URL not defined");
+      return { escrowEvents: [], withdrawEvents: [] };
+    }
+
+    // Simplified query to get all events first, then filter
+    const query = `
+      query GetAllReceiverEvents {
+        escrowCreateds(
+          orderBy: timestamp_
+          orderDirection: desc
+          first: 1000
+        ) {
+          escrowId
+          sender
+          receivers
+          amounts
+          totalAmount
+          tokenAddress
+          block_number
+          timestamp_
+          transactionHash_
+          contractId_
+        }
+        tokenWithdrawns(
+          orderBy: timestamp_
+          orderDirection: desc
+          first: 1000
+        ) {
+          escrowId
+          recipient
+          amount
+          depositWallet
+          tokenAddress
+          block_number
+          timestamp_
+          transactionHash_
+          contractId_
+        }
+        tokenWithdrawnToFiats(
+          orderBy: timestamp_
+          orderDirection: desc
+          first: 1000
+        ) {
+          escrowId
+          recipient
+          amount
+          depositWallet
+          tokenAddress
+          block_number
+          timestamp_
+          transactionHash_
+          contractId_
+        }
+      }
+    `;
+
+    const response = await axios.post(GOLDSKY_ESCROW_API_URL, {
+      query,
+    });
+
+    if (response.data.errors) {
+      console.error("❌ GraphQL errors:", response.data.errors);
+      return { escrowEvents: [], withdrawEvents: [] };
+    }
+
+    const data = response.data.data;
+    const allEvents = [];
+    const withdrawEvents = [];
+    const receiverAddressLower = receiverAddress.toLowerCase();
+
+    // Process escrow created events (where user is a receiver)
+    if (data.escrowCreateds) {
+      data.escrowCreateds.forEach((event: any) => {
+        // Check if the receiver address is in the receivers list
+        if (event.receivers) {
+          const receivers = event.receivers.split(',').map((addr: string) => addr.trim().toLowerCase());
+          if (receivers.includes(receiverAddressLower)) {
+            allEvents.push({
+              ...event,
+              eventType: "ESCROW_CREATED",
+              tokenType: determineTokenTypeFromContract(event.contractId_),
+            });
+          }
+        }
+      });
+    }
+
+    // Process withdrawal events
+    if (data.tokenWithdrawns) {
+      data.tokenWithdrawns.forEach((event: any) => {
+        if (event.recipient && event.recipient.toLowerCase() === receiverAddressLower) {
+          withdrawEvents.push({
+            escrowId: event.escrowId,
+            recipient: event.recipient,
+            amount: event.amount,
+            timestamp: new Date(parseInt(event.timestamp_) * 1000),
+            transactionHash: event.transactionHash_,
+            blockNumber: event.block_number,
+            depositWallet: event.depositWallet,
+            tokenType: determineTokenTypeFromContract(event.contractId_),
+          });
+        }
+      });
+    }
+
+    if (data.tokenWithdrawnToFiats) {
+      data.tokenWithdrawnToFiats.forEach((event: any) => {
+        if (event.recipient && event.recipient.toLowerCase() === receiverAddressLower) {
+          withdrawEvents.push({
+            escrowId: event.escrowId,
+            recipient: event.recipient,
+            amount: event.amount,
+            timestamp: new Date(parseInt(event.timestamp_) * 1000),
+            transactionHash: event.transactionHash_,
+            blockNumber: event.block_number,
+            depositWallet: event.depositWallet,
+            tokenType: determineTokenTypeFromContract(event.contractId_),
+          });
+        }
+      });
+    }
+
+    // Sort all events by timestamp
+    allEvents.sort((a, b) => parseInt(b.timestamp_) - parseInt(a.timestamp_));
+    withdrawEvents.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+    
+    const result = { escrowEvents: allEvents, withdrawEvents };
+    
+    // Cache the result
+    setCachedData(cacheKey, result);
+    
+    return result;
+  } catch (error) {
+    console.error("❌ Error fetching comprehensive receiver events:", error);
+    return { escrowEvents: [], withdrawEvents: [] };
+  }
+};
+
+// Enhanced function to fetch comprehensive escrow events including topups and other activities
+export const fetchComprehensiveEscrowEvents = async (userAddress: string) => {
+  try {
+    if (!userAddress) {
+      console.error("❌ No user address provided");
+      return [];
+    }
+
+    const cacheKey = `comprehensive_${userAddress.toLowerCase()}`;
+    const cachedData = getCachedData(cacheKey);
+    if (cachedData) {
+      return cachedData;
+    }
+
+    if (!GOLDSKY_ESCROW_API_URL) {
+      console.error("❌ Goldsky API URL not defined");
+      return [];
+    }
+
+    // Simplified query to get all events first, then filter
+    const query = `
+      query GetAllEvents {
+        escrowCreateds(
+          orderBy: timestamp_
+          orderDirection: desc
+          first: 1000
+        ) {
+          escrowId
+          sender
+          receivers
+          amounts
+          totalAmount
+          tokenAddress
+          block_number
+          timestamp_
+          transactionHash_
+          contractId_
+        }
+        fundsTopUps(
+          orderBy: timestamp_
+          orderDirection: desc
+          first: 1000
+        ) {
+          escrowId
+          sender
+          amount
+          newCycleBalance
+          tokenAddress
+          block_number
+          timestamp_
+          transactionHash_
+          contractId_
+        }
+        receiverAddeds(
+          orderBy: timestamp_
+          orderDirection: desc
+          first: 1000
+        ) {
+          escrowId
+          sender
+          receiver
+          amount
+          tokenAddress
+          block_number
+          timestamp_
+          transactionHash_
+          contractId_
+        }
+        receiverRemoveds(
+          orderBy: timestamp_
+          orderDirection: desc
+          first: 1000
+        ) {
+          escrowId
+          sender
+          receiver
+          refundAmount
+          tokenAddress
+          block_number
+          timestamp_
+          transactionHash_
+          contractId_
+        }
+        receiverAmountUpdateds(
+          orderBy: timestamp_
+          orderDirection: desc
+          first: 1000
+        ) {
+          escrowId
+          sender
+          receiver
+          oldAmount
+          newAmount
+          tokenAddress
+          block_number
+          timestamp_
+          transactionHash_
+          contractId_
+        }
+      }
+    `;
+
+    const response = await axios.post(GOLDSKY_ESCROW_API_URL, {
+      query,
+    });
+
+    if (response.data.errors) {
+      console.error("❌ GraphQL errors:", response.data.errors);
+      return [];
+    }
+
+    const data = response.data.data;
+    const allEvents = [];
+    const userAddressLower = userAddress.toLowerCase();
+
+    // Process escrow created events
+    if (data.escrowCreateds) {
+      data.escrowCreateds.forEach((event: any) => {
+        if (event.sender && event.sender.toLowerCase() === userAddressLower) {
+          allEvents.push({
+            ...event,
+            eventType: "ESCROW_CREATED",
+            tokenType: determineTokenTypeFromContract(event.contractId_),
+          });
+        }
+      });
+    }
+
+    // Process topup events
+    if (data.fundsTopUps) {
+      data.fundsTopUps.forEach((event: any) => {
+        if (event.sender && event.sender.toLowerCase() === userAddressLower) {
+          allEvents.push({
+            ...event,
+            eventType: "TOPUP_FUNDS",
+            tokenType: determineTokenTypeFromContract(event.contractId_),
+          });
+        }
+      });
+    }
+
+    // Process receiver added events
+    if (data.receiverAddeds) {
+      data.receiverAddeds.forEach((event: any) => {
+        if (event.sender && event.sender.toLowerCase() === userAddressLower) {
+          allEvents.push({
+            ...event,
+            eventType: "ADD_RECIPIENTS",
+            tokenType: determineTokenTypeFromContract(event.contractId_),
+          });
+        }
+      });
+    }
+
+    // Process receiver removed events
+    if (data.receiverRemoveds) {
+      data.receiverRemoveds.forEach((event: any) => {
+        if (event.sender && event.sender.toLowerCase() === userAddressLower) {
+          allEvents.push({
+            ...event,
+            eventType: "REMOVE_RECIPIENTS",
+            tokenType: determineTokenTypeFromContract(event.contractId_),
+          });
+        }
+      });
+    }
+
+    // Process receiver amount updated events
+    if (data.receiverAmountUpdateds) {
+      data.receiverAmountUpdateds.forEach((event: any) => {
+        if (event.sender && event.sender.toLowerCase() === userAddressLower) {
+          allEvents.push({
+            ...event,
+            eventType: "UPDATE_RECIPIENTS_AMOUNT",
+            tokenType: determineTokenTypeFromContract(event.contractId_),
+          });
+        }
+      });
+    }
+
+    // Sort all events by timestamp
+    allEvents.sort((a, b) => parseInt(b.timestamp_) - parseInt(a.timestamp_));
+    
+    // Cache the result
+    setCachedData(cacheKey, allEvents);
+    
+    return allEvents;
+  } catch (error) {
+    console.error("❌ Error fetching comprehensive escrow events:", error);
+    return [];
   }
 };
 
@@ -1582,8 +1893,13 @@ const fetchReceiverEscrowsSimple = async (receiverAddress: string) => {
     }
 
     const query = `
-      query GetReceiverEscrowsSimple {
-        escrowCreateds {
+      query GetReceiverEscrowsSimple($receiverAddress: String!) {
+        escrowCreateds(
+          where: {receivers_contains: $receiverAddress}
+          orderBy: timestamp_
+          orderDirection: desc
+          first: 100
+        ) {
           receivers
           sender
           tokenAddress
@@ -1608,6 +1924,7 @@ const fetchReceiverEscrowsSimple = async (receiverAddress: string) => {
           process.env.NEXT_PUBLIC_GOLDSKY_ESCROW_IDRX_API_URL!,
           {
             query,
+            variables: { receiverAddress: receiverAddress.toLowerCase() },
           },
           {
             headers: {
@@ -1627,6 +1944,7 @@ const fetchReceiverEscrowsSimple = async (receiverAddress: string) => {
           process.env.NEXT_PUBLIC_GOLDSKY_ESCROW_API_URL!,
           {
             query,
+            variables: { receiverAddress: receiverAddress.toLowerCase() },
           },
           {
             headers: {
@@ -1699,22 +2017,8 @@ const fetchReceiverEscrowsSimple = async (receiverAddress: string) => {
         idrxEscrows.length + usdcEscrows.length - allEscrows.length,
     });
 
-    // Filter escrows that contain the receiver address
-    const escrows = allEscrows
-      .filter((escrow: any) => {
-        if (!escrow.receivers) return false;
-        const receivers = escrow.receivers
-          .split(",")
-          .map((addr: string) => addr.trim().toLowerCase());
-        return receivers.includes(receiverAddress.toLowerCase());
-      })
-      .sort((a: any, b: any) => {
-        // Sort by timestamp descending (newest first)
-        const timestampA = parseInt(a.timestamp_) || 0;
-        const timestampB = parseInt(b.timestamp_) || 0;
-        return timestampB - timestampA;
-      })
-      .slice(0, 100); // Limit to 100 most recent escrows
+    // No need to filter - GraphQL already filtered by receivers_contains
+    const escrows = allEscrows;
 
     console.log("✅ Filtered and sorted receiver escrows:", {
       totalFiltered: escrows.length,

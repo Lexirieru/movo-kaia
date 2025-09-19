@@ -1,4 +1,4 @@
-import { escrowUsdcContract, escrowIdrxContract } from "./smartContract";
+import { escrowContract, escrowIdrxContract } from "./smartContract";
 import {
   EscrowInfo,
   EscrowRoomDetails,
@@ -13,7 +13,7 @@ export const getEscrowDetailsFromContract = async (
   try {
     let contract;
     if (tokenType === "USDC") {
-      contract = escrowUsdcContract;
+      contract = escrowContract;
     } else {
       contract = escrowIdrxContract;
     }
@@ -48,11 +48,11 @@ export const getEscrowDetailsFromContract = async (
       tokenType,
       escrowRoom: {
         sender: escrowDetails[0], // sender
-        totalAllocatedAmount: escrowDetails[1], // totalAllocatedAmount
-        totalDepositedAmount: escrowDetails[2], // totalDepositedAmount
-        totalWithdrawnAmount: escrowDetails[3], // totalWithdrawnAmount
-        availableBalance: escrowDetails[4], // availableBalance
-        isActive: escrowDetails[5], // isActive
+        totalAllocatedAmount: escrowDetails[2], // totalAllocatedAmount
+        totalDepositedAmount: escrowDetails[3], // totalDepositedAmount
+        totalWithdrawnAmount: escrowDetails[4], // totalWithdrawnAmount
+        availableBalance: escrowDetails[5], // availableBalance
+        isActive: true, // We'll assume active for now
         createdAt: escrowDetails[6], // createdAt
         lastTopUpAt: escrowDetails[7], // lastTopUpAt
         activeReceiverCount: Number(escrowDetails[9]), // activeReceiverCount
@@ -74,7 +74,7 @@ export const getSenderEscrows = async (
   try {
     let contract;
     if (tokenType === "USDC") {
-      contract = escrowUsdcContract;
+      contract = escrowContract;
     } else {
       contract = escrowIdrxContract;
     }
@@ -82,7 +82,7 @@ export const getSenderEscrows = async (
     const escrowIds = await contract.read.getUserEscrows([
       senderAddress as `0x${string}`,
     ]);
-    return escrowIds.map((id) => id);
+    return escrowIds.map((id: string) => id);
   } catch (error) {
     console.error("Error getting sender escrows:", error);
     return [];
@@ -99,41 +99,41 @@ export const getReceiverEscrows = async (
     if (tokenType === "USDC") {
       contract = escrowIdrxContract;
     } else {
-      contract = escrowUsdcContract;
+      contract = escrowContract;
     }
 
     const escrowIds = await contract.read.getReceiverEscrows([
       receiverAddress as `0x${string}`,
     ]);
-    return escrowIds.map((id) => id);
+    return escrowIds.map((id: string) => id);
   } catch (error) {
     console.error("Error getting receiver escrows:", error);
     return [];
   }
 };
 
-// Check if receiver can claim from escrow
+// Check if receiver can claim from escrow (with vesting support)
 export const canReceiverClaim = async (
   escrowId: string,
   receiverAddress: string,
   tokenType: "USDC" | "IDRX",
-): Promise<{ canClaim: boolean; claimableAmount: bigint; reason?: string }> => {
+): Promise<{ canClaim: boolean; claimableAmount: bigint; reason?: string; vestingInfo?: any }> => {
   try {
     let contract;
     if (tokenType === "USDC") {
-      contract = escrowUsdcContract;
+      contract = escrowContract;
     } else {
       contract = escrowIdrxContract;
     }
 
-    // Get escrow balance info
-    const balanceInfo = await contract.read.getEscrowBalance([
+    // Get escrow details
+    const escrowDetails = await contract.read.getEscrowDetails([
       escrowId as `0x${string}`,
     ]);
 
     // Check if escrow has available balance
-    if (balanceInfo[1] <= 0) {
-      // availableBalance
+    if (escrowDetails[5] <= 0) {
+      // availableBalance is at index 5
       return {
         canClaim: false,
         claimableAmount: BigInt(0),
@@ -157,29 +157,70 @@ export const canReceiverClaim = async (
       };
     }
 
-    // Calculate claimable amount
-    const claimableAmount = receiverDetails[0] - receiverDetails[1]; // currentAllocation - withdrawnAmount
+    // Get vesting information
+    const vestingInfo = await getVestingInfo(escrowId, tokenType);
+    const receiverVestingInfo = await getReceiverVestingInfo(escrowId, receiverAddress, tokenType);
+
+    if (!vestingInfo || !receiverVestingInfo) {
+      return {
+        canClaim: false,
+        claimableAmount: BigInt(0),
+        reason: "Error getting vesting information",
+      };
+    }
+
+    // Use the withdrawable amount from smart contract (which considers vesting)
+    const withdrawableAmount = await getWithdrawableAmount(escrowId, receiverAddress, tokenType);
 
     // Check if there are funds available to claim
-    if (claimableAmount <= 0) {
+    if (withdrawableAmount <= 0) {
+      let reason = "No funds available to claim";
+      
+      if (vestingInfo.isVestingEnabled) {
+        const currentTime = Number(vestingInfo.currentTime);
+        const vestingStartTime = Number(vestingInfo.vestingStartTime);
+        const vestingEndTime = Number(vestingInfo.vestingEndTime);
+        
+        if (currentTime < vestingStartTime) {
+          reason = `Vesting starts in ${Math.ceil((vestingStartTime - currentTime) / 86400)} days`;
+        } else if (currentTime < vestingEndTime) {
+          const progress = Number(receiverVestingInfo.vestingProgress) / 100;
+          reason = `Vesting in progress (${progress.toFixed(1)}% vested)`;
+        } else {
+          reason = "All funds have been withdrawn";
+        }
+      }
+
       return {
         canClaim: false,
         claimableAmount: BigInt(0),
-        reason: "No funds available to claim",
+        reason,
+        vestingInfo: {
+          isVestingEnabled: vestingInfo.isVestingEnabled,
+          vestingStartTime: vestingInfo.vestingStartTime,
+          vestingEndTime: vestingInfo.vestingEndTime,
+          currentTime: vestingInfo.currentTime,
+          vestedAmount: receiverVestingInfo.vestedAmount,
+          totalVestedAmount: receiverVestingInfo.totalVestedAmount,
+          vestingProgress: receiverVestingInfo.vestingProgress,
+        },
       };
     }
 
-    // Check if escrow has sufficient available balance
-    if (balanceInfo[1] < claimableAmount) {
-      // availableBalance
-      return {
-        canClaim: false,
-        claimableAmount: BigInt(0),
-        reason: "Insufficient escrow balance",
-      };
-    }
-
-    return { canClaim: true, claimableAmount, reason: "Can claim" };
+    return { 
+      canClaim: true, 
+      claimableAmount: withdrawableAmount, 
+      reason: "Can claim",
+      vestingInfo: {
+        isVestingEnabled: vestingInfo.isVestingEnabled,
+        vestingStartTime: vestingInfo.vestingStartTime,
+        vestingEndTime: vestingInfo.vestingEndTime,
+        currentTime: vestingInfo.currentTime,
+        vestedAmount: receiverVestingInfo.vestedAmount,
+        totalVestedAmount: receiverVestingInfo.totalVestedAmount,
+        vestingProgress: receiverVestingInfo.vestingProgress,
+      },
+    };
   } catch (error) {
     console.error("Error checking if receiver can claim:", error);
     return {
@@ -203,20 +244,20 @@ export const getEscrowBalanceSummary = async (
   try {
     let contract;
     if (tokenType === "USDC") {
-      contract = escrowUsdcContract;
+      contract = escrowContract;
     } else {
       contract = escrowIdrxContract;
     }
 
-    const balanceInfo = await contract.read.getEscrowBalance([
+    const escrowDetails = await contract.read.getEscrowDetails([
       escrowId as `0x${string}`,
     ]);
 
     return {
-      totalAllocated: balanceInfo[0], // totalAllocated
-      availableBalance: balanceInfo[1], // availableBalance
-      totalDeposited: balanceInfo[2], // totalDeposited
-      totalWithdrawn: balanceInfo[3], // totalWithdrawn
+      totalAllocated: escrowDetails[2], // totalAllocatedAmount
+      availableBalance: escrowDetails[5], // availableBalance
+      totalDeposited: escrowDetails[3], // totalDepositedAmount
+      totalWithdrawn: escrowDetails[4], // totalWithdrawnAmount
     };
   } catch (error) {
     console.error("Error getting escrow balance summary:", error);
@@ -233,7 +274,7 @@ export const getWithdrawableAmount = async (
   try {
     let contract;
     if (tokenType === "USDC") {
-      contract = escrowUsdcContract;
+      contract = escrowContract;
     } else {
       contract = escrowIdrxContract;
     }
@@ -246,5 +287,77 @@ export const getWithdrawableAmount = async (
   } catch (error) {
     console.error("Error getting withdrawable amount:", error);
     return BigInt(0);
+  }
+};
+
+// Get vesting information for an escrow
+export const getVestingInfo = async (
+  escrowId: string,
+  tokenType: "USDC" | "IDRX",
+): Promise<{
+  isVestingEnabled: boolean;
+  vestingStartTime: bigint;
+  vestingDuration: bigint;
+  vestingEndTime: bigint;
+  currentTime: bigint;
+} | null> => {
+  try {
+    let contract;
+    if (tokenType === "USDC") {
+      contract = escrowContract;
+    } else {
+      contract = escrowIdrxContract;
+    }
+
+    const vestingInfo = await contract.read.getVestingInfo([
+      escrowId as `0x${string}`,
+    ]);
+
+    return {
+      isVestingEnabled: vestingInfo[0],
+      vestingStartTime: vestingInfo[1],
+      vestingDuration: vestingInfo[2],
+      vestingEndTime: vestingInfo[3],
+      currentTime: vestingInfo[4],
+    };
+  } catch (error) {
+    console.error("Error getting vesting info:", error);
+    return null;
+  }
+};
+
+// Get receiver vesting information
+export const getReceiverVestingInfo = async (
+  escrowId: string,
+  receiverAddress: string,
+  tokenType: "USDC" | "IDRX",
+): Promise<{
+  vestedAmount: bigint;
+  totalVestedAmount: bigint;
+  availableToClaim: bigint;
+  vestingProgress: bigint;
+} | null> => {
+  try {
+    let contract;
+    if (tokenType === "USDC") {
+      contract = escrowContract;
+    } else {
+      contract = escrowIdrxContract;
+    }
+
+    const vestingInfo = await contract.read.getReceiverVestingInfo([
+      escrowId as `0x${string}`,
+      receiverAddress as `0x${string}`,
+    ]);
+
+    return {
+      vestedAmount: vestingInfo[0],
+      totalVestedAmount: vestingInfo[1],
+      availableToClaim: vestingInfo[2],
+      vestingProgress: vestingInfo[3],
+    };
+  } catch (error) {
+    console.error("Error getting receiver vesting info:", error);
+    return null;
   }
 };
