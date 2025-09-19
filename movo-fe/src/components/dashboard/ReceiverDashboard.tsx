@@ -61,6 +61,11 @@ export default function ReceiverDashboard({
       console.log("🔄 Using data from parent dashboard:", propIncomingTransactions);
       
       // Map onchain data to IncomingTransaction interface
+      console.log("🔍 ReceiverDashboard received propIncomingTransactions:", {
+        length: propIncomingTransactions.length,
+        data: propIncomingTransactions
+      });
+      
       const mappedTransactions: IncomingTransaction[] = propIncomingTransactions
         .map((withdrawal: any) => {
           console.log("🔍 Mapping withdrawal data:", withdrawal);
@@ -91,9 +96,24 @@ export default function ReceiverDashboard({
             tokenIcon: tokenIcon,
           };
         })
-        .filter((transaction) => parseFloat(transaction.availableAmount) > 0);
+        .filter((transaction) => {
+          const availableAmount = parseFloat(transaction.availableAmount);
+          const isValid = availableAmount > 0;
+          if (!isValid) {
+            console.log("🔍 Filtering out transaction with invalid availableAmount:", {
+              transaction,
+              availableAmount,
+              availableAmountString: transaction.availableAmount
+            });
+          }
+          return isValid;
+        });
 
-      console.log("✅ Mapped incoming transactions from props:", mappedTransactions);
+      console.log("✅ Mapped incoming transactions from props:", {
+        originalLength: propIncomingTransactions.length,
+        mappedLength: mappedTransactions.length,
+        mappedTransactions
+      });
       setIncomingTransactions(mappedTransactions);
       setHasFetched(true);
       

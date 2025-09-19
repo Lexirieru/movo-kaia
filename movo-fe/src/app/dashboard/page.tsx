@@ -77,6 +77,8 @@ function DynamicDashboard({
         console.log("📊 Data fetched:", {
           senderEscrows: senderEscrowsData.length,
           receiverWithdrawals: receiverDataResult.availableWithdrawals.length,
+          receiverDataResult: receiverDataResult,
+          availableWithdrawals: receiverDataResult.availableWithdrawals
         });
 
         // Set sender data
@@ -96,6 +98,15 @@ function DynamicDashboard({
             type: "claimable",
           })),
         ];
+        
+        console.log("📊 Combined escrows:", {
+          totalCombined: combinedEscrows.length,
+          createdCount: combinedEscrows.filter(e => e.type === "created").length,
+          claimableCount: combinedEscrows.filter(e => e.type === "claimable").length,
+          claimableEscrows: combinedEscrows.filter(e => e.type === "claimable"),
+          allEscrows: combinedEscrows
+        });
+        
         setAllEscrows(combinedEscrows);
 
         console.log("📊 Combined data:", {
@@ -123,7 +134,14 @@ function DynamicDashboard({
       case "created":
         return senderEscrows;
       case "claimable":
-        return receiverData?.availableWithdrawals || [];
+        // Use the same data source as "all" but filter for claimable escrows
+        const claimableEscrows = allEscrows.filter(escrow => escrow.type === "claimable");
+        console.log("🔍 Filtering claimable escrows:", {
+          totalAllEscrows: allEscrows.length,
+          claimableEscrows: claimableEscrows.length,
+          claimableData: claimableEscrows
+        });
+        return claimableEscrows;
       case "all":
       default:
         return allEscrows;
@@ -183,7 +201,7 @@ function DynamicDashboard({
                 : "text-white/60 hover:text-white hover:bg-white/10"
             }`}
           >
-            Claimable ({receiverData?.availableWithdrawals?.length || 0})
+            Claimable ({allEscrows.filter(escrow => escrow.type === "claimable").length})
           </button>
         </div>
       </div>
@@ -210,12 +228,12 @@ function DynamicDashboard({
         {activeFilter === "claimable" && (
           <>
             {console.log("🔍 Rendering claimable filter with data:", {
-              receiverData: receiverData,
-              availableWithdrawals: receiverData?.availableWithdrawals,
+              filteredEscrows: filteredEscrows,
+              filteredEscrowsLength: filteredEscrows.length,
               isLoading: isCheckingData,
             })}
             <ReceiverDashboard
-              incomingTransactions={receiverData?.availableWithdrawals || []}
+              incomingTransactions={filteredEscrows}
               isLoading={isCheckingData}
             />
           </>
@@ -241,12 +259,12 @@ function DynamicDashboard({
               <h3 className="text-lg font-medium text-white mb-3 flex items-center">
                 <span className="w-1.5 h-1.5 bg-green-400 rounded-full mr-2"></span>
                 Available to Claim (
-                {receiverData?.availableWithdrawals?.length || 0})
+                {allEscrows.filter(escrow => escrow.type === "claimable").length})
               </h3>
               <div className="bg-white/5 rounded-lg p-4">
                 <ReceiverDashboard
                   incomingTransactions={
-                    receiverData?.availableWithdrawals || []
+                    allEscrows.filter(escrow => escrow.type === "claimable")
                   }
                   isLoading={isCheckingData}
                 />
@@ -279,7 +297,7 @@ function DynamicDashboard({
           <div>Active Filter: {activeFilter}</div>
           <div>Created Escrows: {senderEscrows.length}</div>
           <div>
-            Claimable Escrows: {receiverData?.availableWithdrawals?.length || 0}
+            Claimable Escrows: {allEscrows.filter(escrow => escrow.type === "claimable").length}
           </div>
           <div>Total Escrows: {allEscrows.length}</div>
           <div>Filtered Results: {filteredEscrows.length}</div>
