@@ -10,7 +10,11 @@ import { escrowIdrxAbis } from "./abis/escrowIdrxAbis";
 import { usdcAbis } from "./abis/usdcAbis";
 import { usdtAbis } from "./abis/usdtAbis";
 import { idrxAbis } from "./abis/idrxAbis";
-import { getEscrowAddress, getTokenAddress } from "./contractConfig";
+import {
+  getEscrowAddress,
+  getTokenAddress,
+  getTokenDecimals,
+} from "./contractConfig";
 
 // Import saveEscrowEventWithContext function
 const saveEscrowEventWithContext = async (
@@ -50,7 +54,7 @@ export const baseSepolia = defineChain({
       http: [
         "https://sepolia.base.org",
         "https://base-sepolia.g.alchemy.com/v2/demo",
-        "https://base-sepolia.api.onfinality.io/public"
+        "https://base-sepolia.api.onfinality.io/public",
       ],
       webSocket: ["wss://sepolia.base.org"],
     },
@@ -58,7 +62,7 @@ export const baseSepolia = defineChain({
       http: [
         "https://sepolia.base.org",
         "https://base-sepolia.g.alchemy.com/v2/demo",
-        "https://base-sepolia.api.onfinality.io/public"
+        "https://base-sepolia.api.onfinality.io/public",
       ],
       webSocket: ["wss://sepolia.base.org"],
     },
@@ -337,18 +341,19 @@ export const formatTokenAmount = (
   try {
     // Convert BigInt to string to avoid precision loss
     const amountStr = amount.toString();
-    
+
     // Handle edge cases
-    if (amountStr === '0') {
-      return '0.0';
+    if (amountStr === "0") {
+      return "0.0";
     }
-    
+
     // Handle the decimal conversion manually to avoid precision issues
     if (amountStr.length <= decimals) {
       // Amount is less than 1 unit
       // Use a safer approach for padding
-      const paddedAmount = '0'.repeat(decimals + 1 - amountStr.length) + amountStr;
-      const integerPart = paddedAmount.slice(0, -decimals) || '0';
+      const paddedAmount =
+        "0".repeat(decimals + 1 - amountStr.length) + amountStr;
+      const integerPart = paddedAmount.slice(0, -decimals) || "0";
       const decimalPart = paddedAmount.slice(-decimals);
       return `${integerPart}.${decimalPart}`;
     } else {
@@ -363,7 +368,7 @@ export const formatTokenAmount = (
     const divisor = BigInt(Math.pow(10, decimals));
     const integerPart = amount / divisor;
     const decimalPart = amount % divisor;
-    return `${integerPart}.${decimalPart.toString().padStart(decimals, '0')}`;
+    return `${integerPart}.${decimalPart.toString().padStart(decimals, "0")}`;
   }
 };
 
@@ -393,8 +398,6 @@ export const extractEscrowIdFromLogs = (receipt: any): string | null => {
   }
 };
 
-
-
 // Check token balance
 export const checkTokenBalance = async (
   tokenType: "USDC" | "USDT" | "IDRX",
@@ -407,7 +410,9 @@ export const checkTokenBalance = async (
       address: tokenAddress as `0x${string}`,
       abi: [
         {
-          inputs: [{ internalType: "address", name: "account", type: "address" }],
+          inputs: [
+            { internalType: "address", name: "account", type: "address" },
+          ],
           name: "balanceOf",
           outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
           stateMutability: "view",
@@ -432,7 +437,7 @@ export const checkTokenAllowance = async (
 ): Promise<bigint> => {
   try {
     console.log("🔍 Checking allowance for escrowId:", escrowId);
-    
+
     // Get the correct escrow contract address based on token type
     let escrowContractAddress;
     if (tokenType === "IDRX") {
@@ -441,9 +446,12 @@ export const checkTokenAllowance = async (
       // For USDC and USDT, use the regular escrow contract
       escrowContractAddress = getEscrowAddress("USDC");
     }
-    
-    console.log("🔍 Escrow contract address for allowance:", escrowContractAddress);
-    
+
+    console.log(
+      "🔍 Escrow contract address for allowance:",
+      escrowContractAddress,
+    );
+
     const tokenAddress = getTokenAddress(tokenType);
     const allowance = await publicClient.readContract({
       address: tokenAddress as `0x${string}`,
@@ -462,7 +470,7 @@ export const checkTokenAllowance = async (
       functionName: "allowance",
       args: [owner as `0x${string}`, escrowContractAddress as `0x${string}`],
     });
-    
+
     console.log("🔍 Current allowance:", allowance.toString());
     return allowance as bigint;
   } catch (error) {
@@ -480,7 +488,7 @@ export const approveTokens = async (
 ): Promise<boolean> => {
   try {
     const tokenAddress = getTokenAddress(tokenType);
-    
+
     // Get the correct escrow contract address based on token type
     let escrowContractAddress;
     if (tokenType === "IDRX") {
@@ -495,11 +503,14 @@ export const approveTokens = async (
       tokenAddress,
       escrowContractAddress,
       amount: amount.toString(),
-      escrowId
+      escrowId,
     });
 
     // Validate escrow contract address
-    if (!escrowContractAddress || escrowContractAddress === "0x0000000000000000000000000000000000000000") {
+    if (
+      !escrowContractAddress ||
+      escrowContractAddress === "0x0000000000000000000000000000000000000000"
+    ) {
       throw new Error("Invalid escrow contract address");
     }
 
@@ -522,7 +533,9 @@ export const approveTokens = async (
       account: walletClient.account.address,
     });
 
-    console.log("✅ Approval simulation successful, proceeding with transaction");
+    console.log(
+      "✅ Approval simulation successful, proceeding with transaction",
+    );
 
     const hash = await walletClient.writeContract(request);
     await publicClient.waitForTransactionReceipt({ hash });
@@ -853,24 +866,21 @@ export const createEscrowOnchain = async (
       walletAddress: validateAddress(receiver),
       amount: formatTokenAmount(
         escrowData.amounts[index],
-        tokenType === "IDRX" ? 18 : 6,
+        tokenType === "IDRX" ? 2 : 6,
       ),
       fullname: "Unknown User", // Will be resolved in backend
     }));
 
     // Enhanced event data with more context
     const eventData = {
-      totalAmount: formatTokenAmount(
-        totalAmount,
-        tokenType === "IDRX" ? 18 : 6,
-      ),
+      totalAmount: formatTokenAmount(totalAmount, tokenType === "IDRX" ? 2 : 6),
       recipients: recipients,
       vestingEnabled: escrowData.vestingEnabled || false,
       vestingDuration: escrowData.vestingDuration || 0,
       recipientsCount: recipients.length,
       averageAmount: formatTokenAmount(
         totalAmount / BigInt(recipients.length),
-        tokenType === "IDRX" ? 18 : 6,
+        tokenType === "IDRX" ? 2 : 6,
       ),
       createdAt: new Date().toISOString(),
     };
@@ -959,7 +969,7 @@ export const createEscrowOnchain = async (
 //     let escrowId = null;
 //     if (receipt.logs && receipt.logs.length > 0) {
 //       // Look for EscrowCreated event log
-//       const escrowCreatedLog = receipt.logs.find((log: any) => 
+//       const escrowCreatedLog = receipt.logs.find((log: any) =>
 //         log.topics && log.topics.length > 1
 //       );
 //       if (escrowCreatedLog && escrowCreatedLog.topics[1]) {
@@ -1042,14 +1052,14 @@ export const addReceiver = async (
   tokenType: string,
   escrowId: `0x${string}`,
   receiverAddress: `0x${string}`,
-  amount: bigint
+  amount: bigint,
 ) => {
   try {
     console.log("🔄 Adding receiver to escrow:", {
       tokenType,
       escrowId,
       receiverAddress,
-      amount: amount.toString()
+      amount: amount.toString(),
     });
 
     // Get the correct contract based on token type
@@ -1068,7 +1078,7 @@ export const addReceiver = async (
     const hash = await walletClient.writeContract({
       address: contract.address,
       abi: contract.abi,
-      functionName: 'addReceiver',
+      functionName: "addReceiver",
       args: [escrowId, receiverAddress, amount],
     });
 
@@ -1084,18 +1094,16 @@ export const addReceiver = async (
     return {
       success: true,
       transactionHash: hash,
-      receipt
+      receipt,
     };
-
   } catch (error) {
     console.error("❌ Error adding receiver:", error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : "Unknown error"
+      error: error instanceof Error ? error.message : "Unknown error",
     };
   }
 };
-
 
 // Topup funds to escrow
 export const topUpFunds = async (
@@ -1116,7 +1124,7 @@ export const topUpFunds = async (
       escrowId,
       amount: amount.toString(),
       tokenType,
-      contractAddress: contract.address
+      contractAddress: contract.address,
     });
 
     // First, let's check if the escrow exists and validate its state
@@ -1125,25 +1133,27 @@ export const topUpFunds = async (
         escrowId as `0x${string}`,
       ]);
       console.log("🔍 Escrow details:", escrowDetails);
-      
+
       // Check if escrow exists (first element should not be zero address)
       if (escrowDetails[0] === "0x0000000000000000000000000000000000000000") {
         throw new Error("Escrow not found or invalid escrow ID");
       }
-      
+
       // Check if escrow is active
       const isActive = escrowDetails[9]; // isActive is at index 9
       if (!isActive) {
         throw new Error("Escrow is not active");
       }
-      
+
       // Check if user has enough token balance
       const tokenAddress = getTokenAddress(tokenType);
       const userBalance = await publicClient.readContract({
         address: tokenAddress as `0x${string}`,
         abi: [
           {
-            inputs: [{ internalType: "address", name: "account", type: "address" }],
+            inputs: [
+              { internalType: "address", name: "account", type: "address" },
+            ],
             name: "balanceOf",
             outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
             stateMutability: "view",
@@ -1153,14 +1163,16 @@ export const topUpFunds = async (
         functionName: "balanceOf",
         args: [walletClient.account.address],
       });
-      
+
       console.log("🔍 User token balance:", userBalance.toString());
       console.log("🔍 Required amount:", amount.toString());
-      
+
       if (userBalance < amount) {
-        throw new Error(`Insufficient token balance. Required: ${amount.toString()}, Available: ${userBalance.toString()}`);
+        throw new Error(
+          `Insufficient token balance. Required: ${amount.toString()}, Available: ${userBalance.toString()}`,
+        );
       }
-      
+
       // Check allowance - use escrow contract address as spender
       const allowance = await publicClient.readContract({
         address: tokenAddress as `0x${string}`,
@@ -1179,13 +1191,14 @@ export const topUpFunds = async (
         functionName: "allowance",
         args: [walletClient.account.address, contract.address],
       });
-      
+
       console.log("🔍 Current allowance:", allowance.toString());
-      
+
       if (allowance < amount) {
-        throw new Error(`Insufficient allowance. Required: ${amount.toString()}, Available: ${allowance.toString()}`);
+        throw new Error(
+          `Insufficient allowance. Required: ${amount.toString()}, Available: ${allowance.toString()}`,
+        );
       }
-      
     } catch (error) {
       console.error("❌ Error validating escrow and balance:", error);
       throw error;
@@ -1211,7 +1224,7 @@ export const topUpFunds = async (
       walletClient.account.address,
       tokenType,
       {
-        topupAmount: formatTokenAmount(amount, tokenType === "IDRX" ? 18 : 6),
+        topupAmount: formatTokenAmount(amount, tokenType === "IDRX" ? 2 : 6),
       },
       receipt,
       contract.address,
@@ -1277,7 +1290,7 @@ export const updateRecipientAmount = async (
               oldAmount: "0", // We don't have the old amount here
               newAmount: formatTokenAmount(
                 newAmount,
-                tokenType === "IDRX" ? 18 : 6,
+                tokenType === "IDRX" ? 2 : 6,
               ),
               fullname: "Unknown User", // Will be resolved in backend
             },

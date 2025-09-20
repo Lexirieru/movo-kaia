@@ -129,8 +129,61 @@ export default function ReceiverDashboard({
     }
   };
 
-  // Main fetching useEffect (like GroupDashboard pattern)
+  // Priority useEffect: Use props data if provided
   useEffect(() => {
+    if (propIncomingTransactions && propIncomingTransactions.length >= 0) {
+      console.log("🔄 Using props data for ReceiverDashboard:");
+      console.log("📊 Props incoming transactions:", propIncomingTransactions);
+
+      // Convert props data to IncomingTransaction format if needed
+      const mappedTransactions: IncomingTransaction[] = propIncomingTransactions
+        .map((escrow: any) => {
+          const tokenType = getTokenType(escrow.tokenAddress);
+          const tokenIcon = getTokenIcon(tokenType);
+
+          return {
+            receiverWalletAddress: effectiveWalletAddress || "",
+            receiverId: user?._id || "",
+            totalAmount: escrow.allocatedAmount?.toString() || "0",
+            availableAmount: escrow.availableAmount?.toString() || "0",
+            originCurrency: escrow.originCurrency || tokenType,
+            senderWalletAddress:
+              escrow.senderWalletAddress || escrow.sender || "",
+            senderName:
+              escrow.senderName ||
+              (escrow.senderWalletAddress || escrow.sender
+                ? `${(escrow.senderWalletAddress || escrow.sender).slice(0, 6)}...${(escrow.senderWalletAddress || escrow.sender).slice(-4)}`
+                : "Unknown Sender"),
+            createdAt: escrow.createdAt
+              ? escrow.createdAt instanceof Date
+                ? escrow.createdAt
+                : new Date(escrow.createdAt)
+              : new Date(),
+            escrowId: escrow.escrowId,
+            transactionHash: escrow.transactionHash,
+            blockNumber: escrow.blockNumber,
+            allocatedAmount: escrow.allocatedAmount || escrow.totalAmount,
+            withdrawnAmount: escrow.withdrawnAmount || "0",
+            hasWithdrawn: escrow.hasWithdrawn || false,
+            tokenAddress: escrow.tokenAddress,
+            tokenType: tokenType,
+            tokenIcon: tokenIcon,
+          };
+        })
+        .filter((transaction) => parseFloat(transaction.availableAmount) > 0);
+
+      console.log("✅ Mapped transactions from props:", mappedTransactions);
+      setIncomingTransactions(mappedTransactions);
+      setHasFetched(true);
+      return;
+    }
+  }, [propIncomingTransactions, effectiveWalletAddress, user]);
+
+  // Main fetching useEffect (like GroupDashboard pattern) - only runs when no props provided
+  useEffect(() => {
+    // Skip if we have props data
+    if (propIncomingTransactions && propIncomingTransactions.length >= 0)
+      return;
     if (loading || !isConnected || !effectiveWalletAddress) return;
 
     console.log("� Starting receiver data fetch process...");

@@ -1,11 +1,11 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { 
-  Wallet, 
-  Users, 
-  DollarSign, 
-  Clock, 
+import {
+  Wallet,
+  Users,
+  DollarSign,
+  Clock,
   ExternalLink,
   MoreVertical,
   Trash2,
@@ -14,9 +14,21 @@ import {
   ChevronUp,
   RefreshCw,
   ArrowUp,
-  X
+  X,
 } from "lucide-react";
-import { escrowContract, escrowIdrxContract, usdcContract, usdtContract, idrxContract, parseTokenAmount, formatTokenAmount, topUpFunds, checkTokenBalance, checkTokenAllowance, approveTokens } from "@/lib/smartContract";
+import {
+  escrowContract,
+  escrowIdrxContract,
+  usdcContract,
+  usdtContract,
+  idrxContract,
+  parseTokenAmount,
+  formatTokenAmount,
+  topUpFunds,
+  checkTokenBalance,
+  checkTokenAllowance,
+  approveTokens,
+} from "@/lib/smartContract";
 import { getTokenAddress } from "@/lib/contractConfig";
 import { useWallet } from "@/lib/walletContext";
 import { useWalletClientHook } from "@/lib/useWalletClient";
@@ -83,18 +95,27 @@ const formatAmount = (amount: string, tokenAddress: string) => {
   if (!amount || amount === "0") {
     return "Amount not available";
   }
-  
+
   // Determine token type based on address
   // const usdcAddress = getTokenAddress("USDC");
   // const usdtAddress = getTokenAddress("USDT");
   // const idrxAddress = getTokenAddress("IDRX");
-  const usdcAddress = (process.env.NEXT_PUBLIC_USDC_ADDRESS || "0xf9D5a610fe990bfCdF7dd9FD64bdfe89D6D1eb4c").toLowerCase();
-  const usdtAddress = (process.env.NEXT_PUBLIC_USDT_ADDRESS || "0x80327544e61e391304ad16f0BAFb2C5c7A76dfB3").toLowerCase();
-  const idrxAddress = (process.env.NEXT_PUBLIC_IDRX_ADDRESS || "0x77fEa84656B5EF40BF33e3835A9921dAEAadb976").toLowerCase();
-  
+  const usdcAddress = (
+    process.env.NEXT_PUBLIC_USDC_ADDRESS ||
+    "0xf9D5a610fe990bfCdF7dd9FD64bdfe89D6D1eb4c"
+  ).toLowerCase();
+  const usdtAddress = (
+    process.env.NEXT_PUBLIC_USDT_ADDRESS ||
+    "0x80327544e61e391304ad16f0BAFb2C5c7A76dfB3"
+  ).toLowerCase();
+  const idrxAddress = (
+    process.env.NEXT_PUBLIC_IDRX_ADDRESS ||
+    "0x77fEa84656B5EF40BF33e3835A9921dAEAadb976"
+  ).toLowerCase();
+
   let tokenSymbol = "USDC"; // Default to USDC
   let decimals = 6;
-  
+
   if (tokenAddress.toLowerCase() === usdcAddress.toLowerCase()) {
     tokenSymbol = "USDC";
     decimals = 6;
@@ -105,7 +126,7 @@ const formatAmount = (amount: string, tokenAddress: string) => {
     tokenSymbol = "IDRX";
     decimals = 2;
   }
-  
+
   const amountNumber = parseFloat(amount) / Math.pow(10, decimals);
   return `${amountNumber.toFixed(decimals === 6 ? 2 : 0)} ${tokenSymbol}`;
 };
@@ -120,10 +141,14 @@ export default function EscrowList({
   const { address, isConnected } = useWallet();
   const walletClient = useWalletClientHook();
   const [selectedEscrow, setSelectedEscrow] = useState<string | null>(null);
-  const [expandedEscrows, setExpandedEscrows] = useState<Set<string>>(new Set());
-  const [contractDetails, setContractDetails] = useState<Map<string, ContractDetails>>(new Map());
+  const [expandedEscrows, setExpandedEscrows] = useState<Set<string>>(
+    new Set(),
+  );
+  const [contractDetails, setContractDetails] = useState<
+    Map<string, ContractDetails>
+  >(new Map());
   const [loadingDetails, setLoadingDetails] = useState<Set<string>>(new Set());
-  
+
   // Topup modal state
   const [topUpModal, setTopUpModal] = useState<{
     isOpen: boolean;
@@ -143,17 +168,17 @@ export default function EscrowList({
     const usdcAddress = getTokenAddress("USDC");
     const usdtAddress = getTokenAddress("USDT");
     const idrxAddress = getTokenAddress("IDRX");
-      const addr = tokenAddress.toLowerCase();
+    const addr = tokenAddress.toLowerCase();
 
-      console.log("🔍 Token type detection:", {
-    inputAddress: addr,
-    usdtAddress,
-    usdcAddress,
-    idrxAddress,
-    isUSDT: addr === usdtAddress,
-    isUSDC: addr === usdcAddress,
-    isIDRX: addr === idrxAddress
-  });
+    console.log("🔍 Token type detection:", {
+      inputAddress: addr,
+      usdtAddress,
+      usdcAddress,
+      idrxAddress,
+      isUSDT: addr === usdtAddress,
+      isUSDC: addr === usdcAddress,
+      isIDRX: addr === idrxAddress,
+    });
 
     if (tokenAddress.toLowerCase() === usdcAddress.toLowerCase()) {
       return "USDC";
@@ -170,7 +195,7 @@ export default function EscrowList({
     const usdcAddress = getTokenAddress("USDC");
     const usdtAddress = getTokenAddress("USDT");
     const idrxAddress = getTokenAddress("IDRX");
-    
+
     if (tokenAddress.toLowerCase() === usdcAddress.toLowerCase()) {
       return "USDC";
     } else if (tokenAddress.toLowerCase() === usdtAddress.toLowerCase()) {
@@ -182,55 +207,60 @@ export default function EscrowList({
   };
 
   // Function to load contract details
-  const loadContractDetails = async (escrowId: string, tokenAddress: string) => {
+  const loadContractDetails = async (
+    escrowId: string,
+    tokenAddress: string,
+  ) => {
     if (contractDetails.has(escrowId) || loadingDetails.has(escrowId)) {
       return;
     }
 
-    setLoadingDetails(prev => new Set(prev).add(escrowId));
-    
+    setLoadingDetails((prev) => new Set(prev).add(escrowId));
+
     const tokenType = getTokenType(tokenAddress);
     let contract;
-    
+
     if (tokenType === "USDC" || tokenType === "USDT") {
       contract = escrowContract;
     } else {
       contract = escrowIdrxContract;
     }
 
-      if (!contract) {
-    console.error("❌ Contract not found for token type:", tokenType);
-    setLoadingDetails(prev => {
-      const newSet = new Set(prev);
-      newSet.delete(escrowId);
-      return newSet;
-    });
-    return;
-  }
+    if (!contract) {
+      console.error("❌ Contract not found for token type:", tokenType);
+      setLoadingDetails((prev) => {
+        const newSet = new Set(prev);
+        newSet.delete(escrowId);
+        return newSet;
+      });
+      return;
+    }
 
     // Ensure escrowId is properly formatted as bytes32
     let formattedEscrowId = escrowId;
-    if (!escrowId.startsWith('0x')) {
-      formattedEscrowId = '0x' + escrowId;
+    if (!escrowId.startsWith("0x")) {
+      formattedEscrowId = "0x" + escrowId;
     }
-    
+
     // Pad to 32 bytes (64 hex characters + 0x prefix = 66 characters)
     if (formattedEscrowId.length < 66) {
-      formattedEscrowId = formattedEscrowId.padEnd(66, '0');
+      formattedEscrowId = formattedEscrowId.padEnd(66, "0");
     }
 
-    console.log("🔍 Loading contract details for:", { 
-      escrowId, 
+    console.log("🔍 Loading contract details for:", {
+      escrowId,
       escrowIdType: typeof escrowId,
       escrowIdLength: escrowId?.length,
-      tokenType, 
-      contractAddress: contract.address 
+      tokenType,
+      contractAddress: contract.address,
     });
 
-    console.log("🔍 Formatted escrowId:", { original: escrowId, formatted: formattedEscrowId });
-    
-    try {
+    console.log("🔍 Formatted escrowId:", {
+      original: escrowId,
+      formatted: formattedEscrowId,
+    });
 
+    try {
       // Call getEscrowDetails directly on the contract
       const escrowDetails = await contract.read.getEscrowDetails([
         formattedEscrowId as `0x${string}`,
@@ -260,7 +290,11 @@ export default function EscrowList({
             isActive: receiverDetails[2],
           });
         } catch (receiverError) {
-          console.warn("Failed to get details for receiver:", receiverAddress, receiverError);
+          console.warn(
+            "Failed to get details for receiver:",
+            receiverAddress,
+            receiverError,
+          );
         }
       }
 
@@ -283,8 +317,7 @@ export default function EscrowList({
       };
 
       console.log("✅ Processed contract details:", details);
-      setContractDetails(prev => new Map(prev).set(escrowId, details));
-      
+      setContractDetails((prev) => new Map(prev).set(escrowId, details));
     } catch (error) {
       console.error("❌ Failed to load contract details:", {
         error: error,
@@ -292,10 +325,10 @@ export default function EscrowList({
         formattedEscrowId: formattedEscrowId,
         tokenType: tokenType,
         contractAddress: contract?.address,
-        errorMessage: error instanceof Error ? error.message : 'Unknown error'
+        errorMessage: error instanceof Error ? error.message : "Unknown error",
       });
     } finally {
-      setLoadingDetails(prev => {
+      setLoadingDetails((prev) => {
         const newSet = new Set(prev);
         newSet.delete(escrowId);
         return newSet;
@@ -319,26 +352,26 @@ export default function EscrowList({
   // Helper function to format token amount
   const formatTokenAmountLocal = (amount: string, tokenAddress: string) => {
     if (!amount || amount === "0") return "0.00";
-    
+
     const usdcAddress = getTokenAddress("USDC");
     const usdtAddress = getTokenAddress("USDT");
     const idrxAddress = getTokenAddress("IDRX");
-    
+
     let decimals = 6; // Default for USDC/USDT
     let displayDecimals = 2; // How many decimal places to show
     if (tokenAddress.toLowerCase() === idrxAddress.toLowerCase()) {
       decimals = 2;
       displayDecimals = 2;
     }
-    
+
     // Handle large numbers by using string manipulation instead of parseFloat
     const amountStr = amount.toString();
     let formattedAmount;
-    
+
     if (amountStr.length <= decimals) {
       // Amount is less than 1 unit
-      const paddedAmount = amountStr.padStart(decimals + 1, '0');
-      const integerPart = paddedAmount.slice(0, -decimals) || '0';
+      const paddedAmount = amountStr.padStart(decimals + 1, "0");
+      const integerPart = paddedAmount.slice(0, -decimals) || "0";
       const decimalPart = paddedAmount.slice(-decimals);
       formattedAmount = `${integerPart}.${decimalPart}`;
     } else {
@@ -347,7 +380,7 @@ export default function EscrowList({
       const decimalPart = amountStr.slice(-decimals);
       formattedAmount = `${integerPart}.${decimalPart}`;
     }
-    
+
     // Convert to number and format with proper decimal places
     const num = parseFloat(formattedAmount);
     return num.toFixed(displayDecimals);
@@ -367,15 +400,15 @@ export default function EscrowList({
   // Function to open top up modal
   const openTopUpModal = async (escrowId: string, tokenAddress: string) => {
     const tokenType = getTokenType(tokenAddress);
-    
+
     // Find the escrow data to get pre-fetched contract details
-    const escrowData = escrows.find(escrow => escrow.escrowId === escrowId);
-    
+    const escrowData = escrows.find((escrow) => escrow.escrowId === escrowId);
+
     // Calculate max amount based on pre-fetched data
     // For top up, we can use a reasonable default since there's no hard limit in the contract
     // The actual limit will be the user's token balance
     let maxAmount = "1000000000000"; // Default max (1000 tokens with 6 decimals)
-    
+
     // Use allocated amount as a reference, but allow topping up more
     if (escrowData?.allocatedAmount) {
       // Use allocated amount as a reasonable reference
@@ -390,30 +423,39 @@ export default function EscrowList({
         maxAmount = details.escrowRoom.totalAllocatedAmount.toString();
       }
     }
-    
+
     // For top up, use the allocated amount directly without multiplication
     // This prevents the issue where we're multiplying an already correctly formatted amount
     // The user can still top up more than the allocated amount by entering a custom value
     // No multiplication needed - use the amount as-is
-    
+
     console.log("🔍 Max amount calculation debug:", {
-      escrowData: escrowData ? {
-        allocatedAmount: escrowData.allocatedAmount,
-        totalAmount: escrowData.totalAmount
-      } : null,
-      originalMaxAmount: escrowData?.allocatedAmount || escrowData?.totalAmount || "default",
-      maxAmount: maxAmount
+      escrowData: escrowData
+        ? {
+            allocatedAmount: escrowData.allocatedAmount,
+            totalAmount: escrowData.totalAmount,
+          }
+        : null,
+      originalMaxAmount:
+        escrowData?.allocatedAmount || escrowData?.totalAmount || "default",
+      maxAmount: maxAmount,
     });
-    
+
     // Get user's token balance
     const balance = await getUserTokenBalance(tokenType);
-    const balanceFormatted = formatTokenAmount(balance, tokenType === "IDRX" ? 18 : 6);
+    const balanceFormatted = formatTokenAmount(
+      balance,
+      tokenType === "IDRX" ? 2 : 6,
+    );
     setUserTokenBalance(balanceFormatted);
-    
+
     // Format max amount with proper decimals
-    const maxAmountFormatted = formatTokenAmount(BigInt(maxAmount), tokenType === "IDRX" ? 18 : 6);
+    const maxAmountFormatted = formatTokenAmount(
+      BigInt(maxAmount),
+      tokenType === "IDRX" ? 2 : 6,
+    );
     const tokenSymbol = getTokenSymbol(tokenAddress);
-    
+
     console.log("🚀 Opening top up modal with max amount:", {
       escrowId,
       tokenType,
@@ -423,12 +465,16 @@ export default function EscrowList({
       userBalance: balance.toString(),
       userBalanceFormatted: balanceFormatted,
       tokenAddress,
-      decimals: tokenAddress.toLowerCase() === "0x77fea84656b5ef40bf33e3835a9921daeaadb976" ? 2 : 6,
+      decimals:
+        tokenAddress.toLowerCase() ===
+        "0x77fea84656b5ef40bf33e3835a9921daeaadb976"
+          ? 2
+          : 6,
       allocatedAmount: escrowData?.allocatedAmount,
       totalAmount: escrowData?.totalAmount,
-      hasContractDetails: contractDetails.has(escrowId)
+      hasContractDetails: contractDetails.has(escrowId),
     });
-    
+
     setTopUpModal({
       isOpen: true,
       escrowId,
@@ -470,10 +516,12 @@ export default function EscrowList({
   // Function to get user's token balance
   const getUserTokenBalance = async (tokenType: "USDC" | "USDT" | "IDRX") => {
     if (!address) return BigInt(0);
-    
+
     try {
       const tokenContract = getTokenContract(tokenType);
-      const balance = await tokenContract.read.balanceOf([address as `0x${string}`]);
+      const balance = await tokenContract.read.balanceOf([
+        address as `0x${string}`,
+      ]);
       return balance;
     } catch (error) {
       console.error("Failed to get token balance:", error);
@@ -486,11 +534,11 @@ export default function EscrowList({
     if (!topUpModal || !address || !isConnected || !walletClient) return;
 
     setIsTopUpLoading(true);
-    
+
     try {
       const { escrowId, tokenAddress, tokenType } = topUpModal;
       const amount = parseFloat(topUpAmount);
-      
+
       if (isNaN(amount) || amount <= 0) {
         alert("Please enter a valid amount");
         return;
@@ -500,9 +548,11 @@ export default function EscrowList({
       const maxAmountNumber = parseFloat(topUpModal.maxAmountFormatted);
       const userBalanceNumber = parseFloat(userTokenBalance);
       const actualMax = Math.min(maxAmountNumber, userBalanceNumber);
-      
+
       if (amount > actualMax) {
-        alert(`Amount cannot exceed maximum allowed: ${actualMax} ${topUpModal.tokenSymbol}`);
+        alert(
+          `Amount cannot exceed maximum allowed: ${actualMax} ${topUpModal.tokenSymbol}`,
+        );
         return;
       }
 
@@ -514,7 +564,7 @@ export default function EscrowList({
         amount,
         maxAmount: maxAmountNumber,
         userBalance: userBalanceNumber,
-        actualMax
+        actualMax,
       });
 
       // Convert amount to proper decimals using viem's parseUnits
@@ -526,17 +576,23 @@ export default function EscrowList({
       // Check if user has enough balance
       const userBalance = await checkTokenBalance(tokenType, address);
       if (userBalance < amountInWei) {
-        throw new Error(`Insufficient balance. You have ${formatTokenAmount(userBalance, tokenType === "IDRX" ? 2 : 6)} ${tokenType}`);
+        throw new Error(
+          `Insufficient balance. You have ${formatTokenAmount(userBalance, tokenType === "IDRX" ? 2 : 6)} ${tokenType}`,
+        );
       }
 
       // Check current allowance
-      const currentAllowance = await checkTokenAllowance(tokenType, address, escrowId);
+      const currentAllowance = await checkTokenAllowance(
+        tokenType,
+        address,
+        escrowId,
+      );
       console.log("🔍 Current allowance:", currentAllowance.toString());
 
       // Approve tokens if needed
       if (currentAllowance < amountInWei) {
         console.log("🔐 Approving tokens...");
-        
+
         const approvalSuccess = await approveTokens(
           walletClient,
           tokenType,
@@ -559,19 +615,21 @@ export default function EscrowList({
 
       if (result.success) {
         console.log("✅ Top up successful:", result.transactionHash);
-        
+
         // Close modal and refresh data
         closeTopUpModal();
-        
+
         // Call the parent's onTopupFund callback
         onTopupFund(escrowId);
       } else {
         throw new Error(result.error || "Failed to topup funds");
       }
-      
     } catch (error) {
       console.error("❌ Top up failed:", error);
-      alert("Top up failed: " + (error instanceof Error ? error.message : "Unknown error"));
+      alert(
+        "Top up failed: " +
+          (error instanceof Error ? error.message : "Unknown error"),
+      );
     } finally {
       setIsTopUpLoading(false);
     }
@@ -581,7 +639,10 @@ export default function EscrowList({
     return (
       <div className="space-y-4">
         {[...Array(3)].map((_, i) => (
-          <div key={i} className="bg-white/5 border border-white/10 rounded-xl p-6 animate-pulse">
+          <div
+            key={i}
+            className="bg-white/5 border border-white/10 rounded-xl p-6 animate-pulse"
+          >
             <div className="flex items-center justify-between">
               <div className="space-y-2">
                 <div className="h-4 bg-white/20 rounded w-32"></div>
@@ -601,9 +662,12 @@ export default function EscrowList({
         <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-4">
           <Wallet className="w-8 h-8 text-white/40" />
         </div>
-        <h3 className="text-xl font-semibold text-white mb-2">No Escrows Found</h3>
+        <h3 className="text-xl font-semibold text-white mb-2">
+          No Escrows Found
+        </h3>
         <p className="text-white/60 mb-6">
-          You haven't created any escrows yet. Create your first escrow to get started.
+          You haven't created any escrows yet. Create your first escrow to get
+          started.
         </p>
       </div>
     );
@@ -615,7 +679,7 @@ export default function EscrowList({
         const isExpanded = expandedEscrows.has(escrow.escrowId);
         const details = contractDetails.get(escrow.escrowId);
         const isLoadingDetails = loadingDetails.has(escrow.escrowId);
-        
+
         return (
           <div
             key={escrow.id}
@@ -636,7 +700,7 @@ export default function EscrowList({
                     </p>
                   </div>
                 </div>
-                
+
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
                   <div className="flex items-center space-x-2">
                     <Users className="w-4 h-4 text-white/60" />
@@ -644,34 +708,36 @@ export default function EscrowList({
                       {escrow.receivers.length} Receivers
                     </span>
                   </div>
-                  
+
                   <div className="flex items-center space-x-2">
                     <DollarSign className="w-4 h-4 text-white/60" />
                     <span className="text-white/80 text-sm">
                       {formatAmount(escrow.totalAmount, escrow.tokenAddress)}
                     </span>
                   </div>
-                  
+
                   <div className="flex items-center space-x-2">
                     <Clock className="w-4 h-4 text-white/60" />
-                    <span className="text-white/80 text-sm">
-                      Active
-                    </span>
+                    <span className="text-white/80 text-sm">Active</span>
                   </div>
                 </div>
               </div>
-              
+
               <div className="flex items-center space-x-2">
                 <button
-                  onClick={() => openTopUpModal(escrow.escrowId, escrow.tokenAddress)}
+                  onClick={() =>
+                    openTopUpModal(escrow.escrowId, escrow.tokenAddress)
+                  }
                   className="px-4 py-2 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg text-sm font-medium hover:shadow-lg hover:shadow-green-500/25 transition-all duration-200 flex items-center space-x-2"
                 >
                   <ArrowUp className="w-4 h-4" />
                   <span>Top Up</span>
                 </button>
-                
+
                 <button
-                  onClick={() => toggleDetails(escrow.escrowId, escrow.tokenAddress)}
+                  onClick={() =>
+                    toggleDetails(escrow.escrowId, escrow.tokenAddress)
+                  }
                   className="px-4 py-2 bg-gradient-to-r from-cyan-500 to-blue-600 text-white rounded-lg text-sm font-medium hover:shadow-lg hover:shadow-cyan-500/25 transition-all duration-200 flex items-center space-x-2"
                 >
                   {isLoadingDetails ? (
@@ -683,15 +749,21 @@ export default function EscrowList({
                   )}
                   <span>Details</span>
                 </button>
-                
+
                 <div className="relative">
                   <button
-                    onClick={() => setSelectedEscrow(selectedEscrow === escrow.escrowId ? null : escrow.escrowId)}
+                    onClick={() =>
+                      setSelectedEscrow(
+                        selectedEscrow === escrow.escrowId
+                          ? null
+                          : escrow.escrowId,
+                      )
+                    }
                     className="p-2 text-white/60 hover:text-white hover:bg-white/10 rounded-lg transition-all duration-200"
                   >
                     <MoreVertical className="w-4 h-4" />
                   </button>
-                  
+
                   {selectedEscrow === escrow.escrowId && (
                     <div className="absolute right-0 top-full mt-2 w-48 bg-gray-800 border border-white/10 rounded-lg shadow-xl z-10">
                       <button
@@ -726,57 +798,99 @@ export default function EscrowList({
                 {isLoadingDetails ? (
                   <div className="flex items-center justify-center space-x-3 py-8">
                     <RefreshCw className="w-5 h-5 animate-spin text-cyan-400" />
-                    <span className="text-white/60">Loading contract details...</span>
+                    <span className="text-white/60">
+                      Loading contract details...
+                    </span>
                   </div>
                 ) : details ? (
                   <div className="space-y-6">
                     {/* Contract Details Header */}
                     <div className="bg-gradient-to-r from-cyan-500/10 to-blue-500/10 border border-cyan-500/20 rounded-xl p-4">
-                      <h4 className="text-lg font-semibold text-white mb-4">Contract Details</h4>
-                      
+                      <h4 className="text-lg font-semibold text-white mb-4">
+                        Contract Details
+                      </h4>
+
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-3">
                           <div>
-                            <p className="text-white/60 text-sm">Sender Address</p>
-                            <p className="text-white font-mono text-sm">{formatAddress(details.escrowRoom.sender)}</p>
+                            <p className="text-white/60 text-sm">
+                              Sender Address
+                            </p>
+                            <p className="text-white font-mono text-sm">
+                              {formatAddress(details.escrowRoom.sender)}
+                            </p>
                           </div>
                           <div>
                             <p className="text-white/60 text-sm">Token Type</p>
-                            <p className="text-white font-semibold">{details.tokenType}</p>
+                            <p className="text-white font-semibold">
+                              {details.tokenType}
+                            </p>
                           </div>
                           <div>
                             <p className="text-white/60 text-sm">Created At</p>
-                            <p className="text-white text-sm">{formatTimestamp(details.escrowRoom.createdAt.toString())}</p>
+                            <p className="text-white text-sm">
+                              {formatTimestamp(
+                                details.escrowRoom.createdAt.toString(),
+                              )}
+                            </p>
                           </div>
                           <div>
                             <p className="text-white/60 text-sm">Last Top Up</p>
-                            <p className="text-white text-sm">{formatTimestamp(details.escrowRoom.lastTopUpAt.toString())}</p>
+                            <p className="text-white text-sm">
+                              {formatTimestamp(
+                                details.escrowRoom.lastTopUpAt.toString(),
+                              )}
+                            </p>
                           </div>
                         </div>
-                        
+
                         <div className="space-y-3">
                           <div>
-                            <p className="text-white/60 text-sm">Total Allocated</p>
+                            <p className="text-white/60 text-sm">
+                              Total Allocated
+                            </p>
                             <p className="text-white font-semibold">
-                              {formatTokenAmount(details.escrowRoom.totalAllocatedAmount, escrow.tokenType === "IDRX" ? 18 : 6)} tokens
+                              {formatTokenAmount(
+                                details.escrowRoom.totalAllocatedAmount,
+                                escrow.tokenType === "IDRX" ? 2 : 6,
+                              )}{" "}
+                              tokens
                             </p>
                           </div>
                           <div>
-                            <p className="text-white/60 text-sm">Total Deposited</p>
+                            <p className="text-white/60 text-sm">
+                              Total Deposited
+                            </p>
                             <p className="text-white font-semibold">
-                              {formatTokenAmount(details.escrowRoom.totalDepositedAmount, escrow.tokenType === "IDRX" ? 18 : 6)} tokens
+                              {formatTokenAmount(
+                                details.escrowRoom.totalDepositedAmount,
+                                escrow.tokenType === "IDRX" ? 2 : 6,
+                              )}{" "}
+                              tokens
                             </p>
                           </div>
                           <div>
-                            <p className="text-white/60 text-sm">Total Withdrawn</p>
+                            <p className="text-white/60 text-sm">
+                              Total Withdrawn
+                            </p>
                             <p className="text-white font-semibold">
-                              {formatTokenAmount(details.escrowRoom.totalWithdrawnAmount, escrow.tokenType === "IDRX" ? 18 : 6)} tokens
+                              {formatTokenAmount(
+                                details.escrowRoom.totalWithdrawnAmount,
+                                escrow.tokenType === "IDRX" ? 2 : 6,
+                              )}{" "}
+                              tokens
                             </p>
                           </div>
                           <div>
-                            <p className="text-white/60 text-sm">Available Balance</p>
+                            <p className="text-white/60 text-sm">
+                              Available Balance
+                            </p>
                             <p className="text-green-400 font-semibold">
-                              {formatTokenAmount(details.escrowRoom.availableBalance, escrow.tokenType === "IDRX" ? 18 : 6)} tokens
+                              {formatTokenAmount(
+                                details.escrowRoom.availableBalance,
+                                escrow.tokenType === "IDRX" ? 2 : 6,
+                              )}{" "}
+                              tokens
                             </p>
                           </div>
                         </div>
@@ -785,38 +899,67 @@ export default function EscrowList({
 
                     {/* Receiver Information */}
                     <div className="bg-gradient-to-r from-purple-500/10 to-pink-500/10 border border-purple-500/20 rounded-xl p-4">
-                      <h4 className="text-lg font-semibold text-white mb-4">Receiver Information</h4>
-                      
+                      <h4 className="text-lg font-semibold text-white mb-4">
+                        Receiver Information
+                      </h4>
+
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                         <div>
-                          <p className="text-white/60 text-sm">Total Receivers</p>
-                          <p className="text-white font-semibold">{details.totalReceivers}</p>
+                          <p className="text-white/60 text-sm">
+                            Total Receivers
+                          </p>
+                          <p className="text-white font-semibold">
+                            {details.totalReceivers}
+                          </p>
                         </div>
                         <div>
-                          <p className="text-white/60 text-sm">Active Receivers</p>
-                          <p className="text-white font-semibold">{details.escrowRoom.activeReceiverCount}</p>
+                          <p className="text-white/60 text-sm">
+                            Active Receivers
+                          </p>
+                          <p className="text-white font-semibold">
+                            {details.escrowRoom.activeReceiverCount}
+                          </p>
                         </div>
                       </div>
 
                       {details.receivers && details.receivers.length > 0 && (
                         <div>
-                          <p className="text-white/60 text-sm mb-2">Receiver Details</p>
+                          <p className="text-white/60 text-sm mb-2">
+                            Receiver Details
+                          </p>
                           <div className="space-y-2 max-h-40 overflow-y-auto">
                             {details.receivers.map((receiver, index) => (
-                              <div key={index} className="flex items-center justify-between p-2 bg-white/5 rounded-lg">
+                              <div
+                                key={index}
+                                className="flex items-center justify-between p-2 bg-white/5 rounded-lg"
+                              >
                                 <div className="flex items-center space-x-2">
-                                  <span className="text-purple-400 text-sm font-medium">{index + 1}.</span>
-                                  <span className="text-white font-mono text-sm">{formatAddress(receiver.receiverAddress)}</span>
+                                  <span className="text-purple-400 text-sm font-medium">
+                                    {index + 1}.
+                                  </span>
+                                  <span className="text-white font-mono text-sm">
+                                    {formatAddress(receiver.receiverAddress)}
+                                  </span>
                                 </div>
                                 <div className="text-right">
                                   <div className="text-white text-xs">
-                                    Allocated: {formatTokenAmount(receiver.currentAllocation, escrow.tokenType === "IDRX" ? 18 : 6)}
+                                    Allocated:{" "}
+                                    {formatTokenAmount(
+                                      receiver.currentAllocation,
+                                      escrow.tokenType === "IDRX" ? 2 : 6,
+                                    )}
                                   </div>
                                   <div className="text-white/60 text-xs">
-                                    Withdrawn: {formatTokenAmount(receiver.withdrawnAmount, escrow.tokenType === "IDRX" ? 18 : 6)}
+                                    Withdrawn:{" "}
+                                    {formatTokenAmount(
+                                      receiver.withdrawnAmount,
+                                      escrow.tokenType === "IDRX" ? 2 : 6,
+                                    )}
                                   </div>
-                                  <div className={`text-xs ${receiver.isActive ? 'text-green-400' : 'text-red-400'}`}>
-                                    {receiver.isActive ? 'Active' : 'Inactive'}
+                                  <div
+                                    className={`text-xs ${receiver.isActive ? "text-green-400" : "text-red-400"}`}
+                                  >
+                                    {receiver.isActive ? "Active" : "Inactive"}
                                   </div>
                                 </div>
                               </div>
@@ -842,8 +985,12 @@ export default function EscrowList({
                     <div className="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-4">
                       <Clock className="w-8 h-8 text-red-400" />
                     </div>
-                    <p className="text-red-400 font-medium">Failed to load contract details</p>
-                    <p className="text-white/60 text-sm mt-2">Please try again later</p>
+                    <p className="text-red-400 font-medium">
+                      Failed to load contract details
+                    </p>
+                    <p className="text-white/60 text-sm mt-2">
+                      Please try again later
+                    </p>
                   </div>
                 )}
               </div>
@@ -877,11 +1024,28 @@ export default function EscrowList({
             <div className="p-6 space-y-6">
               {/* Escrow Info */}
               <div className="bg-gradient-to-r from-cyan-500/10 to-blue-500/10 border border-cyan-500/20 rounded-xl p-4">
-                <h4 className="text-cyan-300 font-medium mb-2">Escrow Details</h4>
+                <h4 className="text-cyan-300 font-medium mb-2">
+                  Escrow Details
+                </h4>
                 <div className="space-y-1 text-sm">
-                  <p className="text-white/60">Escrow ID: <span className="text-white font-mono">{topUpModal.escrowId.slice(0, 8)}...</span></p>
-                  <p className="text-white/60">Token: <span className="text-white font-medium">{topUpModal.tokenSymbol}</span></p>
-                  <p className="text-white/60">Your Balance: <span className="text-white font-medium">{userTokenBalance} {topUpModal.tokenSymbol}</span></p>
+                  <p className="text-white/60">
+                    Escrow ID:{" "}
+                    <span className="text-white font-mono">
+                      {topUpModal.escrowId.slice(0, 8)}...
+                    </span>
+                  </p>
+                  <p className="text-white/60">
+                    Token:{" "}
+                    <span className="text-white font-medium">
+                      {topUpModal.tokenSymbol}
+                    </span>
+                  </p>
+                  <p className="text-white/60">
+                    Your Balance:{" "}
+                    <span className="text-white font-medium">
+                      {userTokenBalance} {topUpModal.tokenSymbol}
+                    </span>
+                  </p>
                 </div>
               </div>
 
@@ -946,7 +1110,9 @@ export default function EscrowList({
                   ) : (
                     <>
                       <ArrowUp className="w-5 h-5" />
-                      <span>Topup {topUpAmount} {topUpModal.tokenSymbol}</span>
+                      <span>
+                        Topup {topUpAmount} {topUpModal.tokenSymbol}
+                      </span>
                     </>
                   )}
                 </button>

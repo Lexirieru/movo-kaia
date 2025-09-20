@@ -22,25 +22,27 @@ export default function TokenBalanceCard({
   loading = false,
   decimals,
 }: TokenBalanceCardProps) {
-  const formatDisplayBalance = (balance: string, symbol: string, decimals: number) => {
+  const formatDisplayBalance = (
+    balance: string,
+    symbol: string,
+    decimals: number,
+  ) => {
     const num = parseFloat(balance);
     if (num === 0) return "0";
-    
-    // For IDRX with 18 decimals, handle very small numbers better
-    if (symbol === "IDRX" && decimals === 18) {
-      if (num < 0.000000000000000001) return "< 0.000000000000000001";
-      if (num < 0.000001) return num.toFixed(18).replace(/\.?0+$/, '');
-      if (num < 0.01) return num.toFixed(6).replace(/\.?0+$/, '');
-      if (num < 1) return num.toFixed(4).replace(/\.?0+$/, '');
-      if (num < 100) return num.toFixed(2).replace(/\.?0+$/, '');
+
+    // For IDRX with 2 decimals, handle formatting appropriately
+    if (symbol === "IDRX" && decimals === 2) {
+      if (num < 0.01) return num.toFixed(2);
+      if (num < 1) return num.toFixed(2);
+      if (num < 100) return num.toFixed(2).replace(/\.?0+$/, "");
       return num.toLocaleString(undefined, { maximumFractionDigits: 2 });
     }
-    
+
     // For other tokens, use standard formatting
-    if (num < 0.000001) return num.toFixed(6).replace(/\.?0+$/, '');
-    if (num < 0.01) return num.toFixed(6).replace(/\.?0+$/, '');
-    if (num < 1) return num.toFixed(4).replace(/\.?0+$/, '');
-    if (num < 100) return num.toFixed(2).replace(/\.?0+$/, '');
+    if (num < 0.000001) return num.toFixed(6).replace(/\.?0+$/, "");
+    if (num < 0.01) return num.toFixed(6).replace(/\.?0+$/, "");
+    if (num < 1) return num.toFixed(4).replace(/\.?0+$/, "");
+    if (num < 100) return num.toFixed(2).replace(/\.?0+$/, "");
     return num.toLocaleString(undefined, { maximumFractionDigits: 2 });
   };
 
@@ -59,7 +61,9 @@ export default function TokenBalanceCard({
               />
             ) : (
               <div className="w-8 h-8 bg-gradient-to-br from-cyan-400/20 to-blue-600/20 rounded-full flex items-center justify-center border border-cyan-500/30">
-                <span className="text-cyan-400 font-bold text-sm">{symbol.charAt(0)}</span>
+                <span className="text-cyan-400 font-bold text-sm">
+                  {symbol.charAt(0)}
+                </span>
               </div>
             )}
             {loading && (

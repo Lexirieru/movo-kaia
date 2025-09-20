@@ -264,11 +264,8 @@ export const getEscrowDetailsWithTokenDetection = async (escrowId: string) => {
   }
 };
 
-
-
 export const fetchEscrowDetailsFromGoldsky = async (escrowId: string) => {
   try {
-
     const query = `
       query GetEscrowDetails($escrowId: String!) {
         escrowCreateds(where: { escrowId: $escrowId }) {
@@ -308,11 +305,6 @@ export const fetchEscrowDetailsFromGoldsky = async (escrowId: string) => {
   }
 };
 
-
-
-
-
-
 // Function to get contract address based on token type
 const getContractAddressByTokenType = (tokenType: string): string => {
   const tokenTypeLower = tokenType.toLowerCase();
@@ -328,7 +320,6 @@ const getContractAddressByTokenType = (tokenType: string): string => {
   }
 };
 
-
 export const api = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_BASE_URL,
   withCredentials: true,
@@ -337,7 +328,6 @@ export const api = axios.create({
 // Function to query tokenWithdrawnToFiat from Goldsky
 export const fetchTokenWithdrawnToFiat = async (receiver: string) => {
   try {
-
     const query = `
       query FetchTokenWithdrawnToFiat($receiver: String!) {
         tokenWithdrawnToFiat(receiver: $receiver) {
@@ -826,7 +816,9 @@ export const checkWalletAddressesRegistration = async (
 };
 
 // Enhanced function to fetch comprehensive receiver events including withdrawals
-export const fetchComprehensiveReceiverEvents = async (receiverAddress: string) => {
+export const fetchComprehensiveReceiverEvents = async (
+  receiverAddress: string,
+) => {
   try {
     if (!receiverAddress) {
       console.error("❌ No receiver address provided");
@@ -915,7 +907,9 @@ export const fetchComprehensiveReceiverEvents = async (receiverAddress: string) 
       data.escrowCreateds.forEach((event: any) => {
         // Check if the receiver address is in the receivers list
         if (event.receivers) {
-          const receivers = event.receivers.split(',').map((addr: string) => addr.trim().toLowerCase());
+          const receivers = event.receivers
+            .split(",")
+            .map((addr: string) => addr.trim().toLowerCase());
           if (receivers.includes(receiverAddressLower)) {
             allEvents.push({
               ...event,
@@ -930,7 +924,10 @@ export const fetchComprehensiveReceiverEvents = async (receiverAddress: string) 
     // Process withdrawal events
     if (data.tokenWithdrawns) {
       data.tokenWithdrawns.forEach((event: any) => {
-        if (event.recipient && event.recipient.toLowerCase() === receiverAddressLower) {
+        if (
+          event.recipient &&
+          event.recipient.toLowerCase() === receiverAddressLower
+        ) {
           withdrawEvents.push({
             escrowId: event.escrowId,
             recipient: event.recipient,
@@ -947,7 +944,10 @@ export const fetchComprehensiveReceiverEvents = async (receiverAddress: string) 
 
     if (data.tokenWithdrawnToFiats) {
       data.tokenWithdrawnToFiats.forEach((event: any) => {
-        if (event.recipient && event.recipient.toLowerCase() === receiverAddressLower) {
+        if (
+          event.recipient &&
+          event.recipient.toLowerCase() === receiverAddressLower
+        ) {
           withdrawEvents.push({
             escrowId: event.escrowId,
             recipient: event.recipient,
@@ -964,13 +964,15 @@ export const fetchComprehensiveReceiverEvents = async (receiverAddress: string) 
 
     // Sort all events by timestamp
     allEvents.sort((a, b) => parseInt(b.timestamp_) - parseInt(a.timestamp_));
-    withdrawEvents.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
-    
+    withdrawEvents.sort(
+      (a, b) => b.timestamp.getTime() - a.timestamp.getTime(),
+    );
+
     const result = { escrowEvents: allEvents, withdrawEvents };
-    
+
     // Cache the result
     setCachedData(cacheKey, result);
-    
+
     return result;
   } catch (error) {
     console.error("❌ Error fetching comprehensive receiver events:", error);
@@ -1160,10 +1162,10 @@ export const fetchComprehensiveEscrowEvents = async (userAddress: string) => {
 
     // Sort all events by timestamp
     allEvents.sort((a, b) => parseInt(b.timestamp_) - parseInt(a.timestamp_));
-    
+
     // Cache the result
     setCachedData(cacheKey, allEvents);
-    
+
     return allEvents;
   } catch (error) {
     console.error("❌ Error fetching comprehensive escrow events:", error);
@@ -1563,7 +1565,6 @@ const fetchReceiverEscrowsFromIndexer = async (receiverAddress: string) => {
       originalAddress: receiverAddress,
     });
 
-
     const response = await axios.post(
       GOLDSKY_ESCROW_API_URL,
       {
@@ -1579,7 +1580,6 @@ const fetchReceiverEscrowsFromIndexer = async (receiverAddress: string) => {
         timeout: 15000, // 15 second timeout for better reliability
       },
     );
-    
 
     console.log("📥 Goldsky receiver API response:", response.data);
     console.log("📥 Receiver response status:", response.status);
@@ -2086,6 +2086,24 @@ const fetchReceiverEscrowsSimple = async (receiverAddress: string) => {
           contractAddress,
         );
 
+        // Calculate actual available amount for this receiver
+        // Receiver can only claim if availableBalance >= their allocated amount
+        const availableBalance = contractDetails?.availableBalance || "0";
+        const receiverAllocatedAmount = receiverAmount;
+
+        // Check if this receiver can claim: availableBalance should be >= receiverAllocatedAmount
+        const canClaim =
+          parseFloat(availableBalance) >= parseFloat(receiverAllocatedAmount);
+        const actualAvailableAmount = canClaim ? receiverAllocatedAmount : "0";
+
+        console.log(`🔍 Receiver claim check for escrow ${escrow.escrowId}:`, {
+          receiverAddress: receiverAddress.toLowerCase(),
+          receiverAllocatedAmount,
+          contractAvailableBalance: availableBalance,
+          canClaim,
+          actualAvailableAmount,
+        });
+
         return {
           // Basic escrow info
           id: `receiver-escrow-${index}`,
@@ -2099,9 +2117,9 @@ const fetchReceiverEscrowsSimple = async (receiverAddress: string) => {
           senderWalletAddress: escrow.sender,
           senderName: `${escrow.sender.slice(0, 6)}...${escrow.sender.slice(-4)}`,
 
-          // Amount data
+          // Amount data - FIXED: Use actual available amount based on contract balance
           totalAmount: escrow.totalAmount || "0",
-          availableAmount: receiverAmount,
+          availableAmount: actualAvailableAmount, // This is the key fix!
           originCurrency: tokenType,
 
           // Token data
@@ -2118,7 +2136,7 @@ const fetchReceiverEscrowsSimple = async (receiverAddress: string) => {
           createdAt: createdDate,
 
           // Status
-          status: "AVAILABLE",
+          status: canClaim ? "AVAILABLE" : "INSUFFICIENT_BALANCE",
 
           // Additional receiver data
           receiverIndex,
@@ -2126,13 +2144,16 @@ const fetchReceiverEscrowsSimple = async (receiverAddress: string) => {
           allAmounts: amounts,
 
           // Additional contract data
-          allocatedAmount: contractDetails?.totalAllocatedAmount || "0",
+          allocatedAmount: receiverAllocatedAmount,
           depositedAmount: contractDetails?.totalDepositedAmount || "0",
           withdrawnAmount: contractDetails?.totalWithdrawnAmount || "0",
-          availableBalance: contractDetails?.availableBalance || "0",
+          availableBalance: availableBalance,
           receiverCount: contractDetails?.receiverCount || "0",
           activeReceiverCount: contractDetails?.activeReceiverCount || "0",
           lastTopUpAt: contractDetails?.lastTopUpAt || "0",
+
+          // Additional debugging info
+          canClaim,
         };
       }),
     ).then((results) =>
