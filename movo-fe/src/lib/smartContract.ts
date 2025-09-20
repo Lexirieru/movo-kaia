@@ -40,6 +40,8 @@ const saveEscrowEventWithContext = async (
   });
 };
 
+export type TokenType = "USDC" | "USDT" | "IDRX_KAIA" | "IDRX_BASE";
+
 // Define Base Sepolia chain with correct Chain ID
 export const baseSepolia = defineChain({
   id: 84532,
@@ -212,10 +214,15 @@ export const escrowContract = getContract({
 });
 
 export const escrowIdrxContract = getContract({
-  address: getEscrowAddress("IDRX") as `0x${string}`,
+  address: getEscrowAddress("IDRX_BASE") as `0x${string}`,
   abi: escrowIdrxAbis,
   client: publicClient,
 });
+// export const escrowIdrxContract = getContract({
+//   address: getEscrowAddress("IDRX") as `0x${string}`,
+//   abi: escrowIdrxAbis,
+//   client: publicClient,
+// });
 
 export const usdcContract = getContract({
   address: getTokenAddress("USDC") as `0x${string}`,
@@ -230,10 +237,15 @@ export const usdtContract = getContract({
 });
 
 export const idrxContract = getContract({
-  address: getTokenAddress("IDRX") as `0x${string}`,
+  address: getTokenAddress("IDRX_BASE") as `0x${string}`,
   abi: idrxAbis,
   client: publicClient,
 });
+// export const idrxContract = getContract({
+//   address: getTokenAddress("IDRX") as `0x${string}`,
+//   abi: idrxAbis,
+//   client: publicClient,
+// });
 
 // Types
 export interface EscrowData {
@@ -400,7 +412,8 @@ export const extractEscrowIdFromLogs = (receipt: any): string | null => {
 
 // Check token balance
 export const checkTokenBalance = async (
-  tokenType: "USDC" | "USDT" | "IDRX",
+  tokenType: TokenType,
+  // tokenType: "USDC" | "USDT" | "IDRX",
   userAddress: string,
 ): Promise<bigint> => {
   try {
@@ -431,7 +444,8 @@ export const checkTokenBalance = async (
 
 // Check token allowance
 export const checkTokenAllowance = async (
-  tokenType: "USDC" | "USDT" | "IDRX",
+  // tokenType: "USDC" | "USDT" | "IDRX",
+  tokenType: TokenType,
   owner: string,
   escrowId: string,
 ): Promise<bigint> => {
@@ -440,12 +454,20 @@ export const checkTokenAllowance = async (
 
     // Get the correct escrow contract address based on token type
     let escrowContractAddress;
-    if (tokenType === "IDRX") {
-      escrowContractAddress = getEscrowAddress("IDRX");
+    if (tokenType === "IDRX_BASE") {
+      escrowContractAddress = getEscrowAddress("IDRX_BASE");
+    } else if (tokenType === "IDRX_KAIA") {
+      escrowContractAddress = getEscrowAddress("IDRX_KAIA");
     } else {
       // For USDC and USDT, use the regular escrow contract
       escrowContractAddress = getEscrowAddress("USDC");
     }
+    // if (tokenType === "IDRX") {
+    //   escrowContractAddress = getEscrowAddress("IDRX");
+    // } else {
+    //   // For USDC and USDT, use the regular escrow contract
+    //   escrowContractAddress = getEscrowAddress("USDC");
+    // }
 
     console.log(
       "🔍 Escrow contract address for allowance:",
@@ -482,7 +504,8 @@ export const checkTokenAllowance = async (
 // Approve tokens for escrow contract
 export const approveTokens = async (
   walletClient: any,
-  tokenType: "USDC" | "USDT" | "IDRX",
+  tokenType: TokenType,
+  // tokenType: "USDC" | "USDT" | "IDRX",
   escrowId: string,
   amount: bigint,
 ): Promise<boolean> => {
@@ -491,12 +514,20 @@ export const approveTokens = async (
 
     // Get the correct escrow contract address based on token type
     let escrowContractAddress;
-    if (tokenType === "IDRX") {
-      escrowContractAddress = getEscrowAddress("IDRX");
+    if (tokenType === "IDRX_BASE") {
+      escrowContractAddress = getEscrowAddress("IDRX_BASE");
+    } else if (tokenType === "IDRX_KAIA") {
+      escrowContractAddress = getEscrowAddress("IDRX_KAIA");
     } else {
       // For USDC and USDT, use the regular escrow contract
       escrowContractAddress = getEscrowAddress("USDC");
     }
+    // if (tokenType === "IDRX") {
+    //   escrowContractAddress = getEscrowAddress("IDRX");
+    // } else {
+    //   // For USDC and USDT, use the regular escrow contract
+    //   escrowContractAddress = getEscrowAddress("USDC");
+    // }
 
     console.log("🔍 Approve tokens debug:", {
       tokenType,
@@ -601,7 +632,8 @@ export const verifyNetwork = async (walletClient: any): Promise<boolean> => {
 // Create escrow onchain
 export const createEscrowOnchain = async (
   walletClient: any,
-  tokenType: "USDC" | "USDT" | "IDRX",
+  tokenType: TokenType,
+  // tokenType: "USDC" | "USDT" | "IDRX",
   escrowData: EscrowData,
   userId?: string,
 ): Promise<CreateEscrowResult> => {
@@ -617,11 +649,16 @@ export const createEscrowOnchain = async (
     }
 
     let contract;
-    if (tokenType === "IDRX") {
+    if (tokenType === "IDRX_KAIA" || tokenType === "IDRX_BASE") {
       contract = escrowIdrxContract;
     } else {
       contract = escrowContract; // For USDC and USDT
     }
+    // if (tokenType === "IDRX") {
+    //   contract = escrowIdrxContract;
+    // } else {
+    //   contract = escrowContract; // For USDC and USDT
+    // }
 
     // Debug logging
     console.log("Creating escrow with:", {
@@ -822,8 +859,15 @@ export const createEscrowOnchain = async (
     // Ensure ABI is included in the request
     const requestWithAbi = {
       ...request,
-      abi: tokenType === "IDRX" ? escrowIdrxAbis : escrowAbis, // Use correct ABI
+      abi:
+        tokenType === "IDRX_KAIA" || tokenType === "IDRX_BASE"
+          ? escrowIdrxAbis
+          : escrowAbis, // Use correct ABI
     };
+    // const requestWithAbi = {
+    //   ...request,
+    //   abi: tokenType === "IDRX" ? escrowIdrxAbis : escrowAbis, // Use correct ABI
+    // };
 
     // Use the request directly from simulation, but ensure account is correct
     console.log("🔍 Request details before execution:", {
@@ -866,24 +910,45 @@ export const createEscrowOnchain = async (
       walletAddress: validateAddress(receiver),
       amount: formatTokenAmount(
         escrowData.amounts[index],
-        tokenType === "IDRX" ? 2 : 6,
+        tokenType === "IDRX_KAIA" || tokenType === "IDRX_BASE" ? 18 : 6,
       ),
+      // amount: formatTokenAmount(
+      //   escrowData.amounts[index],
+      //   tokenType === "IDRX" ? 2 : 6,
+      // ),
       fullname: "Unknown User", // Will be resolved in backend
     }));
 
     // Enhanced event data with more context
     const eventData = {
-      totalAmount: formatTokenAmount(totalAmount, tokenType === "IDRX" ? 2 : 6),
+      totalAmount: formatTokenAmount(
+        totalAmount,
+        tokenType === "IDRX_KAIA" || tokenType === "IDRX_BASE" ? 18 : 6,
+        // tokenType === "IDRX" ? 18 : 6,
+      ),
       recipients: recipients,
       vestingEnabled: escrowData.vestingEnabled || false,
       vestingDuration: escrowData.vestingDuration || 0,
       recipientsCount: recipients.length,
       averageAmount: formatTokenAmount(
         totalAmount / BigInt(recipients.length),
-        tokenType === "IDRX" ? 2 : 6,
+        tokenType === "IDRX_KAIA" || tokenType === "IDRX_BASE" ? 18 : 6,
+        // tokenType === "IDRX" ? 18 : 6,
       ),
       createdAt: new Date().toISOString(),
     };
+    // const eventData = {
+    //   totalAmount: formatTokenAmount(totalAmount, tokenType === "IDRX" ? 2 : 6),
+    //   recipients: recipients,
+    //   vestingEnabled: escrowData.vestingEnabled || false,
+    //   vestingDuration: escrowData.vestingDuration || 0,
+    //   recipientsCount: recipients.length,
+    //   averageAmount: formatTokenAmount(
+    //     totalAmount / BigInt(recipients.length),
+    //     tokenType === "IDRX" ? 2 : 6,
+    //   ),
+    //   createdAt: new Date().toISOString(),
+    // };
 
     console.log(`✅ Escrow created successfully onchain`);
     console.log(`🔍 Transaction hash: ${hash}`);
@@ -1110,15 +1175,21 @@ export const topUpFunds = async (
   walletClient: any,
   escrowId: string,
   amount: bigint,
-  tokenType: "USDC" | "USDT" | "IDRX",
+  tokenType: TokenType,
+  // tokenType: "USDC" | "USDT" | "IDRX",
 ): Promise<{ success: boolean; transactionHash?: string; error?: string }> => {
   try {
     let contract;
-    if (tokenType === "IDRX") {
+    if (tokenType === "IDRX_BASE" || tokenType === "IDRX_KAIA") {
       contract = escrowIdrxContract;
     } else {
       contract = escrowContract; // For USDC and USDT
     }
+    // if (tokenType === "IDRX") {
+    //   contract = escrowIdrxContract;
+    // } else {
+    //   contract = escrowContract; // For USDC and USDT
+    // }
 
     console.log("🔍 topUpFunds debug:", {
       escrowId,
@@ -1224,7 +1295,11 @@ export const topUpFunds = async (
       walletClient.account.address,
       tokenType,
       {
-        topupAmount: formatTokenAmount(amount, tokenType === "IDRX" ? 2 : 6),
+        topupAmount: formatTokenAmount(
+          amount,
+          tokenType === "IDRX_KAIA" || tokenType === "IDRX_BASE" ? 18 : 6,
+        ),
+        // topupAmount: formatTokenAmount(amount, tokenType === "IDRX" ? 2 : 6),
       },
       receipt,
       contract.address,
@@ -1320,71 +1395,354 @@ export const updateRecipientAmount = async (
 };
 
 // Remove recipient from escrow
+// export const removeRecipient = async (
+//   walletClient: any,
+//   tokenType: TokenType,
+//   // tokenType: "USDC" | "USDT" | "IDRX",
+//   escrowId: string,
+//   receiverAddress: `0x${string}`,
+// ): Promise<{ success: boolean; transactionHash?: string; error?: string }> => {
+//   try {
+//     console.log("Removing recipient from escrow:", {
+//       tokenType,
+//       escrowId,
+//       receiverAddress,
+//     });
+
+//     const isCorrectNetwork = await verifyNetwork(walletClient);
+//     if (!isCorrectNetwork) {
+//       const walletType = detectWalletType(walletClient);
+//       const expectedChain = getChainForWallet(walletType);
+//       throw new Error(
+//         `Please switch to ${expectedChain.name} network (Chain ID: ${expectedChain.id})`,
+//       );
+//     }
+
+//     //validate wallet client
+//     if (!walletClient.account || !walletClient.account.address) {
+//       throw new Error(
+//         "Wallet client account is not available. Please reconnect your wallet.",
+//       );
+//     }
+
+//     let contract;
+//     let abi;
+
+//     // const contractAddress =
+//     //   tokenType === "IDRX" ? escrowIdrxContract : escrowContract;
+
+//     if (tokenType === "IDRX_BASE" || tokenType === "IDRX_KAIA") {
+//       contract = escrowIdrxContract;
+//       abi = escrowIdrxAbis;
+//     } else {
+//       contract = escrowContract; // For USDC and USDT
+//       abi = escrowAbis;
+//     }
+
+//     if (
+//       !contract.address ||
+//       contract.address === "0x0000000000000000000000000000000000000000"
+//     ) {
+//       throw new Error(`Invalid contract address: ${contract.address}`);
+//     }
+
+//     const validatedReceiverAddress = validateAddress(receiverAddress);
+//     console.log("Remove recipient parameters:", {
+//       contractAddress: contract.address,
+//       escrowId,
+//       receiverAddress: validatedReceiverAddress,
+//       sender: walletClient.account.address,
+//     });
+
+//     const { request } = await publicClient.simulateContract({
+//       address: contract.address,
+//       abi: abi,
+//       functionName: "removeReceiver",
+//       args: [
+//         escrowId as `0x${string}`,
+//         validatedReceiverAddress as `0x${string}`,
+//       ],
+//       account: walletClient.account.address,
+//     });
+//     console.log("Simulation successful");
+
+//     const txHash = await walletClient.writeContract(request);
+//     // const txHash = await walletClient.writeContract({
+//     //   address: contractAddress.address,
+//     //   abi: tokenType === "IDRX" ? escrowIdrxAbis : escrowAbis,
+//     //   functionName: "removeReceiver", // Assuming this function exists
+//     //   args: [escrowId, receiverAddress],
+//     // });
+
+//     console.log("Remove recipient transaction sent: ", txHash);
+
+//     // const receipt = await walletClient.waitForTransactionReceipt(txHash);
+//     const receipt = await publicClient.waitForTransactionReceipt({
+//       hash: txHash,
+//     });
+
+//     if (receipt.status == "success") {
+//       console.log("Recipient removed successfully:", receipt);
+
+//       // Save remove recipient event for tracking
+//       await saveEscrowEventWithContext(
+//         "REMOVE_RECIPIENTS",
+//         escrowId,
+//         txHash,
+//         walletClient.account.address,
+//         tokenType,
+//         {
+//           removedRecipients: [
+//             {
+//               walletAddress: receiverAddress,
+//               amount: "0", // We don't have the amount here
+//               fullname: "Unknown User", // Will be resolved in backend
+//             },
+//           ],
+//         },
+//         receipt,
+//         contract.address,
+//       );
+
+//       return {
+//         success: true,
+//         transactionHash: txHash,
+//       };
+//     } else {
+//       return {
+//         success: false,
+//         error: "Transaction failed",
+//       };
+//     }
+//   } catch (error) {
+//     console.error("Error removing recipient from escrow:", error);
+//     return {
+//       success: false,
+//       error: error instanceof Error ? error.message : "Unknown error occured",
+//     };
+//   }
+// };
 export const removeRecipient = async (
   walletClient: any,
-  tokenType: "USDC" | "USDT" | "IDRX",
+  tokenType: TokenType,
   escrowId: string,
   receiverAddress: `0x${string}`,
 ): Promise<{ success: boolean; transactionHash?: string; error?: string }> => {
   try {
-    console.log("Removing recipient from escrow:", {
+    console.log("🗑️ Removing recipient from escrow:", {
       tokenType,
       escrowId,
       receiverAddress,
     });
 
-    const contractAddress =
-      tokenType === "IDRX" ? escrowIdrxContract : escrowContract;
+    // Verify network first
+    const isCorrectNetwork = await verifyNetwork(walletClient);
+    if (!isCorrectNetwork) {
+      const walletType = detectWalletType(walletClient);
+      const expectedChain = getChainForWallet(walletType);
+      throw new Error(
+        `Please switch to ${expectedChain.name} network (Chain ID: ${expectedChain.id})`
+      );
+    }
 
-    const txHash = await walletClient.writeContract({
-      address: contractAddress.address,
-      abi: tokenType === "IDRX" ? escrowIdrxAbis : escrowAbis,
-      functionName: "removeReceiver", // Assuming this function exists
-      args: [escrowId, receiverAddress],
+    // Validate wallet client
+    if (!walletClient.account || !walletClient.account.address) {
+      throw new Error(
+        "Wallet client account is not available. Please reconnect your wallet.",
+      );
+    }
+
+    // Get the correct contract based on token type
+    let contract;
+    let abi;
+    if (tokenType === "IDRX_BASE" || tokenType === "IDRX_KAIA") {
+      contract = escrowIdrxContract;
+      abi = escrowIdrxAbis;
+    } else {
+      contract = escrowContract; // For USDC and USDT
+      abi = escrowAbis;
+    }
+
+    // Validate contract address
+    if (!contract.address || contract.address === "0x0000000000000000000000000000000000000000") {
+      throw new Error(`Invalid contract address: ${contract.address}`);
+    }
+
+    // Validate receiver address
+    const validatedReceiverAddress = validateAddress(receiverAddress);
+
+    // Format escrow ID properly as bytes32
+    let formattedEscrowId = escrowId;
+    if (!escrowId.startsWith("0x")) {
+      formattedEscrowId = "0x" + escrowId;
+    }
+    
+    // Pad to 32 bytes (64 hex characters + 0x prefix = 66 characters)
+    if (formattedEscrowId.length < 66) {
+      formattedEscrowId = formattedEscrowId.padEnd(66, "0");
+    }
+
+    console.log("📋 Remove recipient parameters:", {
+      contractAddress: contract.address,
+      originalEscrowId: escrowId,
+      formattedEscrowId,
+      receiverAddress: validatedReceiverAddress,
+      sender: walletClient.account.address,
     });
 
-    console.log("Remove recipient transaction sent: ", txHash);
+    // STEP 1: Verify the escrow exists and get its details
+    console.log("🔍 Step 1: Verifying escrow exists...");
+    try {
+      const escrowDetails = await publicClient.readContract({
+        address: contract.address,
+        abi: abi,
+        functionName: "getEscrowDetails",
+        args: [formattedEscrowId as `0x${string}`],
+      });
 
-    const receipt = await walletClient.waitForTransactionReceipt(txHash);
+      console.log("✅ Escrow details found:", escrowDetails);
 
-    if (receipt.status == "success") {
-      console.log("Recipient removed successfully:", receipt);
+      // Check if escrow exists (sender should not be zero address)
+      if (escrowDetails[0] === "0x0000000000000000000000000000000000000000") {
+        throw new Error(`Escrow with ID ${escrowId} does not exist`);
+      }
 
-      // Save remove recipient event for tracking
-      await saveEscrowEventWithContext(
-        "REMOVE_RECIPIENTS",
-        escrowId,
-        txHash,
-        walletClient.account.address,
-        tokenType,
-        {
-          removedRecipients: [
-            {
-              walletAddress: receiverAddress,
-              amount: "0", // We don't have the amount here
-              fullname: "Unknown User", // Will be resolved in backend
-            },
-          ],
-        },
-        receipt,
-        contractAddress.address,
+      // Check if the current user is the sender
+      if (escrowDetails[0].toLowerCase() !== walletClient.account.address.toLowerCase()) {
+        throw new Error("Only the escrow sender can remove receivers");
+      }
+
+      console.log("✅ Escrow validation passed");
+    } catch (error) {
+      console.error("❌ Escrow validation failed:", error);
+      throw new Error(`Escrow validation failed: ${error instanceof Error ? error.message : "Unknown error"}`);
+    }
+
+    // STEP 2: Get all receivers in the escrow to verify the receiver exists
+    console.log("🔍 Step 2: Checking if receiver exists in escrow...");
+    try {
+      const escrowReceivers = await publicClient.readContract({
+        address: contract.address,
+        abi: abi,
+        functionName: "getEscrowReceivers",
+        args: [formattedEscrowId as `0x${string}`],
+      });
+
+      console.log("📋 Current receivers in escrow:", escrowReceivers);
+
+      // Check if the receiver exists in the escrow
+      const receiverExists = (escrowReceivers as string[]).some(
+        (addr: string) => addr.toLowerCase() === validatedReceiverAddress.toLowerCase()
       );
 
-      return {
-        success: true,
-        transactionHash: txHash,
-      };
-    } else {
-      return {
-        success: false,
-        error: "Transaction failed",
-      };
+      if (!receiverExists) {
+        throw new Error(
+          `Receiver ${validatedReceiverAddress} does not exist in escrow ${escrowId}. ` +
+          `Current receivers: ${(escrowReceivers as string[]).join(", ")}`
+        );
+      }
+
+      console.log("✅ Receiver found in escrow");
+    } catch (error) {
+      console.error("❌ Receiver verification failed:", error);
+      throw new Error(`Receiver verification failed: ${error instanceof Error ? error.message : "Unknown error"}`);
     }
+
+    // STEP 3: Get receiver details to confirm it's active
+    console.log("🔍 Step 3: Getting receiver details...");
+    try {
+      const receiverDetails = await publicClient.readContract({
+        address: contract.address,
+        abi: abi,
+        functionName: "getReceiverDetails",
+        args: [formattedEscrowId as `0x${string}`, validatedReceiverAddress as `0x${string}`],
+      });
+
+      console.log("📋 Receiver details:", receiverDetails);
+
+      // Check if receiver is active (index 2 should be true for active receivers)
+      if (!receiverDetails[2]) {
+        throw new Error(`Receiver ${validatedReceiverAddress} is already inactive in escrow ${escrowId}`);
+      }
+
+      console.log("✅ Receiver is active and can be removed");
+    } catch (error) {
+      console.error("❌ Receiver details check failed:", error);
+      throw new Error(`Receiver details check failed: ${error instanceof Error ? error.message : "Unknown error"}`);
+    }
+
+    // STEP 4: Simulate the transaction
+    console.log("🔍 Step 4: Simulating removeReceiver transaction...");
+    const { request } = await publicClient.simulateContract({
+      address: contract.address,
+      abi: abi,
+      functionName: "removeReceiver",
+      args: [formattedEscrowId as `0x${string}`, validatedReceiverAddress as `0x${string}`],
+      account: walletClient.account.address,
+    });
+
+    console.log("✅ Remove recipient simulation successful");
+
+    // STEP 5: Execute the transaction
+    console.log("🔍 Step 5: Executing transaction...");
+    const hash = await walletClient.writeContract(request);
+    console.log("📝 Remove recipient transaction submitted:", hash);
+
+    // Wait for transaction confirmation
+    const receipt = await publicClient.waitForTransactionReceipt({ hash });
+    console.log("✅ Remove recipient transaction confirmed:", receipt);
+
+    // Save event for tracking
+    await saveEscrowEventWithContext(
+      "REMOVE_RECIPIENTS",
+      escrowId,
+      hash,
+      walletClient.account.address,
+      tokenType,
+      {
+        removedReceiver: validatedReceiverAddress,
+        escrowId: formattedEscrowId,
+        contractAddress: contract.address,
+      },
+      receipt,
+      contract.address
+    );
+
+    console.log("✅ Recipient removed successfully from blockchain");
+
+    return {
+      success: true,
+      transactionHash: hash,
+    };
   } catch (error) {
-    console.error("Error removing recipient from escrow:", error);
+    console.error("❌ Error removing recipient:", error);
+    
+    let errorMessage = "Unknown error occurred";
+    if (error instanceof Error) {
+      errorMessage = error.message;
+    } else if (typeof error === "string") {
+      errorMessage = error;
+    }
+
+    // Handle specific error cases
+    if (errorMessage.includes("User rejected")) {
+      errorMessage = "Transaction was rejected by user";
+    } else if (errorMessage.includes("insufficient funds")) {
+      errorMessage = "Insufficient funds to pay for transaction";
+    } else if (errorMessage.includes("execution reverted")) {
+      if (errorMessage.includes("Receiver does not exist")) {
+        errorMessage = "Receiver not found in escrow. They may have been removed already or never added to this escrow.";
+      } else {
+        errorMessage = "Transaction failed: " + errorMessage;
+      }
+    } else if (errorMessage.includes("does not exist in escrow")) {
+      // Our custom error message
+      errorMessage = errorMessage;
+    }
+
     return {
       success: false,
-      error: error instanceof Error ? error.message : "Unknown error occured",
+      error: errorMessage,
     };
   }
 };
@@ -1533,7 +1891,8 @@ export const withdrawIDRXToCrypto = async (
   try {
     // Send transaction
     const hash = await walletClient.writeContract({
-      address: getEscrowAddress("IDRX"),
+      address: getEscrowAddress("IDRX_BASE"),
+      // address: getEscrowAddress("IDRX"),
       abi: escrowIdrxAbis,
       functionName: "withdrawIDRXToCrypto",
       args: [escrowId, amount],
@@ -1557,7 +1916,8 @@ export const withdrawIDRXToCrypto = async (
           withdrawTo: walletClient.account.address, // Receiver's own wallet
         },
         receipt,
-        getEscrowAddress("IDRX"),
+        getEscrowAddress("IDRX_BASE"),
+        // getEscrowAddress("IDRX"),
       );
 
       return {

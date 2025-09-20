@@ -27,25 +27,42 @@ export const getContractAddress = (
 };
 
 // Get escrow address by token type
-export const getEscrowAddress = (tokenType: "USDC" | "USDT" | "IDRX") => {
-  return tokenType === "IDRX"
-    ? CONTRACT_CONFIG.base.escrowIDRX
-    : CONTRACT_CONFIG.base.escrow;
+export const getEscrowAddress = (tokenType: 'USDC' | 'USDT' | 'IDRX_KAIA' | 'IDRX_BASE') => {
+  return (tokenType === 'IDRX_BASE' ? CONTRACT_CONFIG.base.escrowIDRX : (tokenType === 'IDRX_KAIA' ? CONTRACT_CONFIG.base.escrowIDRX :  CONTRACT_CONFIG.base.escrow));
 };
+// export const getEscrowAddress = (tokenType: "USDC" | "USDT" | "IDRX") => {
+//   return tokenType === "IDRX"
+//     ? CONTRACT_CONFIG.base.escrowIDRX
+//     : CONTRACT_CONFIG.base.escrow;
+// };
 
 // Get token address by token type
-export const getTokenAddress = (tokenType: "USDC" | "USDT" | "IDRX") => {
+export const getTokenAddress = (tokenType:'USDC' | 'USDT' | 'IDRX_KAIA' | 'IDRX_BASE') => {
   switch (tokenType) {
-    case "USDC":
+    case 'USDC':
       return CONTRACT_CONFIG.base.mockUSDC;
-    case "USDT":
+    case 'USDT':
       return CONTRACT_CONFIG.base.mockUSDT;
-    case "IDRX":
+    case 'IDRX_KAIA':
+            return CONTRACT_CONFIG.base.mockIDRX;
+    case 'IDRX_BASE':
       return CONTRACT_CONFIG.base.mockIDRX;
     default:
       throw new Error(`Unsupported token type: ${tokenType}`);
   }
 };
+// export const getTokenAddress = (tokenType: "USDC" | "USDT" | "IDRX") => {
+//   switch (tokenType) {
+//     case "USDC":
+//       return CONTRACT_CONFIG.base.mockUSDC;
+//     case "USDT":
+//       return CONTRACT_CONFIG.base.mockUSDT;
+//     case "IDRX":
+//       return CONTRACT_CONFIG.base.mockIDRX;
+//     default:
+//       throw new Error(`Unsupported token type: ${tokenType}`);
+//   }
+// };
 
 // Get token decimals by token type
 export const getTokenDecimals = (tokenType: "USDC" | "USDT" | "IDRX") => {

@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
-  Users, 
+  Users,
   UserPlus,
-  DollarSign, 
+  DollarSign,
   TrendingUp,
   Search,
   Plus,
@@ -12,10 +12,12 @@ import {
   CheckCircle2,
   Wallet,
   Filter,
-  ArrowLeft
+  ArrowLeft,
+  MoreHorizontal,
 } from "lucide-react";
 import { useAuth } from "@/lib/userContext";
 import {
+  clearCacheOnEscrowCreated,
   editReceiverAmountInGroup,
   loadSpecifiedGroup,
   removeReceiverDataFromGroup,
@@ -29,7 +31,9 @@ import {
   getEscrowDetailsWithTokenDetection,
   getEscrowDetails,
 } from "@/app/api/api";
-
+import { useWalletClientHook } from "@/lib/useWalletClient"; 
+import { removeRecipient } from "@/lib/smartContract";
+import { getTokenAddress, getEscrowAddress } from "@/lib/contractConfig"; 
 interface Stream {
   _id: string;
   token: string;
@@ -45,13 +49,15 @@ interface SenderDashboardProps {
   onDropdownOpen?: () => void;
 }
 
+type TokenType = "USDC" | "USDT" | "IDRX_BASE" | "IDRX_KAIA";
 export default function SenderDashboard({
   groupId,
   onDropdownOpen,
 }: SenderDashboardProps) {
   const { user, loading } = useAuth();
-  const [escrowDetails, setEscrowDetails] = useState<any>(null)
-  const [detectedTokenType, setDetectedTokenType] = useState<"USDC" | "USDT" | "IDRX">("USDC");
+  const walletClient = useWalletClientHook();
+  const [escrowDetails, setEscrowDetails] = useState<any>(null);
+  const [detectedTokenType, setDetectedTokenType] = useState<TokenType>("USDC");
   const [searchTerm, setSearchTerm] = useState("");
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [streams, setStreams] = useState<Stream[]>([]);
@@ -59,6 +65,9 @@ export default function SenderDashboard({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editAmount, setEditAmount] = useState<string>("");
   const [refreshFlag, setRefreshFlag] = useState(0); // 🔑 trigger ulang useEffect
+  const [removingReceiverId, setRemovingReceiverId] = useState<string | null>(
+    null,
+  ); // New state for tracking removal
 
   const [existingEscrow, setExistingEscrow] = useState<{
     escrowId: string;
@@ -69,6 +78,30 @@ export default function SenderDashboard({
     "all",
   );
 
+  const detectTokenType = (contractAddress: string): TokenType => {
+    const lowerAddress = contractAddress.toLowerCase();
+    
+    // Get all contract addresses for comparison
+    const usdcAddress = getTokenAddress("USDC")?.toLowerCase();
+    const usdtAddress = getTokenAddress("USDT")?.toLowerCase();
+    const idrxBaseAddress = getTokenAddress("IDRX_BASE")?.toLowerCase();
+    const idrxKaiaAddress = getTokenAddress("IDRX_KAIA")?.toLowerCase();
+    
+    if (lowerAddress === usdcAddress) return "USDC";
+    if (lowerAddress === usdtAddress) return "USDT";
+    if (lowerAddress === idrxBaseAddress) return "IDRX_BASE";
+    if (lowerAddress === idrxKaiaAddress) return "IDRX_KAIA";
+    
+    // Fallback detection based on escrow contract
+    const escrowIdrxBaseAddress = getEscrowAddress("IDRX_BASE")?.toLowerCase();
+    const escrowIdrxKaiaAddress = getEscrowAddress("IDRX_KAIA")?.toLowerCase();
+    
+    if (lowerAddress === escrowIdrxBaseAddress) return "IDRX_BASE";
+    if (lowerAddress === escrowIdrxKaiaAddress) return "IDRX_KAIA";
+    
+    console.warn("Unknown token type for address:", contractAddress);
+    return "USDC"; // Default fallback
+  }
   useEffect(() => {
     if (loading || !groupId) return;
 
@@ -84,7 +117,14 @@ export default function SenderDashboard({
         }
 
         setEscrowDetails(details);
-        setDetectedTokenType(details.tokenType);
+        let detectedType: TokenType = "USDC";
+
+        if(details.tokenAddress){
+          detectedType = detectTokenType(details.tokenAddress);
+        } else if(details.contractAddress){
+          detectedType = detectTokenType(details.contractAddress);
+        }
+        setDetectedTokenType(detectedType);
 
         // Transform contract data to stream format
         if (details.receivers) {
@@ -97,10 +137,10 @@ export default function SenderDashboard({
               fullname: `${receiver.address.slice(0, 6)}...${receiver.address.slice(-4)}`,
               totalAmount:
                 parseFloat(receiver.allocation || "0") /
-                Math.pow(10, details.tokenType === "IDRX" ? 2 : 6),
+                Math.pow(10, detectedType === "IDRX_BASE" || detectedType === "IDRX_KAIA" ? 2 : 6),
               totalSent:
                 parseFloat(receiver.withdrawn || "0") /
-                Math.pow(10, details.tokenType === "IDRX" ? 2 : 6),
+                Math.pow(10, detectedType === "IDRX_BASE" || detectedType === "IDRX_KAIA" ? 2 : 6),
             }),
           );
 
@@ -223,21 +263,59 @@ export default function SenderDashboard({
 
   const handleRemove = async (receiverId: string) => {
     const confirmRemove = window.confirm(
-      "Are you sure you want to remove this person from the group? This action cannot be undone.",
+      "Are you sure you want to remove this person from the escrow? This action cannot be undone.",
     );
-    if (!confirmRemove) return; // user batal, langsung keluar
-    console.log(receiverId);
+    if (!confirmRemove) return;
+    setRemovingReceiverId(receiverId);
     try {
-      if (!user) throw new Error("User not found");
-      const groupDeleted = await removeReceiverDataFromGroup(
+      // if (!user) throw new Error("User not found");
+      // const groupDeleted = await removeReceiverDataFromGroup(
+      //   receiverId,
+      //   groupId,
+      //   user._id,
+      // );
+      if(!walletClient) throw new Error("Wallet client not found");
+      const receiverToRemove = streams.find((s) => s._id === receiverId);
+      if (!receiverToRemove) throw new Error("Receiver not found");
+      console.log("Removing receiver:", {
         receiverId,
+        recipientAddress: receiverToRemove.recipient,
+        escrowId: groupId,
+        token: detectedTokenType,
+      });
+
+      console.log("Removing receiver...");
+      let tokenTypeForContract: "USDC" | "IDRX" | "USDT";
+      if(detectedTokenType === "IDRX_BASE" || detectedTokenType === "IDRX_KAIA"){
+        tokenTypeForContract = "IDRX";
+      } else {
+        tokenTypeForContract = detectedTokenType as "USDC" | "USDT";
+      }
+      const onchailResult = await removeRecipient(
+        walletClient,
+        detectedTokenType,
         groupId,
-        user._id,
+        receiverToRemove.recipient as `0x${string}`,
       );
+
+      if (!onchailResult.success)
+        throw new Error("Failed to remove recipient on-chain");
+      console.log("Receiver removed on-chain:", onchailResult);
+
+      // remove from database
+      // console.log("Receiver removed from DB:", receiverId);
+      // const databaseResulit = await removeReceiverDataFromGroup(
+      //   receiverId,
+      //   groupId,
+      //   user?._id || "",
+      // );
+      // console.log("Receiver removed from DB");
+
       setStreams((prev) => prev.filter((s) => s._id !== receiverId));
+      setRefreshFlag((prev) => prev + 1);
+      clearCacheOnEscrowCreated(user?.walletAddress || "");
     } catch (err) {
-      console.log(err);
-      return;
+      console.error("Error removing receiver:", err);
     }
   };
   // Filter streams
@@ -383,16 +461,16 @@ export default function SenderDashboard({
                 <div className="text-2xl font-bold text-white">
                   {(
                     parseFloat(escrowDetails.totalAmount) /
-                    Math.pow(10, detectedTokenType === "IDRX" ? 2 : 6)
-                  ).toFixed(detectedTokenType === "IDRX" ? 0 : 2)}{" "}
+                    Math.pow(10, detectedTokenType === "IDRX_BASE" || detectedTokenType === "IDRX_KAIA" ? 2 : 6)
+                  ).toFixed(detectedTokenType === "IDRX_BASE" || detectedTokenType === "IDRX_KAIA" ? 0 : 2)}{" "}
                   {detectedTokenType}
                 </div>
                 <div className="text-white/60 text-sm">Total Amount</div>
                 <div className="text-green-400 text-sm">
                   {(
                     parseFloat(escrowDetails.remainingAmount) /
-                    Math.pow(10, detectedTokenType === "IDRX" ? 2 : 6)
-                  ).toFixed(detectedTokenType === "IDRX" ? 0 : 2)}{" "}
+                    Math.pow(10, detectedTokenType === "IDRX_BASE" || detectedTokenType === "IDRX_KAIA" ? 2 : 6)
+                  ).toFixed(detectedTokenType === "IDRX_BASE" || detectedTokenType === "IDRX_KAIA" ? 0 : 2)}{" "}
                   {detectedTokenType} remaining
                 </div>
               </div>
@@ -487,7 +565,7 @@ export default function SenderDashboard({
         </div>
 
         {/* Streams List (Mobile Cards) */}
-{/*         
+        {/*         
         <div className="lg:hidden space-y-4">
           {filteredStreams.map((s) => (
             <div
@@ -555,7 +633,7 @@ export default function SenderDashboard({
 
         <div className="space-y-4">
           <h3 className="text-xl font-semibold text-white">Receivers</h3>
-          
+
           {streams.length === 0 ? (
             <div className="text-center py-12 bg-white/5 rounded-xl border border-white/10">
               <Users className="w-12 h-12 text-white/40 mx-auto mb-4" />
@@ -582,21 +660,62 @@ export default function SenderDashboard({
                         <span className="text-lg">{stream.tokenIcon}</span>
                       </div>
                       <div>
-                        <h4 className="font-semibold text-white">{stream.fullname}</h4>
-                        <p className="text-white/60 text-sm">{stream.recipient}</p>
+                        <h4 className="font-semibold text-white">
+                          {stream.fullname}
+                        </h4>
+                        <p className="text-white/60 text-sm">
+                          {stream.recipient}
+                        </p>
                       </div>
                     </div>
-                    
+
                     <div className="text-right">
                       <div className="text-lg font-semibold text-white">
-                        {stream.totalAmount.toFixed(detectedTokenType === "IDRX" ? 0 : 2)} {stream.token}
+                        {stream.totalAmount.toFixed(
+                          detectedTokenType === "IDRX_BASE" || detectedTokenType === "IDRX_KAIA" ? 0 : 2,
+                        )}{" "}
+                        {stream.token}
                       </div>
                       <div className="text-sm text-green-400">
-                        {stream.totalSent.toFixed(detectedTokenType === "IDRX" ? 0 : 2)} {stream.token} claimed
+                        {stream.totalSent.toFixed(
+                          detectedTokenType === "IDRX_BASE" || detectedTokenType === "IDRX_KAIA" ? 0 : 2,
+                        )}{" "}
+                        {stream.token} claimed
                       </div>
                       <div className="text-xs text-white/60">
-                        {((stream.totalAmount - stream.totalSent) / stream.totalAmount * 100).toFixed(1)}% remaining
+                        {(
+                          ((stream.totalAmount - stream.totalSent) /
+                            stream.totalAmount) *
+                          100
+                        ).toFixed(1)}
+                        % remaining
                       </div>
+                    </div>
+
+                    {/* Action buttons */}
+                    <div className="flex items-center space-x-2">
+                      <button
+                        onClick={() => handleRemove(stream._id)}
+                        disabled={removingReceiverId === stream._id}
+                        className={`border border-red-500/30 p-2 rounded-lg transition-all group ${
+                          removingReceiverId === stream._id
+                            ? "bg-red-500/10 text-red-600 cursor-not-allowed"
+                            : "bg-red-500/20 hover:bg-red-500/30 text-red-400 hover:text-red-300"
+                        }`}
+                        title="Remove receiver"
+                      >
+                        {removingReceiverId === stream._id ? (
+                          <div className="w-4 h-4 border-2 border-red-400 border-t-transparent rounded-full animate-spin" />
+                        ) : (
+                          <Trash2 className="w-4 h-4 group-hover:scale-110 transition-transform" />
+                        )}
+                      </button>
+                      <button
+                        className="bg-white/10 hover:bg-white/20 border border-white/20 text-white/60 hover:text-white/80 p-2 rounded-lg transition-all"
+                        title="More options (coming soon)"
+                      >
+                        <MoreHorizontal className="w-5 h-5" />
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -720,10 +839,14 @@ export default function SenderDashboard({
       <CreateStreamModal
         isOpen={isCreateModalOpen}
         onClose={() => setIsCreateModalOpen(false)}
-existingEscrow={escrowDetails ? {
-            escrowId: groupId,
-            tokenType: detectedTokenType
-          } : undefined}       
+        existingEscrow={
+          escrowDetails
+            ? {
+                escrowId: groupId,
+                tokenType: detectedTokenType,
+              }
+            : undefined
+        }
         //    onCreateStream={(newReceiver) => {
         //   const mapped: Stream = {
         //     _id: newReceiver._id,
@@ -739,8 +862,7 @@ existingEscrow={escrowDetails ? {
         //   };
         //   setStreams((prev) => [mapped, ...prev]);
         // }}
-                  onCreateStream={handleAddReceiver}
-
+        onCreateStream={handleAddReceiver}
         onEscrowCreated={refreshStreams}
       />
     </MainLayout>

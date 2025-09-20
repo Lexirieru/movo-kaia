@@ -28,10 +28,12 @@ import {
   checkTokenBalance,
   checkTokenAllowance,
   approveTokens,
+  TokenType,
 } from "@/lib/smartContract";
 import { getTokenAddress } from "@/lib/contractConfig";
 import { useWallet } from "@/lib/walletContext";
 import { useWalletClientHook } from "@/lib/useWalletClient";
+import { Token } from "@/types";
 
 interface EscrowData {
   id: string;
@@ -42,7 +44,7 @@ interface EscrowData {
   receivers: string[];
   amounts: string[];
   tokenAddress: string;
-  tokenType?: "USDC" | "IDRX";
+  tokenType?: TokenType;
   allocatedAmount?: string;
   depositedAmount?: string;
   withdrawnAmount?: string;
@@ -52,7 +54,7 @@ interface EscrowData {
 
 interface ContractDetails {
   escrowId: string;
-  tokenType: "USDC" | "USDT" | "IDRX";
+  tokenType: TokenType;
   escrowRoom: {
     sender: string;
     totalAllocatedAmount: bigint;
@@ -100,30 +102,40 @@ const formatAmount = (amount: string, tokenAddress: string) => {
   // const usdcAddress = getTokenAddress("USDC");
   // const usdtAddress = getTokenAddress("USDT");
   // const idrxAddress = getTokenAddress("IDRX");
-  const usdcAddress = (
-    process.env.NEXT_PUBLIC_USDC_ADDRESS ||
-    "0xf9D5a610fe990bfCdF7dd9FD64bdfe89D6D1eb4c"
-  ).toLowerCase();
-  const usdtAddress = (
-    process.env.NEXT_PUBLIC_USDT_ADDRESS ||
-    "0x80327544e61e391304ad16f0BAFb2C5c7A76dfB3"
-  ).toLowerCase();
-  const idrxAddress = (
-    process.env.NEXT_PUBLIC_IDRX_ADDRESS ||
-    "0x77fEa84656B5EF40BF33e3835A9921dAEAadb976"
-  ).toLowerCase();
+
+  // Get token addresses for comparison
+  const usdcAddress = getTokenAddress("USDC")?.toLowerCase();
+  const usdtAddress = getTokenAddress("USDT")?.toLowerCase();
+  const idrxBaseAddress = getTokenAddress("IDRX_BASE")?.toLowerCase();
+  const idrxKaiaAddress = getTokenAddress("IDRX_KAIA")?.toLowerCase();
+  // const usdcAddress = (
+  //   process.env.NEXT_PUBLIC_USDC_ADDRESS ||
+  //   "0xf9D5a610fe990bfCdF7dd9FD64bdfe89D6D1eb4c"
+  // ).toLowerCase();
+  // const usdtAddress = (
+  //   process.env.NEXT_PUBLIC_USDT_ADDRESS ||
+  //   "0x80327544e61e391304ad16f0BAFb2C5c7A76dfB3"
+  // ).toLowerCase();
+  // const idrxAddress = (
+  //   process.env.NEXT_PUBLIC_IDRX_ADDRESS ||
+  //   "0x77fEa84656B5EF40BF33e3835A9921dAEAadb976"
+  // ).toLowerCase();
 
   let tokenSymbol = "USDC"; // Default to USDC
   let decimals = 6;
+  const lowerTokenAddress = tokenAddress.toLowerCase();
 
-  if (tokenAddress.toLowerCase() === usdcAddress.toLowerCase()) {
+  if (lowerTokenAddress === usdcAddress) {
     tokenSymbol = "USDC";
     decimals = 6;
-  } else if (tokenAddress.toLowerCase() === usdtAddress.toLowerCase()) {
+  } else if (lowerTokenAddress === usdtAddress) {
     tokenSymbol = "USDT";
     decimals = 6;
-  } else if (tokenAddress.toLowerCase() === idrxAddress.toLowerCase()) {
-    tokenSymbol = "IDRX";
+  } else if (lowerTokenAddress === idrxBaseAddress) {
+    tokenSymbol = "IDRX_BASE";
+    decimals = 2;
+  } else if (lowerTokenAddress === idrxKaiaAddress) {
+    tokenSymbol = "IDRX_KAIA";
     decimals = 2;
   }
 
@@ -154,7 +166,7 @@ export default function EscrowList({
     isOpen: boolean;
     escrowId: string;
     tokenAddress: string;
-    tokenType: "USDC" | "IDRX";
+    tokenType: TokenType;
     maxAmount: string;
     maxAmountFormatted: string;
     tokenSymbol: string;
@@ -164,46 +176,46 @@ export default function EscrowList({
   const [userTokenBalance, setUserTokenBalance] = useState<string>("0");
 
   // Helper function to get token type based on token address
-  const getTokenType = (tokenAddress: string): "USDC" | "USDT" | "IDRX" => {
+  const getTokenType = (tokenAddress: string): TokenType => {
     const usdcAddress = getTokenAddress("USDC");
     const usdtAddress = getTokenAddress("USDT");
-    const idrxAddress = getTokenAddress("IDRX");
+    // const idrxAddress = getTokenAddress("IDRX");
+    const idrxBaseAddress = getTokenAddress("IDRX_BASE");
+    const idrxKaiaAddress = getTokenAddress("IDRX_KAIA");
     const addr = tokenAddress.toLowerCase();
 
     console.log("🔍 Token type detection:", {
       inputAddress: addr,
-      usdtAddress,
-      usdcAddress,
-      idrxAddress,
-      isUSDT: addr === usdtAddress,
-      isUSDC: addr === usdcAddress,
-      isIDRX: addr === idrxAddress,
+      usdcAddress: usdcAddress?.toLowerCase(),
+      usdtAddress: usdtAddress?.toLowerCase(),
+      idrxBaseAddress: idrxBaseAddress?.toLowerCase(),
+      idrxKaiaAddress: idrxKaiaAddress?.toLowerCase(),
     });
 
-    if (tokenAddress.toLowerCase() === usdcAddress.toLowerCase()) {
+    if (addr === usdcAddress?.toLowerCase()) {
       return "USDC";
-    } else if (tokenAddress.toLowerCase() === usdtAddress.toLowerCase()) {
+    } else if (addr === usdtAddress?.toLowerCase()) {
       return "USDT";
-    } else if (tokenAddress.toLowerCase() === idrxAddress.toLowerCase()) {
-      return "IDRX";
+    } else if (addr === idrxBaseAddress?.toLowerCase()) {
+      return "IDRX_BASE";
+    } else if (addr === idrxKaiaAddress?.toLowerCase()) {
+      return "IDRX_KAIA";
     }
     return "USDC"; // Default
   };
+    // if (tokenAddress.toLowerCase() === usdcAddress.toLowerCase()) {
+    //   return "USDC";
+    // } else if (tokenAddress.toLowerCase() === usdtAddress.toLowerCase()) {
+    //   return "USDT";
+    // } else if (tokenAddress.toLowerCase() === idrxAddress.toLowerCase()) {
+    //   return "IDRX";
+    // }
 
   // Helper function to get token symbol
   const getTokenSymbol = (tokenAddress: string): string => {
-    const usdcAddress = getTokenAddress("USDC");
-    const usdtAddress = getTokenAddress("USDT");
-    const idrxAddress = getTokenAddress("IDRX");
+    const tokenType = getTokenType(tokenAddress);
 
-    if (tokenAddress.toLowerCase() === usdcAddress.toLowerCase()) {
-      return "USDC";
-    } else if (tokenAddress.toLowerCase() === usdtAddress.toLowerCase()) {
-      return "USDT";
-    } else if (tokenAddress.toLowerCase() === idrxAddress.toLowerCase()) {
-      return "IDRX";
-    }
-    return "USDC"; // Default
+    return tokenType; // Default
   };
 
   // Function to load contract details
@@ -353,15 +365,13 @@ export default function EscrowList({
   const formatTokenAmountLocal = (amount: string, tokenAddress: string) => {
     if (!amount || amount === "0") return "0.00";
 
-    const usdcAddress = getTokenAddress("USDC");
-    const usdtAddress = getTokenAddress("USDT");
-    const idrxAddress = getTokenAddress("IDRX");
+    const tokenType = getTokenType(tokenAddress);
 
     let decimals = 6; // Default for USDC/USDT
     let displayDecimals = 2; // How many decimal places to show
-    if (tokenAddress.toLowerCase() === idrxAddress.toLowerCase()) {
+    if (tokenType === "IDRX_BASE" || tokenType === "IDRX_KAIA") {
       decimals = 2;
-      displayDecimals = 2;
+      displayDecimals = 2; 
     }
 
     // Handle large numbers by using string manipulation instead of parseFloat
@@ -443,16 +453,17 @@ export default function EscrowList({
 
     // Get user's token balance
     const balance = await getUserTokenBalance(tokenType);
+    const decimals = (tokenType === "IDRX_BASE" || tokenType === "IDRX_KAIA") ? 2 : 6;
     const balanceFormatted = formatTokenAmount(
       balance,
-      tokenType === "IDRX" ? 2 : 6,
+      decimals
     );
     setUserTokenBalance(balanceFormatted);
 
     // Format max amount with proper decimals
     const maxAmountFormatted = formatTokenAmount(
       BigInt(maxAmount),
-      tokenType === "IDRX" ? 2 : 6,
+      decimals
     );
     const tokenSymbol = getTokenSymbol(tokenAddress);
 
@@ -479,7 +490,8 @@ export default function EscrowList({
       isOpen: true,
       escrowId,
       tokenAddress,
-      tokenType: tokenType as "USDC" | "IDRX",
+      tokenType: tokenType,
+      // tokenType: tokenType as "USDC" | "IDRX",
       maxAmount,
       maxAmountFormatted,
       tokenSymbol,
@@ -494,27 +506,32 @@ export default function EscrowList({
   };
 
   // Function to get token contract based on token type
-  const getTokenContract = (tokenType: "USDC" | "USDT" | "IDRX") => {
-    if (tokenType === "USDC") {
-      return usdcContract;
-    } else if (tokenType === "USDT") {
-      return usdtContract;
-    } else {
-      return idrxContract;
+  const getTokenContract = (tokenType:TokenType) => {
+    switch (tokenType) {
+      case "USDC":
+        return usdcContract;
+      case "USDT":
+        return usdtContract;
+      case "IDRX_BASE":
+      case "IDRX_KAIA":
+        return idrxContract;
+      default:
+        return usdcContract;
     }
   };
 
   // Function to get escrow contract based on token type
-  const getEscrowContract = (tokenType: "USDC" | "USDT" | "IDRX") => {
+  const getEscrowContract = (tokenType:TokenType) => {
     if (tokenType === "USDC" || tokenType === "USDT") {
-      return escrowContract; // USDT uses same escrow contract as USDC
-    } else {
+      return escrowContract;
+    } else if (tokenType === "IDRX_BASE" || tokenType === "IDRX_KAIA") {
       return escrowIdrxContract;
     }
+    return escrowContract; // Default
   };
 
   // Function to get user's token balance
-  const getUserTokenBalance = async (tokenType: "USDC" | "USDT" | "IDRX") => {
+  const getUserTokenBalance = async (tokenType: TokenType) => {
     if (!address) return BigInt(0);
 
     try {
@@ -568,7 +585,8 @@ export default function EscrowList({
       });
 
       // Convert amount to proper decimals using viem's parseUnits
-      const decimals = tokenType === "IDRX" ? 2 : 6;
+      const decimals = (tokenType === "IDRX_BASE" || tokenType === "IDRX_KAIA") ? 2 : 6;
+      // const decimals = tokenType === "IDRX" ? 2 : 6;
       const amountInWei = parseTokenAmount(amount.toString(), decimals);
 
       console.log("💰 Amount in wei:", amountInWei.toString());
@@ -577,7 +595,7 @@ export default function EscrowList({
       const userBalance = await checkTokenBalance(tokenType, address);
       if (userBalance < amountInWei) {
         throw new Error(
-          `Insufficient balance. You have ${formatTokenAmount(userBalance, tokenType === "IDRX" ? 2 : 6)} ${tokenType}`,
+          `Insufficient balance. You have ${formatTokenAmount(userBalance, decimals)} ${tokenType}`,
         );
       }
 
@@ -852,7 +870,8 @@ export default function EscrowList({
                             <p className="text-white font-semibold">
                               {formatTokenAmount(
                                 details.escrowRoom.totalAllocatedAmount,
-                                escrow.tokenType === "IDRX" ? 2 : 6,
+                                (details.tokenType === "IDRX_BASE" || details.tokenType === "IDRX_KAIA") ? 2 : 6,
+                                // escrow.tokenType === "IDRX" ? 2 : 6,
                               )}{" "}
                               tokens
                             </p>
@@ -864,7 +883,8 @@ export default function EscrowList({
                             <p className="text-white font-semibold">
                               {formatTokenAmount(
                                 details.escrowRoom.totalDepositedAmount,
-                                escrow.tokenType === "IDRX" ? 2 : 6,
+                                (details.tokenType === "IDRX_BASE" || details.tokenType === "IDRX_KAIA") ? 2 : 6,
+                                // escrow.tokenType === "IDRX" ? 2 : 6,
                               )}{" "}
                               tokens
                             </p>
@@ -876,9 +896,10 @@ export default function EscrowList({
                             <p className="text-white font-semibold">
                               {formatTokenAmount(
                                 details.escrowRoom.totalWithdrawnAmount,
-                                escrow.tokenType === "IDRX" ? 2 : 6,
+                                (details.tokenType === "IDRX_BASE" || details.tokenType === "IDRX_KAIA") ? 2 : 6,
+                                // escrow.tokenType === "IDRX" ? 2 : 6,
                               )}{" "}
-                              tokens
+                              {details.tokenType}
                             </p>
                           </div>
                           <div>
@@ -888,9 +909,10 @@ export default function EscrowList({
                             <p className="text-green-400 font-semibold">
                               {formatTokenAmount(
                                 details.escrowRoom.availableBalance,
-                                escrow.tokenType === "IDRX" ? 2 : 6,
+                                (details.tokenType === "IDRX_BASE" || details.tokenType === "IDRX_KAIA") ? 2 : 6,
+                                // escrow.tokenType === "IDRX" ? 2 : 6,
                               )}{" "}
-                              tokens
+                              {details.tokenType}
                             </p>
                           </div>
                         </div>
@@ -946,14 +968,16 @@ export default function EscrowList({
                                     Allocated:{" "}
                                     {formatTokenAmount(
                                       receiver.currentAllocation,
-                                      escrow.tokenType === "IDRX" ? 2 : 6,
+                                      (details.tokenType === "IDRX_BASE" || details.tokenType === "IDRX_KAIA") ? 2 : 6,
+                                      // escrow.tokenType === "IDRX" ? 2 : 6,
                                     )}
                                   </div>
                                   <div className="text-white/60 text-xs">
                                     Withdrawn:{" "}
                                     {formatTokenAmount(
                                       receiver.withdrawnAmount,
-                                      escrow.tokenType === "IDRX" ? 2 : 6,
+                                      (details.tokenType === "IDRX_BASE" || details.tokenType === "IDRX_KAIA") ? 2 : 6,
+                                      // escrow.tokenType === "IDRX" ? 2 : 6,
                                     )}
                                   </div>
                                   <div
@@ -1057,7 +1081,8 @@ export default function EscrowList({
                 <div className="relative">
                   <input
                     type="number"
-                    step="0.01"
+                    step="1"
+                    // step="0.01"
                     min="0"
                     value={topUpAmount}
                     onChange={(e) => setTopUpAmount(e.target.value)}

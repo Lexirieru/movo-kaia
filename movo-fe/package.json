@@ -14,7 +14,7 @@
     "@linenext/dapp-portal-sdk": "^1.4.4",
     "@tanstack/react-query": "^5",
     "@upstash/redis": "^1.34.4",
-    "axios": "^1.11.0",
+    "axios": "^1.12.2",
     "buffer": "^6.0.3",
     "clsx": "^2.1.1",
     "cobe": "^0.6.4",
@@ -34,7 +34,7 @@
   },
   "devDependencies": {
     "@types/node": "^22",
-    "@types/react": "^18",
+    "@types/react": "^18.3.24",
     "@types/react-dom": "^18",
     "eslint": "^8",
     "eslint-config-next": "15.3.3",
