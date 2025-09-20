@@ -131,17 +131,19 @@ export default function ReceiverDashboard({
 
   // Priority useEffect: Use props data if provided
   useEffect(() => {
-    if (propIncomingTransactions && propIncomingTransactions.length >= 0) {
+    if (propIncomingTransactions !== undefined) {
       console.log("🔄 Using props data for ReceiverDashboard:");
       console.log("📊 Props incoming transactions:", propIncomingTransactions);
+      console.log("📊 Props length:", propIncomingTransactions.length);
 
       // Convert props data to IncomingTransaction format if needed
       const mappedTransactions: IncomingTransaction[] = propIncomingTransactions
-        .map((escrow: any) => {
+        .map((escrow: any, index: number) => {
+          console.log(`🔍 Mapping escrow ${index}:`, escrow);
           const tokenType = getTokenType(escrow.tokenAddress);
           const tokenIcon = getTokenIcon(tokenType);
 
-          return {
+          const mappedTransaction = {
             receiverWalletAddress: effectiveWalletAddress || "",
             receiverId: user?._id || "",
             totalAmount: escrow.allocatedAmount?.toString() || "0",
@@ -169,6 +171,9 @@ export default function ReceiverDashboard({
             tokenType: tokenType,
             tokenIcon: tokenIcon,
           };
+
+          console.log(`✅ Mapped transaction ${index}:`, mappedTransaction);
+          return mappedTransaction;
         })
         .filter((transaction) => parseFloat(transaction.availableAmount) > 0);
 
@@ -182,8 +187,7 @@ export default function ReceiverDashboard({
   // Main fetching useEffect (like GroupDashboard pattern) - only runs when no props provided
   useEffect(() => {
     // Skip if we have props data
-    if (propIncomingTransactions && propIncomingTransactions.length >= 0)
-      return;
+    if (propIncomingTransactions !== undefined) return;
     if (loading || !isConnected || !effectiveWalletAddress) return;
 
     console.log("� Starting receiver data fetch process...");

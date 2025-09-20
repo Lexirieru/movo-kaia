@@ -14,6 +14,7 @@ import { useAuth } from "@/lib/userContext";
 import { useWallet } from "@/lib/walletContext";
 import GroupDashboard from "@/components/dashboard/GroupDashboard";
 import MainLayout from "@/components/layout/MainLayout";
+import { formatTokenAmount } from "@/lib/tokenMapping";
 
 // Unified Dashboard Component with Filters
 interface DynamicDashboardProps {
@@ -35,6 +36,19 @@ function DynamicDashboard({
   const [senderEscrows, setSenderEscrows] = useState<any[]>([]);
   const [receiverData, setReceiverData] = useState<any>(null);
   const [allEscrows, setAllEscrows] = useState<any[]>([]);
+
+  // Helper function to format token amount with proper decimals
+  const formatTokenAmountWithDecimals = (amount: string, tokenType: string) => {
+    const amountNumber = parseFloat(amount);
+    if (isNaN(amountNumber)) return "0.00";
+
+    // USDC and USDT use 6 decimals, IDRX uses 2 decimals
+    const decimals = tokenType === "IDRX" ? 2 : 6;
+    const divisor = Math.pow(10, decimals);
+    const formattedAmount = amountNumber / divisor;
+
+    return formattedAmount.toFixed(2); // Show 2 decimal places for display
+  };
 
   useEffect(() => {
     const checkUserData = async () => {
@@ -109,6 +123,15 @@ function DynamicDashboard({
       const totalAllocated = parseFloat(escrow.totalAmount || "0");
       return availableBalance >= totalAllocated;
     });
+  };
+
+  // Helper function to get total claimable escrows (sender + receiver)
+  const getTotalClaimableCount = () => {
+    const senderClaimableCount = getClaimableSenderEscrows().length;
+    const receiverClaimableCount = allEscrows.filter(
+      (escrow) => escrow.type === "claimable",
+    ).length;
+    return senderClaimableCount + receiverClaimableCount;
   };
 
   // Get filtered escrows based on active filter
@@ -186,7 +209,7 @@ function DynamicDashboard({
                 : "text-white/60 hover:text-white hover:bg-white/10"
             }`}
           >
-            Claimable ({getClaimableSenderEscrows().length})
+            Claimable ({getTotalClaimableCount()})
           </button>
         </div>
       </div>
@@ -202,7 +225,7 @@ function DynamicDashboard({
           </h2>
           <span className="px-3 py-1 bg-cyan-400/20 text-cyan-400 text-sm rounded-full">
             {activeFilter === "claimable"
-              ? getClaimableSenderEscrows().length
+              ? getTotalClaimableCount()
               : filteredEscrows.length}{" "}
             found
           </span>
@@ -224,38 +247,191 @@ function DynamicDashboard({
               return null;
             })()}
 
-            {/* Claimable Sender Escrows - Only show escrows from "All Escrows" that meet claimable condition */}
-            {getClaimableSenderEscrows().length > 0 ? (
-              <GroupDashboard
-                onRoleChange={onRoleChange}
-                viewMode="claimable-sender"
-                claimableEscrows={getClaimableSenderEscrows()}
-              />
-            ) : (
-              <div className="text-center py-12">
-                <div className="w-16 h-16 bg-orange-500/10 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <span className="text-2xl">⏳</span>
-                </div>
-                <h3 className="text-xl font-semibold text-white mb-2">
-                  No Claimable Escrows
-                </h3>
-                <p className="text-white/60 mb-4">
-                  None of your created escrows are ready to be claimed by
-                  recipients yet.
-                </p>
-                <div className="bg-orange-500/10 border border-orange-500/20 rounded-lg p-4 max-w-md mx-auto">
-                  <h4 className="text-orange-400 font-medium mb-2">
-                    Escrows become claimable when:
+            {/* Show both sender claimable escrows AND receiver claimable escrows */}
+            <div className="space-y-6">
+              {/* Sender Claimable Escrows */}
+              {getClaimableSenderEscrows().length > 0 && (
+                <div>
+                  <h4 className="text-md font-medium text-white mb-3 flex items-center">
+                    <span className="w-1.5 h-1.5 bg-blue-400 rounded-full mr-2"></span>
+                    Your Created Escrows Ready for Recipients (
+                    {getClaimableSenderEscrows().length})
                   </h4>
-                  <ul className="text-orange-300/80 text-sm space-y-1 text-left">
-                    <li>• Available balance ≥ Total allocated amount</li>
-                    <li>
-                      • Recipients can then withdraw their allocated funds
-                    </li>
-                  </ul>
+                  <GroupDashboard
+                    onRoleChange={onRoleChange}
+                    viewMode="claimable-sender"
+                    claimableEscrows={getClaimableSenderEscrows()}
+                  />
                 </div>
-              </div>
-            )}
+              )}
+
+              {/* Receiver Claimable Escrows - New card format */}
+              {allEscrows.filter((escrow) => escrow.type === "claimable")
+                .length > 0 ? (
+                <div>
+                  <h4 className="text-md font-medium text-white mb-3 flex items-center">
+                    <span className="w-1.5 h-1.5 bg-green-400 rounded-full mr-2"></span>
+                    Ready to Claim from Others (
+                    {
+                      allEscrows.filter((escrow) => escrow.type === "claimable")
+                        .length
+                    }
+                    )
+                  </h4>
+                  <div className="space-y-4">
+                    {allEscrows
+                      .filter((escrow) => escrow.type === "claimable")
+                      .map((escrow, index) => (
+                        <div
+                          key={`claimable-${escrow.escrowId}-${index}`}
+                          className="bg-white/5 rounded-lg p-4 border border-white/10"
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center space-x-4">
+                              <div className="w-12 h-12 bg-gradient-to-r from-green-400 to-emerald-500 rounded-full flex items-center justify-center">
+                                <span className="text-white font-bold">
+                                  {escrow.originCurrency?.charAt(0) || "T"}
+                                </span>
+                              </div>
+                              <div>
+                                <h4 className="text-white font-medium">
+                                  From:{" "}
+                                  {escrow.senderName ||
+                                    `${escrow.senderWalletAddress?.slice(0, 6)}...${escrow.senderWalletAddress?.slice(-4)}`}
+                                </h4>
+                                <p className="text-white/60 text-sm">
+                                  {formatTokenAmountWithDecimals(
+                                    escrow.availableAmount || "0",
+                                    escrow.originCurrency || "IDRX",
+                                  )}{" "}
+                                  {escrow.originCurrency} available
+                                </p>
+                                <p className="text-white/40 text-xs">
+                                  Escrow ID: {escrow.escrowId?.slice(0, 8)}...
+                                </p>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <div className="flex items-center space-x-2 mb-2">
+                                <span className="w-2 h-2 bg-green-400 rounded-full"></span>
+                                <span className="text-green-400 text-sm">
+                                  Claimable
+                                </span>
+                              </div>
+                              <button
+                                className="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:shadow-lg transition-all hover:scale-105"
+                                onClick={() => {
+                                  // Handle claim action here
+                                  console.log("Claiming escrow:", escrow);
+                                }}
+                              >
+                                Claim Now
+                              </button>
+                            </div>
+                          </div>
+                          <div className="mt-3 pt-3 border-t border-white/10">
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                              <div>
+                                <span className="text-white/60">
+                                  Total Allocated:
+                                </span>
+                                <div className="text-white">
+                                  {formatTokenAmountWithDecimals(
+                                    escrow.allocatedAmount || "0",
+                                    escrow.originCurrency || "IDRX",
+                                  )}{" "}
+                                  {escrow.originCurrency}
+                                </div>
+                              </div>
+                              <div>
+                                <span className="text-white/60">
+                                  Available:
+                                </span>
+                                <div className="text-white">
+                                  {formatTokenAmountWithDecimals(
+                                    escrow.availableAmount || "0",
+                                    escrow.originCurrency || "IDRX",
+                                  )}{" "}
+                                  {escrow.originCurrency}
+                                </div>
+                              </div>
+                              <div>
+                                <span className="text-white/60">Created:</span>
+                                <div className="text-white">
+                                  {escrow.createdAt
+                                    ? new Date(
+                                        escrow.createdAt,
+                                      ).toLocaleDateString()
+                                    : "N/A"}
+                                </div>
+                              </div>
+                              <div>
+                                <span className="text-white/60">Status:</span>
+                                <div className="text-green-400">
+                                  Ready to Claim
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-12">
+                  <div className="w-16 h-16 bg-orange-500/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <span className="text-2xl">⏳</span>
+                  </div>
+                  <h3 className="text-xl font-semibold text-white mb-2">
+                    No Claimable Escrows
+                  </h3>
+                  <p className="text-white/60 mb-4">
+                    None of your received escrows are ready to be claimed yet.
+                  </p>
+                  <div className="bg-orange-500/10 border border-orange-500/20 rounded-lg p-4 max-w-md mx-auto">
+                    <h4 className="text-orange-400 font-medium mb-2">
+                      Escrows become claimable when:
+                    </h4>
+                    <ul className="text-orange-300/80 text-sm space-y-1 text-left">
+                      <li>• Sender has funded the escrow sufficiently</li>
+                      <li>• Available balance ≥ Your allocated amount</li>
+                      <li>• You can then claim your allocated funds</li>
+                    </ul>
+                  </div>
+                </div>
+              )}
+
+              {/* No claimable escrows at all */}
+              {getClaimableSenderEscrows().length === 0 &&
+                allEscrows.filter((escrow) => escrow.type === "claimable")
+                  .length === 0 && (
+                  <div className="text-center py-12">
+                    <div className="w-16 h-16 bg-orange-500/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <span className="text-2xl">⏳</span>
+                    </div>
+                    <h3 className="text-xl font-semibold text-white mb-2">
+                      No Claimable Escrows
+                    </h3>
+                    <p className="text-white/60 mb-4">
+                      You don't have any escrows ready to be claimed yet.
+                    </p>
+                    <div className="bg-orange-500/10 border border-orange-500/20 rounded-lg p-4 max-w-md mx-auto">
+                      <h4 className="text-orange-400 font-medium mb-2">
+                        Escrows become claimable when:
+                      </h4>
+                      <ul className="text-orange-300/80 text-sm space-y-1 text-left">
+                        <li>
+                          • Created escrows: Available balance ≥ Total allocated
+                          amount
+                        </li>
+                        <li>
+                          • Received escrows: Sender has funded sufficiently
+                        </li>
+                      </ul>
+                    </div>
+                  </div>
+                )}
+            </div>
           </>
         )}
 
@@ -274,7 +450,7 @@ function DynamicDashboard({
               </div>
             )}
 
-            {/* Claimable Escrows Section */}
+            {/* Claimable Escrows Section - Show all received escrows using ReceiverDashboard */}
             <div>
               <h3 className="text-lg font-medium text-white mb-3 flex items-center">
                 <span className="w-1.5 h-1.5 bg-green-400 rounded-full mr-2"></span>

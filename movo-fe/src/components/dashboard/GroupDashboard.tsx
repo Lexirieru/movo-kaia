@@ -253,18 +253,18 @@ export default function GroupDashboard({
             {viewMode === "claimable-sender" ? (
               <>
                 <h2 className="text-3xl font-bold text-white mb-2">
-                  Available Escrow to Be Withdrawn
+                  Available Funded Escrow
                 </h2>
                 <p className="text-white/60">
-                  Escrows you created where available balance ≥ total allocated
-                  amount.
+                  Escrows you have funded where receivers can start claiming
+                  their amount.
                 </p>
                 <div className="flex items-center space-x-4 mt-2">
                   <p className="text-cyan-400 text-sm">
                     Connected: {address?.slice(0, 6)}...{address?.slice(-4)}
                   </p>
                   <span className="px-2 py-1 bg-orange-400/20 text-orange-400 text-xs rounded-full">
-                    {displayEscrows.length} Ready to Withdraw
+                    {displayEscrows.length} Ready to be claimed
                   </span>
                 </div>
               </>
