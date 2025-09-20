@@ -1359,7 +1359,13 @@ export const fetchEscrowsFromIndexer = async (userAddress: string) => {
         let tokenType: "USDC" | "USDT" | "IDRX" = "USDC";
 
         if (escrow.tokenAddress) {
-          tokenType = getTokenType(escrow.tokenAddress);
+          const detectedType = getTokenType(escrow.tokenAddress);
+          tokenType =
+            detectedType === "USDC" ||
+            detectedType === "USDT" ||
+            detectedType === "IDRX"
+              ? detectedType
+              : "USDC";
         } else if (escrow.contractId_) {
           tokenType = determineTokenTypeFromContract(escrow.contractId_);
         } else if (escrow.source === "IDRX_API") {
@@ -2070,7 +2076,13 @@ const fetchReceiverEscrowsSimple = async (receiverAddress: string) => {
         let tokenType: "USDC" | "USDT" | "IDRX" = "USDC";
 
         if (escrow.tokenAddress) {
-          tokenType = getTokenType(escrow.tokenAddress);
+          const detectedType = getTokenType(escrow.tokenAddress);
+          tokenType =
+            detectedType === "USDC" ||
+            detectedType === "USDT" ||
+            detectedType === "IDRX"
+              ? detectedType
+              : "USDC";
         } else if (escrow.contractId_) {
           tokenType = determineTokenTypeFromContract(escrow.contractId_);
         } else if (escrow.source === "IDRX_API") {
@@ -2639,5 +2651,496 @@ export const fetchReceiverDashboardData = async (
       escrowEvents: [],
       totalAvailable: "0",
     };
+  }
+};
+
+// Note: determineTokenTypeFromContract function already exists earlier in the file
+
+// Function to fetch sender-specific events: TOPUP_FUNDS, UPDATE_RECIPIENTS_AMOUNT, REMOVE_RECIPIENTS
+export const fetchSenderEvents = async (userAddress: string) => {
+  try {
+    const cacheKey = `sender_events_${userAddress.toLowerCase()}`;
+    const cachedData = getCachedData(cacheKey);
+    if (cachedData) {
+      return cachedData;
+    }
+
+    console.log("🔍 Fetching sender-specific events for:", userAddress);
+    console.log("🌐 Environment URLs:", {
+      GOLDSKY_ESCROW_API_URL,
+      GOLDSKY_ESCROW_IDRX_API_URL,
+      areUrlsDefined: !!GOLDSKY_ESCROW_API_URL && !!GOLDSKY_ESCROW_IDRX_API_URL,
+    });
+
+    const userAddressLower = userAddress.toLowerCase();
+
+    // First, get all escrow IDs created by this sender
+    const senderEscrows = await fetchEscrowsFromIndexer(userAddressLower);
+    const senderEscrowIds = senderEscrows.map((escrow: any) => escrow.escrowId);
+
+    console.log("📋 Found sender escrow IDs:", senderEscrowIds);
+
+    // If no escrows found, return empty array early
+    if (senderEscrowIds.length === 0) {
+      console.log("⚠️ No escrows found for sender, returning empty events");
+      setCachedData(cacheKey, []);
+      return [];
+    }
+
+    // Query for sender-specific events from both USDC/USDT and IDRX contracts
+    const queries = [
+      {
+        url: GOLDSKY_ESCROW_API_URL,
+        query: `
+          query GetSenderEvents($userAddress: String!, $escrowIds: [String!]) {
+            escrowCreateds(
+              where: { sender: $userAddress }
+              orderBy: timestamp_
+              orderDirection: desc
+              first: 100
+            ) {
+              escrowId
+              sender
+              receivers
+              amounts
+              totalAmount
+              tokenAddress
+              block_number
+              timestamp_
+              transactionHash_
+              contractId_
+            }
+            fundsTopUps(
+              where: { sender: $userAddress }
+              orderBy: timestamp_
+              orderDirection: desc
+              first: 100
+            ) {
+              escrowId
+              sender
+              amount
+              newCycleBalance
+              block_number
+              timestamp_
+              transactionHash_
+              contractId_
+            }
+            receiverRemoveds(
+              where: { escrowId_in: $escrowIds }
+              orderBy: timestamp_
+              orderDirection: desc
+              first: 100
+            ) {
+              escrowId
+              receiver
+              refundAmount
+              block_number
+              timestamp_
+              transactionHash_
+              contractId_
+            }
+            receiverAmountUpdateds(
+              where: { escrowId_in: $escrowIds }
+              orderBy: timestamp_
+              orderDirection: desc
+              first: 100
+            ) {
+              escrowId
+              receiver
+              oldAmount
+              newAmount
+              block_number
+              timestamp_
+              transactionHash_
+              contractId_
+            }
+          }
+        `,
+        variables: {
+          userAddress: userAddressLower,
+          escrowIds: senderEscrowIds,
+        },
+      },
+    ];
+
+    // Add IDRX contract query if available
+    if (GOLDSKY_ESCROW_IDRX_API_URL) {
+      queries.push({
+        url: GOLDSKY_ESCROW_IDRX_API_URL,
+        query: `
+          query GetSenderEventsIDRX($userAddress: String!, $escrowIds: [String!]) {
+            escrowCreateds(
+              where: { sender: $userAddress }
+              orderBy: timestamp_
+              orderDirection: desc
+              first: 100
+            ) {
+              escrowId
+              sender
+              receivers
+              amounts
+              totalAmount
+              tokenAddress
+              block_number
+              timestamp_
+              transactionHash_
+              contractId_
+            }
+            fundsTopUps(
+              where: { sender: $userAddress }
+              orderBy: timestamp_
+              orderDirection: desc
+              first: 100
+            ) {
+              escrowId
+              sender
+              amount
+              newCycleBalance
+              block_number
+              timestamp_
+              transactionHash_
+              contractId_
+            }
+            receiverRemoveds(
+              where: { escrowId_in: $escrowIds }
+              orderBy: timestamp_
+              orderDirection: desc
+              first: 100
+            ) {
+              escrowId
+              receiver
+              refundAmount
+              block_number
+              timestamp_
+              transactionHash_
+              contractId_
+            }
+            receiverAmountUpdateds(
+              where: { escrowId_in: $escrowIds }
+              orderBy: timestamp_
+              orderDirection: desc
+              first: 100
+            ) {
+              escrowId
+              receiver
+              oldAmount
+              newAmount
+              block_number
+              timestamp_
+              transactionHash_
+              contractId_
+            }
+          }
+        `,
+        variables: {
+          userAddress: userAddressLower,
+          escrowIds: senderEscrowIds,
+        },
+      });
+    }
+
+    const allEvents: any[] = [];
+
+    // Execute queries for all contracts
+    for (const queryConfig of queries) {
+      try {
+        if (!queryConfig.url) {
+          console.warn("⚠️ Skipping query with undefined URL");
+          continue;
+        }
+
+        console.log("📡 Executing sender query to:", queryConfig.url);
+        console.log("🔍 Query variables:", queryConfig.variables);
+
+        const response = await axios.post(queryConfig.url, {
+          query: queryConfig.query,
+          variables: queryConfig.variables,
+        });
+
+        if (response.data.errors) {
+          console.error("❌ GraphQL errors:", response.data.errors);
+          continue;
+        }
+
+        const data = response.data.data;
+        console.log("📊 Response data keys:", Object.keys(data));
+        console.log("📊 Response data:", data);
+
+        // Determine token type based on which API URL was used
+        const tokenType =
+          queryConfig.url === GOLDSKY_ESCROW_IDRX_API_URL ? "IDRX" : "USDC";
+        console.log(
+          `🪙 Token type determined from API URL: ${tokenType} (URL: ${queryConfig.url})`,
+        );
+
+        // Process escrow created events
+        if (data.escrowCreateds) {
+          data.escrowCreateds.forEach((event: any) => {
+            // Validate required fields
+            if (event.escrowId && event.sender && event.timestamp_) {
+              allEvents.push({
+                ...event,
+                eventType: "ESCROW_CREATED",
+                tokenType: tokenType,
+              });
+            }
+          });
+        }
+
+        // Process topup events
+        if (data.fundsTopUps) {
+          data.fundsTopUps.forEach((event: any) => {
+            // Validate required fields
+            if (event.escrowId && event.amount && event.timestamp_) {
+              allEvents.push({
+                ...event,
+                eventType: "TOPUP_FUNDS",
+                tokenType: tokenType,
+              });
+            }
+          });
+        }
+
+        // Process receiver removed events (already filtered by escrowId_in query)
+        if (data.receiverRemoveds) {
+          data.receiverRemoveds.forEach((event: any) => {
+            // Validate required fields
+            if (event.escrowId && event.receiver && event.timestamp_) {
+              allEvents.push({
+                ...event,
+                eventType: "REMOVE_RECIPIENTS",
+                tokenType: tokenType,
+              });
+            }
+          });
+        }
+
+        // Process receiver amount updated events (already filtered by escrowId_in query)
+        if (data.receiverAmountUpdateds) {
+          data.receiverAmountUpdateds.forEach((event: any) => {
+            // Validate required fields
+            if (
+              event.escrowId &&
+              event.receiver &&
+              event.newAmount &&
+              event.timestamp_
+            ) {
+              allEvents.push({
+                ...event,
+                eventType: "UPDATE_RECIPIENTS_AMOUNT",
+                tokenType: tokenType,
+              });
+            }
+          });
+        }
+      } catch (error) {
+        console.error(`❌ Error fetching from ${queryConfig.url}:`, error);
+      }
+    }
+
+    // Sort all events by timestamp (newest first)
+    allEvents.sort((a, b) => parseInt(b.timestamp_) - parseInt(a.timestamp_));
+
+    console.log("📊 Sender events fetched:", {
+      totalEvents: allEvents.length,
+      createdEvents: allEvents.filter((e) => e.eventType === "ESCROW_CREATED")
+        .length,
+      topupEvents: allEvents.filter((e) => e.eventType === "TOPUP_FUNDS")
+        .length,
+      removeEvents: allEvents.filter((e) => e.eventType === "REMOVE_RECIPIENTS")
+        .length,
+      updateEvents: allEvents.filter(
+        (e) => e.eventType === "UPDATE_RECIPIENTS_AMOUNT",
+      ).length,
+    });
+
+    // Debug logging for sample events
+    console.log("📄 Final sender events summary:", {
+      totalEvents: allEvents.length,
+      eventTypes: allEvents.map((e) => e.eventType),
+      sampleEvent: allEvents[0] || null,
+    });
+
+    // Cache the result
+    setCachedData(cacheKey, allEvents);
+
+    return allEvents;
+  } catch (error) {
+    console.error("❌ Error fetching sender events:", error);
+    return [];
+  }
+};
+
+// Function to fetch receiver-specific events: WITHDRAW_FUNDS
+export const fetchReceiverEvents = async (userAddress: string) => {
+  try {
+    const cacheKey = `receiver_events_${userAddress.toLowerCase()}`;
+    const cachedData = getCachedData(cacheKey);
+    if (cachedData) {
+      return cachedData;
+    }
+
+    console.log("🔍 Fetching receiver-specific events for:", userAddress);
+
+    const userAddressLower = userAddress.toLowerCase();
+
+    // Query for receiver-specific withdraw events from both USDC/USDT and IDRX contracts
+    const queries = [
+      {
+        url: GOLDSKY_ESCROW_API_URL,
+        query: `
+          query GetReceiverEvents($userAddress: String!) {
+            tokenWithdrawns(
+              where: { recipient: $userAddress }
+              orderBy: timestamp_
+              orderDirection: desc
+              first: 100
+            ) {
+              escrowId
+              recipient
+              amount
+              depositWallet
+              tokenAddress
+              block_number
+              timestamp_
+              transactionHash_
+              contractId_
+            }
+            tokenWithdrawnToFiats(
+              where: { recipient: $userAddress }
+              orderBy: timestamp_
+              orderDirection: desc
+              first: 100
+            ) {
+              escrowId
+              recipient
+              amount
+              depositWallet
+              tokenAddress
+              block_number
+              timestamp_
+              transactionHash_
+              contractId_
+            }
+          }
+        `,
+        variables: { userAddress: userAddressLower },
+      },
+    ];
+
+    // Add IDRX contract query if available
+    if (GOLDSKY_ESCROW_IDRX_API_URL) {
+      queries.push({
+        url: GOLDSKY_ESCROW_IDRX_API_URL,
+        query: `
+          query GetReceiverEventsIDRX($userAddress: String!) {
+            tokenWithdrawns(
+              where: { recipient: $userAddress }
+              orderBy: timestamp_
+              orderDirection: desc
+              first: 100
+            ) {
+              escrowId
+              recipient
+              amount
+              depositWallet
+              tokenAddress
+              block_number
+              timestamp_
+              transactionHash_
+              contractId_
+            }
+            tokenWithdrawnToFiats(
+              where: { recipient: $userAddress }
+              orderBy: timestamp_
+              orderDirection: desc
+              first: 100
+            ) {
+              escrowId
+              recipient
+              amount
+              depositWallet
+              tokenAddress
+              block_number
+              timestamp_
+              transactionHash_
+              contractId_
+            }
+          }
+        `,
+        variables: { userAddress: userAddressLower },
+      });
+    }
+
+    const allEvents: any[] = [];
+
+    // Execute queries for all contracts
+    for (const queryConfig of queries) {
+      try {
+        if (!queryConfig.url) {
+          console.warn("⚠️ Skipping query with undefined URL");
+          continue;
+        }
+        const response = await axios.post(queryConfig.url, queryConfig);
+
+        if (response.data.errors) {
+          console.error("❌ GraphQL errors:", response.data.errors);
+          continue;
+        }
+
+        const data = response.data.data;
+
+        // Determine token type based on which API URL was used
+        const tokenType =
+          queryConfig.url === GOLDSKY_ESCROW_IDRX_API_URL ? "IDRX" : "USDC";
+        console.log(
+          `🪙 Token type determined from API URL: ${tokenType} (URL: ${queryConfig.url})`,
+        );
+
+        // Process token withdrawn events (crypto withdrawals)
+        if (data.tokenWithdrawns) {
+          data.tokenWithdrawns.forEach((event: any) => {
+            allEvents.push({
+              ...event,
+              eventType: "WITHDRAW_FUNDS",
+              withdrawType: "CRYPTO",
+              tokenType: tokenType,
+            });
+          });
+        }
+
+        // Process token withdrawn to fiat events
+        if (data.tokenWithdrawnToFiats) {
+          data.tokenWithdrawnToFiats.forEach((event: any) => {
+            allEvents.push({
+              ...event,
+              eventType: "WITHDRAW_FUNDS",
+              withdrawType: "FIAT",
+              tokenType: tokenType,
+            });
+          });
+        }
+      } catch (error) {
+        console.error(`❌ Error fetching from ${queryConfig.url}:`, error);
+      }
+    }
+
+    // Sort all events by timestamp (newest first)
+    allEvents.sort((a, b) => parseInt(b.timestamp_) - parseInt(a.timestamp_));
+
+    console.log("📊 Receiver events fetched:", {
+      totalEvents: allEvents.length,
+      cryptoWithdraws: allEvents.filter((e) => e.withdrawType === "CRYPTO")
+        .length,
+      fiatWithdraws: allEvents.filter((e) => e.withdrawType === "FIAT").length,
+    });
+
+    // Cache the result
+    setCachedData(cacheKey, allEvents);
+
+    return allEvents;
+  } catch (error) {
+    console.error("❌ Error fetching receiver events:", error);
+    return [];
   }
 };

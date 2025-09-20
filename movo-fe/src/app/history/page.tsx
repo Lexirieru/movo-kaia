@@ -1,24 +1,26 @@
 "use client";
 
 import { useEffect, Suspense, useState } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
 import { useWallet } from "@/lib/walletContext";
+import { useAuth } from "@/lib/userContext";
 import MainLayout from "@/components/layout/MainLayout";
 import WalletWarning from "@/components/dashboard/WalletWarning";
-// Removed backend API imports - using direct Goldsky integration
-import { 
-  Activity, 
-  Plus, 
-  ArrowUpRight, 
-  Settings, 
-  Users, 
+import { fetchSenderEvents, fetchReceiverEvents } from "../api/api";
+import {
+  Activity,
+  Plus,
+  ArrowUpRight,
+  Settings,
+  Users,
   DollarSign,
   Clock,
   ExternalLink,
   Search,
   Filter,
   TrendingUp,
-  Wallet
+  Wallet,
+  Send,
+  Download,
 } from "lucide-react";
 import PageHeader from "@/components/layout/PageHeader";
 import LoadingState from "@/components/shared/LoadingState";
@@ -26,626 +28,567 @@ import EmptyState from "@/components/shared/EmptyState";
 import StatsCards from "@/components/shared/StatsCards";
 import SearchFilterBar from "@/components/shared/SearchFilterBar";
 
-interface EscrowEvent {
+interface SenderActivity {
   escrowId: string;
-  sender: string;
-  receivers?: string[];
-  amounts?: string[];
-  totalAmount?: string;
-  tokenAddress: string;
-  block_number: string;
-  timestamp_: string;
-  transactionHash_: string;
-  contractId_: string;
-  tokenType?: string;
-  eventType: string;
-  // For different event types
+  eventType: "ESCROW_CREATED" | "TOPUP" | "MODIFY_RECIPIENTS";
   amount?: string;
-  newCycleBalance?: string;
-  receiver?: string;
-  refundAmount?: string;
-  oldAmount?: string;
-  newAmount?: string;
-  depositWallet?: string;
+  tokenType: string;
+  timestamp: Date;
+  transactionHash?: string;
+  description: string;
 }
 
-interface WithdrawEvent {
+interface ReceiverActivity {
   escrowId: string;
-  recipient: string;
+  eventType: "CLAIM_CRYPTO";
   amount: string;
+  tokenType: string;
   timestamp: Date;
-  transactionHash: string;
-  blockNumber: string;
-  depositWallet?: string;
-  tokenType?: string;
+  transactionHash?: string;
+  description: string;
+  fromSender?: string;
 }
 
 function HistoryContent() {
-  const { isConnected, address, isConnecting, setDisableAutoLogin } = useWallet();
-  const searchParams = useSearchParams();
-  const router = useRouter();
-  const effectiveWalletAddress = address || "";
-  
+  const { isConnected, address, isConnecting, setDisableAutoLogin } =
+    useWallet();
+  const { user, currentWalletAddress } = useAuth();
+  const effectiveWalletAddress = currentWalletAddress || address || "";
+
   // Disable auto login untuk history page
   useEffect(() => {
     setDisableAutoLogin(true);
     return () => setDisableAutoLogin(false);
   }, [setDisableAutoLogin]);
-  
-  // Debug wallet addresses
-  console.log("🔍 Wallet addresses debug:", {
-    address,
-    effectiveWalletAddress,
-    isConnected,
-    isConnecting
-  });
 
-  const [activeTab, setActiveTab] = useState<"sender" | "receiver">("sender");
-  const [senderEvents, setSenderEvents] = useState<EscrowEvent[]>([]);
-  const [receiverEvents, setReceiverEvents] = useState<EscrowEvent[]>([]);
-  const [withdrawEvents, setWithdrawEvents] = useState<WithdrawEvent[]>([]);
-  const [loadingEvents, setLoadingEvents] = useState(false);
+  const [senderActivities, setSenderActivities] = useState<SenderActivity[]>(
+    [],
+  );
+  const [receiverActivities, setReceiverActivities] = useState<
+    ReceiverActivity[]
+  >([]);
+  const [loadingData, setLoadingData] = useState(false);
+  const [userHasData, setUserHasData] = useState<
+    "sender" | "receiver" | "both" | "none"
+  >("none");
   const [searchTerm, setSearchTerm] = useState("");
-  const [selectedTimeRange, setSelectedTimeRange] = useState<"24h" | "7d" | "30d" | "90d" | "all">("30d");
-  const [eventTypeFilter, setEventTypeFilter] = useState<"all" | "ESCROW_CREATED" | "TOPUP_FUNDS" | "ADD_RECIPIENTS" | "REMOVE_RECIPIENTS" | "UPDATE_RECIPIENTS_AMOUNT" | "WITHDRAWAL">("all");
+  const [selectedTimeRange, setSelectedTimeRange] = useState<
+    "24h" | "7d" | "30d" | "90d" | "all"
+  >("30d");
+  const [eventTypeFilter, setEventTypeFilter] = useState<
+    "all" | "ESCROW_CREATED" | "TOPUP" | "MODIFY_RECIPIENTS" | "CLAIM_CRYPTO"
+  >("all");
 
-  // Get view parameter from URL
-  const viewParam = searchParams.get("view");
-
-  // Helper function to determine token type from contract ID
-  const determineTokenTypeFromContract = (contractId: string): "USDC" | "USDT" | "IDRX" => {
+  // Helper function to determine token type from address or contract
+  const determineTokenType = (
+    tokenAddress?: string,
+    contractId?: string,
+  ): "USDC" | "USDT" | "IDRX" => {
+    const lowerTokenAddress = tokenAddress?.toLowerCase() || "";
     const lowerContractId = contractId?.toLowerCase() || "";
-    
-    if (lowerContractId.includes("idrx") || lowerContractId.includes("77fea84")) {
+
+    if (
+      lowerContractId.includes("idrx") ||
+      lowerContractId.includes("77fea84") ||
+      lowerTokenAddress.includes("idrx")
+    ) {
       return "IDRX";
     }
-    
-    if (lowerContractId.includes("usdt") || lowerContractId.includes("80327544")) {
+
+    if (
+      lowerContractId.includes("usdt") ||
+      lowerContractId.includes("80327544") ||
+      lowerTokenAddress.includes("usdt")
+    ) {
       return "USDT";
     }
-    
+
     // Default to USDC
     return "USDC";
   };
 
-  // Fetch sender events directly from Goldsky
-  const fetchSenderEvents = async () => {
-    if (!effectiveWalletAddress) {
-      return;
-    }
-    
-    try {
-      setLoadingEvents(true);
-      console.log("🔍 Fetching sender events for:", effectiveWalletAddress);
-      
-      // Direct Goldsky query for sender events
-      const query = `
-        query GetAllEvents {
-          escrowCreateds(
-            where: { sender: "${effectiveWalletAddress.toLowerCase()}" }
-            orderBy: timestamp_
-            orderDirection: desc
-            first: 100
-          ) {
-            escrowId
-            sender
-            receivers
-            amounts
-            totalAmount
-            tokenAddress
-            block_number
-            timestamp_
-            transactionHash_
-            contractId_
-          }
-          fundsTopUps(
-            where: { sender: "${effectiveWalletAddress.toLowerCase()}" }
-            orderBy: timestamp_
-            orderDirection: desc
-            first: 100
-          ) {
-            escrowId
-            sender
-            amount
-            newCycleBalance
-            tokenAddress
-            block_number
-            timestamp_
-            transactionHash_
-            contractId_
-          }
-          receiverAddeds(
-            where: { sender: "${effectiveWalletAddress.toLowerCase()}" }
-            orderBy: timestamp_
-            orderDirection: desc
-            first: 100
-          ) {
-            escrowId
-            sender
-            receiver
-            amount
-            tokenAddress
-            block_number
-            timestamp_
-            transactionHash_
-            contractId_
-          }
-          receiverRemoveds(
-            where: { sender: "${effectiveWalletAddress.toLowerCase()}" }
-            orderBy: timestamp_
-            orderDirection: desc
-            first: 100
-          ) {
-            escrowId
-            sender
-            receiver
-            refundAmount
-            tokenAddress
-            block_number
-            timestamp_
-            transactionHash_
-            contractId_
-          }
-          receiverAmountUpdateds(
-            where: { sender: "${effectiveWalletAddress.toLowerCase()}" }
-            orderBy: timestamp_
-            orderDirection: desc
-            first: 100
-          ) {
-            escrowId
-            sender
-            receiver
-            oldAmount
-            newAmount
-            tokenAddress
-            block_number
-            timestamp_
-            transactionHash_
-            contractId_
-          }
-        }
-      `;
+  // Helper function to format token amount with proper decimals
+  const formatTokenAmountWithDecimals = (amount: string, tokenType: string) => {
+    const amountNumber = parseFloat(amount);
+    if (isNaN(amountNumber)) return "0.00";
 
-      const response = await fetch(process.env.NEXT_PUBLIC_GOLDSKY_ESCROW_API_URL || '', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ query }),
-      });
+    // USDC and USDT use 6 decimals, IDRX uses 2 decimals
+    const decimals = tokenType === "IDRX" ? 2 : 6;
+    const divisor = Math.pow(10, decimals);
+    const formattedAmount = amountNumber / divisor;
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const result = await response.json();
-      
-      if (result.errors) {
-        console.error("❌ GraphQL errors:", result.errors);
-        setSenderEvents([]);
-        return;
-      }
-
-      const data = result.data;
-      const allEvents: EscrowEvent[] = [];
-
-      // Process escrow created events
-      if (data.escrowCreateds) {
-        data.escrowCreateds.forEach((event: any) => {
-          allEvents.push({
-            ...event,
-            eventType: "ESCROW_CREATED",
-            tokenType: determineTokenTypeFromContract(event.contractId_),
-          });
-        });
-      }
-
-      // Process topup events
-      if (data.fundsTopUps) {
-        data.fundsTopUps.forEach((event: any) => {
-          allEvents.push({
-            ...event,
-            eventType: "TOPUP_FUNDS",
-            tokenType: determineTokenTypeFromContract(event.contractId_),
-          });
-        });
-      }
-
-      // Process receiver added events
-      if (data.receiverAddeds) {
-        data.receiverAddeds.forEach((event: any) => {
-          allEvents.push({
-            ...event,
-            eventType: "ADD_RECIPIENTS",
-            tokenType: determineTokenTypeFromContract(event.contractId_),
-          });
-        });
-      }
-
-      // Process receiver removed events
-      if (data.receiverRemoveds) {
-        data.receiverRemoveds.forEach((event: any) => {
-          allEvents.push({
-            ...event,
-            eventType: "REMOVE_RECIPIENTS",
-            tokenType: determineTokenTypeFromContract(event.contractId_),
-          });
-        });
-      }
-
-      // Process receiver amount updated events
-      if (data.receiverAmountUpdateds) {
-        data.receiverAmountUpdateds.forEach((event: any) => {
-          allEvents.push({
-            ...event,
-            eventType: "UPDATE_RECIPIENTS_AMOUNT",
-            tokenType: determineTokenTypeFromContract(event.contractId_),
-          });
-        });
-      }
-
-      // Sort all events by timestamp
-      allEvents.sort((a, b) => parseInt(b.timestamp_) - parseInt(a.timestamp_));
-      
-      console.log("📊 Sender events data:", allEvents);
-      setSenderEvents(allEvents);
-    } catch (error) {
-      console.error("❌ Error fetching sender events:", error);
-      setSenderEvents([]);
-    } finally {
-      setLoadingEvents(false);
-    }
+    return formattedAmount.toFixed(2);
   };
 
-  // Fetch receiver events directly from Goldsky
-  const fetchReceiverEvents = async () => {
+  // Fetch sender activities using the new dedicated function
+  const fetchSenderActivities = async () => {
     if (!effectiveWalletAddress) {
       return;
     }
-    
+
     try {
-      setLoadingEvents(true);
-      console.log("🔍 Fetching receiver events for:", effectiveWalletAddress);
-      
-      // Direct Goldsky query for receiver events
-      const query = `
-        query GetAllReceiverEvents {
-          escrowCreateds(
-            orderBy: timestamp_
-            orderDirection: desc
-            first: 1000
-          ) {
-            escrowId
-            sender
-            receivers
-            amounts
-            totalAmount
-            tokenAddress
-            block_number
-            timestamp_
-            transactionHash_
-            contractId_
-          }
-          tokenWithdrawns(
-            where: { recipient: "${effectiveWalletAddress.toLowerCase()}" }
-            orderBy: timestamp_
-            orderDirection: desc
-            first: 100
-          ) {
-            escrowId
-            recipient
-            amount
-            depositWallet
-            tokenAddress
-            block_number
-            timestamp_
-            transactionHash_
-            contractId_
-          }
-          tokenWithdrawnToFiats(
-            where: { recipient: "${effectiveWalletAddress.toLowerCase()}" }
-            orderBy: timestamp_
-            orderDirection: desc
-            first: 100
-          ) {
-            escrowId
-            recipient
-            amount
-            depositWallet
-            tokenAddress
-            block_number
-            timestamp_
-            transactionHash_
-            contractId_
-          }
+      setLoadingData(true);
+      console.log("🔍 Fetching sender activities for:", effectiveWalletAddress);
+
+      // Get only sender events - no more fetchEscrowsFromIndexer
+      const senderEvents = await fetchSenderEvents(effectiveWalletAddress);
+      console.log("📊 Raw sender events received:", senderEvents);
+
+      const activities: SenderActivity[] = [];
+
+      // Process sender events only (TOPUP_FUNDS, REMOVE_RECIPIENTS, UPDATE_RECIPIENTS_AMOUNT)
+      senderEvents.forEach((event: any) => {
+        // Validate event data before processing
+        if (!event.escrowId || !event.timestamp_ || !event.tokenType) {
+          console.warn("⚠️ Skipping invalid sender event:", event);
+          return;
         }
-      `;
 
-      const response = await fetch(process.env.NEXT_PUBLIC_GOLDSKY_ESCROW_API_URL || '', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ query }),
-      });
+        const tokenType = event.tokenType;
+        console.log(tokenType);
+        const timestamp = new Date(parseInt(event.timestamp_) * 1000);
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const result = await response.json();
-      
-      if (result.errors) {
-        console.error("❌ GraphQL errors:", result.errors);
-        setReceiverEvents([]);
-        setWithdrawEvents([]);
-        return;
-      }
-
-      const data = result.data;
-      const allEvents: EscrowEvent[] = [];
-      const withdrawEvents: WithdrawEvent[] = [];
-      const receiverAddressLower = effectiveWalletAddress.toLowerCase();
-
-      // Process escrow created events (where user is a receiver)
-      if (data.escrowCreateds) {
-        data.escrowCreateds.forEach((event: any) => {
-          // Check if the receiver address is in the receivers list
-          if (event.receivers) {
-            const receivers = event.receivers.split(',').map((addr: string) => addr.trim().toLowerCase());
-            if (receivers.includes(receiverAddressLower)) {
-              allEvents.push({
-                ...event,
+        switch (event.eventType) {
+          case "ESCROW_CREATED":
+            if (event.totalAmount && event.receivers) {
+              // Parse receivers count from the receivers string
+              const receiversCount = event.receivers.split(",").length;
+              activities.push({
+                escrowId: event.escrowId,
                 eventType: "ESCROW_CREATED",
-                tokenType: determineTokenTypeFromContract(event.contractId_),
+                amount: event.totalAmount,
+                tokenType,
+                timestamp,
+                transactionHash: event.transactionHash_,
+                description: `Created escrow with ${formatTokenAmountWithDecimals(event.totalAmount, tokenType)} ${tokenType} for ${receiversCount} recipient${receiversCount > 1 ? "s" : ""}`,
               });
             }
-          }
-        });
-      }
+            break;
 
-      // Process withdrawal events
-      if (data.tokenWithdrawns) {
-        data.tokenWithdrawns.forEach((event: any) => {
-          if (event.recipient && event.recipient.toLowerCase() === receiverAddressLower) {
-            withdrawEvents.push({
-              escrowId: event.escrowId,
-              recipient: event.recipient,
-              amount: event.amount,
-              timestamp: new Date(parseInt(event.timestamp_) * 1000),
-              transactionHash: event.transactionHash_,
-              blockNumber: event.block_number,
-              depositWallet: event.depositWallet,
-              tokenType: determineTokenTypeFromContract(event.contractId_),
-            });
-          }
-        });
-      }
+          case "TOPUP_FUNDS":
+            if (event.amount) {
+              activities.push({
+                escrowId: event.escrowId,
+                eventType: "TOPUP",
+                amount: event.amount,
+                tokenType,
+                timestamp,
+                transactionHash: event.transactionHash_,
+                description: `Added ${formatTokenAmountWithDecimals(event.amount, tokenType)} ${tokenType} to escrow`,
+              });
+            }
+            break;
 
-      if (data.tokenWithdrawnToFiats) {
-        data.tokenWithdrawnToFiats.forEach((event: any) => {
-          if (event.recipient && event.recipient.toLowerCase() === receiverAddressLower) {
-            withdrawEvents.push({
-              escrowId: event.escrowId,
-              recipient: event.recipient,
-              amount: event.amount,
-              timestamp: new Date(parseInt(event.timestamp_) * 1000),
-              transactionHash: event.transactionHash_,
-              blockNumber: event.block_number,
-              depositWallet: event.depositWallet,
-              tokenType: determineTokenTypeFromContract(event.contractId_),
-            });
-          }
-        });
-      }
+          case "REMOVE_RECIPIENTS":
+            if (event.receiver) {
+              activities.push({
+                escrowId: event.escrowId,
+                eventType: "MODIFY_RECIPIENTS",
+                amount: event.refundAmount || "0",
+                tokenType,
+                timestamp,
+                transactionHash: event.transactionHash_,
+                description: `Removed recipient: ${event.receiver?.slice(0, 6)}...${event.receiver?.slice(-4)}`,
+              });
+            }
+            break;
 
-      // Sort all events by timestamp
-      allEvents.sort((a, b) => parseInt(b.timestamp_) - parseInt(a.timestamp_));
-      withdrawEvents.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
-      
-      console.log("📊 Receiver events data:", { escrowEvents: allEvents, withdrawEvents });
-      setReceiverEvents(allEvents);
-      setWithdrawEvents(withdrawEvents);
+          case "UPDATE_RECIPIENTS_AMOUNT":
+            if (event.receiver && event.newAmount) {
+              activities.push({
+                escrowId: event.escrowId,
+                eventType: "MODIFY_RECIPIENTS",
+                amount: event.newAmount,
+                tokenType,
+                timestamp,
+                transactionHash: event.transactionHash_,
+                description: `Updated recipient amount: ${event.receiver?.slice(0, 6)}...${event.receiver?.slice(-4)}`,
+              });
+            }
+            break;
+
+          default:
+            console.warn("⚠️ Unknown sender event type:", event.eventType);
+            break;
+        }
+      });
+
+      // Sort activities by timestamp (newest first)
+      activities.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+
+      console.log("📊 Sender activities combined:", activities);
+      setSenderActivities(activities);
+
+      return activities;
     } catch (error) {
-      console.error("❌ Error fetching receiver events:", error);
-      setReceiverEvents([]);
-      setWithdrawEvents([]);
-    } finally {
-      setLoadingEvents(false);
+      console.error("❌ Error fetching sender activities:", error);
+      setSenderActivities([]);
+      return [];
     }
   };
 
+  // Fetch receiver activities using the new dedicated function
+  const fetchReceiverActivities = async () => {
+    if (!effectiveWalletAddress) {
+      return;
+    }
+
+    try {
+      setLoadingData(true);
+
+      // Use the new dedicated function for receiver events
+      const receiverEvents = await fetchReceiverEvents(effectiveWalletAddress);
+
+      const activities: ReceiverActivity[] = [];
+
+      // Process withdrawal events (WITHDRAW_FUNDS)
+      receiverEvents.forEach((event: any) => {
+        const tokenType = event.tokenType;
+        const timestamp = new Date(parseInt(event.timestamp_) * 1000);
+
+        if (event.eventType === "WITHDRAW_FUNDS") {
+          const withdrawType = event.withdrawType || "CRYPTO";
+          const description =
+            withdrawType === "FIAT"
+              ? `Claimed ${formatTokenAmountWithDecimals(event.amount, tokenType)} ${tokenType} to fiat`
+              : `Claimed ${formatTokenAmountWithDecimals(event.amount, tokenType)} ${tokenType} to crypto wallet`;
+
+          activities.push({
+            escrowId: event.escrowId,
+            eventType: "CLAIM_CRYPTO",
+            amount: event.amount,
+            tokenType,
+            timestamp,
+            transactionHash: event.transactionHash_,
+            description,
+            fromSender: event.depositWallet, // This might contain sender or deposit wallet info
+          });
+        }
+      });
+
+      // Sort activities by timestamp (newest first)
+      activities.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+
+      console.log(
+        "📊 Receiver activities from dedicated function:",
+        activities,
+      );
+      setReceiverActivities(activities);
+
+      return activities;
+    } catch (error) {
+      console.error("❌ Error fetching receiver activities:", error);
+      setReceiverActivities([]);
+      return [];
+    }
+  };
+
+  // Determine user data and role automatically
   useEffect(() => {
-    console.log("🔍 History page - effectiveWalletAddress:", effectiveWalletAddress);
-    console.log("🔍 History page - address:", address);
-    
-    if (effectiveWalletAddress && isConnected) {
-      if (activeTab === "sender") {
-        fetchSenderEvents();
-      } else {
-        fetchReceiverEvents();
+    const determineUserDataAndRole = async () => {
+      if (!effectiveWalletAddress || !isConnected) {
+        setUserHasData("none");
+        return;
       }
+
+      setLoadingData(true);
+
+      try {
+        // Fetch both sender and receiver data in parallel
+        const [senderActivitiesData, receiverActivitiesData] =
+          await Promise.all([
+            fetchSenderActivities(),
+            fetchReceiverActivities(),
+          ]);
+
+        // Determine what type of data user has
+        const hasSenderData =
+          senderActivitiesData && senderActivitiesData.length > 0;
+        const hasReceiverData =
+          receiverActivitiesData && receiverActivitiesData.length > 0;
+
+        if (hasSenderData && hasReceiverData) {
+          setUserHasData("both");
+        } else if (hasSenderData) {
+          setUserHasData("sender");
+        } else if (hasReceiverData) {
+          setUserHasData("receiver");
+        } else {
+          setUserHasData("none");
+        }
+      } catch (error) {
+        console.error("❌ Error determining user data:", error);
+        setUserHasData("none");
+      } finally {
+        setLoadingData(false);
+      }
+    };
+
+    determineUserDataAndRole();
+  }, [effectiveWalletAddress, isConnected]);
+
+  // Get all activities based on user role
+  const getAllActivities = (): (SenderActivity | ReceiverActivity)[] => {
+    const allActivities: (SenderActivity | ReceiverActivity)[] = [];
+
+    if (userHasData === "sender" || userHasData === "both") {
+      allActivities.push(...senderActivities);
     }
-  }, [effectiveWalletAddress, activeTab, isConnected]);
 
-  // Filter events based on search and filters
-  const getFilteredEvents = () => {
-    if (activeTab === "sender") {
-      return senderEvents.filter((event) => {
-        const matchesSearch = 
-          event.escrowId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          event.transactionHash_.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          event.tokenType?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          event.eventType.toLowerCase().includes(searchTerm.toLowerCase());
-
-        const matchesType = 
-          eventTypeFilter === "all" || 
-          event.eventType === eventTypeFilter;
-
-        return matchesSearch && matchesType;
-      });
-    } else {
-      // For receiver tab, combine escrow events and withdrawal events
-      const allEvents = [...receiverEvents];
-      
-      // Add withdrawal events as special events
-      withdrawEvents.forEach(withdraw => {
-        allEvents.push({
-          escrowId: withdraw.escrowId,
-          sender: "",
-          tokenAddress: "",
-          block_number: withdraw.blockNumber,
-          timestamp_: Math.floor(withdraw.timestamp.getTime() / 1000).toString(),
-          transactionHash_: withdraw.transactionHash,
-          contractId_: "",
-          eventType: "WITHDRAWAL",
-          tokenType: withdraw.tokenType,
-          amount: withdraw.amount,
-          depositWallet: withdraw.depositWallet,
-        } as any);
-      });
-
-      return allEvents.filter((event) => {
-        const matchesSearch = 
-          event.escrowId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          event.transactionHash_.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          event.tokenType?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          event.eventType.toLowerCase().includes(searchTerm.toLowerCase());
-
-        const matchesType = 
-          eventTypeFilter === "all" || 
-          event.eventType === eventTypeFilter;
-
-        return matchesSearch && matchesType;
-      });
+    if (userHasData === "receiver" || userHasData === "both") {
+      allActivities.push(...receiverActivities);
     }
+
+    // Sort by timestamp (newest first)
+    return allActivities.sort(
+      (a, b) => b.timestamp.getTime() - a.timestamp.getTime(),
+    );
   };
 
-  const filteredEvents = getFilteredEvents();
+  // Filter activities based on search and filters
+  const getFilteredActivities = () => {
+    const allActivities = getAllActivities();
+
+    return allActivities.filter((activity) => {
+      const matchesSearch =
+        activity.escrowId.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        activity.tokenType.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        activity.eventType.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        activity.description.toLowerCase().includes(searchTerm.toLowerCase());
+
+      const matchesType =
+        eventTypeFilter === "all" || activity.eventType === eventTypeFilter;
+
+      // Apply time range filter
+      const now = new Date();
+      const activityTime = activity.timestamp;
+      let matchesTimeRange = true;
+
+      switch (selectedTimeRange) {
+        case "24h":
+          matchesTimeRange =
+            now.getTime() - activityTime.getTime() <= 24 * 60 * 60 * 1000;
+          break;
+        case "7d":
+          matchesTimeRange =
+            now.getTime() - activityTime.getTime() <= 7 * 24 * 60 * 60 * 1000;
+          break;
+        case "30d":
+          matchesTimeRange =
+            now.getTime() - activityTime.getTime() <= 30 * 24 * 60 * 60 * 1000;
+          break;
+        case "90d":
+          matchesTimeRange =
+            now.getTime() - activityTime.getTime() <= 90 * 24 * 60 * 60 * 1000;
+          break;
+        case "all":
+        default:
+          matchesTimeRange = true;
+          break;
+      }
+
+      return matchesSearch && matchesType && matchesTimeRange;
+    });
+  };
+
+  const filteredActivities = getFilteredActivities();
 
   // Calculate statistics
   const getStats = () => {
-    const events = activeTab === "sender" ? senderEvents : receiverEvents;
-    const totalEscrows = events.length;
-    const totalAmount = events.reduce((sum, event) => sum + parseFloat(event.totalAmount || "0"), 0);
-    const uniqueTokens = new Set(events.map(e => e.tokenType)).size;
-    const totalWithdraws = withdrawEvents.length;
+    const allActivities = getAllActivities();
+    const senderActivitiesCount = senderActivities.length;
+    const receiverActivitiesCount = receiverActivities.length;
 
-    return [
-      {
-        icon: <Plus className="w-5 h-5 text-green-400" />,
-        value: totalEscrows,
-        label: "Total Escrows",
-        iconBgColor: "bg-green-500/20",
-      },
-      {
-        icon: <DollarSign className="w-5 h-5 text-blue-400" />,
-        value: `$${totalAmount.toFixed(2)}`,
-        label: "Total Value",
-        iconBgColor: "bg-blue-500/20",
-      },
-      {
-        icon: <Users className="w-5 h-5 text-purple-400" />,
-        value: uniqueTokens,
-        label: "Token Types",
-        iconBgColor: "bg-purple-500/20",
-      },
-      {
-        icon: <Activity className="w-5 h-5 text-orange-400" />,
-        value: totalWithdraws,
-        label: "Withdrawals",
-        iconBgColor: "bg-orange-500/20",
-      },
-    ];
+    // Calculate total value from sender activities (topups and modifications)
+    const totalValue = senderActivities.reduce((sum, activity) => {
+      const amount = parseFloat(activity.amount || "0");
+      return sum + amount;
+    }, 0);
+
+    const uniqueTokens = new Set(allActivities.map((a) => a.tokenType)).size;
+
+    if (userHasData === "sender") {
+      return [
+        {
+          icon: <Send className="w-5 h-5 text-green-400" />,
+          value: senderActivitiesCount,
+          label: "Escrow Activities",
+          iconBgColor: "bg-green-500/20",
+        },
+        {
+          icon: <DollarSign className="w-5 h-5 text-blue-400" />,
+          value: totalValue.toFixed(2),
+          label: "Total Value",
+          iconBgColor: "bg-blue-500/20",
+        },
+        {
+          icon: <Users className="w-5 h-5 text-purple-400" />,
+          value: uniqueTokens,
+          label: "Token Types",
+          iconBgColor: "bg-purple-500/20",
+        },
+        {
+          icon: <Activity className="w-5 h-5 text-orange-400" />,
+          value: allActivities.length,
+          label: "Total Activities",
+          iconBgColor: "bg-orange-500/20",
+        },
+      ];
+    } else if (userHasData === "receiver") {
+      const totalClaimed = receiverActivities.reduce((sum, activity) => {
+        return sum + parseFloat(activity.amount || "0");
+      }, 0);
+
+      return [
+        {
+          icon: <Download className="w-5 h-5 text-green-400" />,
+          value: receiverActivitiesCount,
+          label: "Claims Made",
+          iconBgColor: "bg-green-500/20",
+        },
+        {
+          icon: <DollarSign className="w-5 h-5 text-blue-400" />,
+          value: totalClaimed.toFixed(2),
+          label: "Total Claimed",
+          iconBgColor: "bg-blue-500/20",
+        },
+        {
+          icon: <Users className="w-5 h-5 text-purple-400" />,
+          value: uniqueTokens,
+          label: "Token Types",
+          iconBgColor: "bg-purple-500/20",
+        },
+        {
+          icon: <Activity className="w-5 h-5 text-orange-400" />,
+          value: allActivities.length,
+          label: "Total Activities",
+          iconBgColor: "bg-orange-500/20",
+        },
+      ];
+    } else {
+      // Both sender and receiver
+      return [
+        {
+          icon: <Send className="w-5 h-5 text-green-400" />,
+          value: senderActivitiesCount,
+          label: "Sent Activities",
+          iconBgColor: "bg-green-500/20",
+        },
+        {
+          icon: <Download className="w-5 h-5 text-blue-400" />,
+          value: receiverActivitiesCount,
+          label: "Received Activities",
+          iconBgColor: "bg-blue-500/20",
+        },
+        {
+          icon: <Users className="w-5 h-5 text-purple-400" />,
+          value: uniqueTokens,
+          label: "Token Types",
+          iconBgColor: "bg-purple-500/20",
+        },
+        {
+          icon: <Activity className="w-5 h-5 text-orange-400" />,
+          value: allActivities.length,
+          label: "Total Activities",
+          iconBgColor: "bg-orange-500/20",
+        },
+      ];
+    }
   };
 
-  // Format event data
-  const formatEventData = (event: EscrowEvent) => {
-    const tokenType = event.tokenType || "Unknown";
-    
-    switch (event.eventType) {
+  // Format activity data for display
+  const formatActivityData = (activity: SenderActivity | ReceiverActivity) => {
+    const tokenType = activity.tokenType;
+
+    switch (activity.eventType) {
       case "ESCROW_CREATED":
-        const totalAmount = parseFloat(event.totalAmount || "0");
-        const receiverCount = event.receivers?.length || 0;
+        const createdActivity = activity as SenderActivity;
         return {
-          description: `Created escrow with ${receiverCount} recipients`,
-          amount: totalAmount,
+          description: createdActivity.description,
+          amount: parseFloat(createdActivity.amount || "0"),
           tokenType,
-          receiverCount,
           color: "bg-green-100 text-green-800 border-green-200",
-          label: "Escrow Created"
+          label: "Escrow Created",
+          icon: <Plus className="w-4 h-4" />,
         };
-      
-      case "TOPUP_FUNDS":
-        const topupAmount = parseFloat(event.amount || "0");
+
+      case "TOPUP":
+        const topupActivity = activity as SenderActivity;
         return {
-          description: `Added funds to escrow`,
-          amount: topupAmount,
+          description: topupActivity.description,
+          amount: parseFloat(topupActivity.amount || "0"),
           tokenType,
           color: "bg-blue-100 text-blue-800 border-blue-200",
-          label: "Funds Added"
+          label: "Funds Added",
+          icon: <ArrowUpRight className="w-4 h-4" />,
         };
-      
-      case "ADD_RECIPIENTS":
-        const addAmount = parseFloat(event.amount || "0");
+
+      case "MODIFY_RECIPIENTS":
+        const modifyActivity = activity as SenderActivity;
         return {
-          description: `Added recipient: ${event.receiver?.slice(0, 6)}...${event.receiver?.slice(-4)}`,
-          amount: addAmount,
+          description: modifyActivity.description,
+          amount: parseFloat(modifyActivity.amount || "0"),
           tokenType,
           color: "bg-purple-100 text-purple-800 border-purple-200",
-          label: "Recipient Added"
+          label: "Recipients Modified",
+          icon: <Users className="w-4 h-4" />,
         };
-      
-      case "REMOVE_RECIPIENTS":
-        const refundAmount = parseFloat(event.refundAmount || "0");
+
+      case "CLAIM_CRYPTO":
+        const claimActivity = activity as ReceiverActivity;
         return {
-          description: `Removed recipient: ${event.receiver?.slice(0, 6)}...${event.receiver?.slice(-4)}`,
-          amount: refundAmount,
+          description: claimActivity.description,
+          amount: parseFloat(claimActivity.amount || "0"),
           tokenType,
-          color: "bg-red-100 text-red-800 border-red-200",
-          label: "Recipient Removed"
-        };
-      
-      case "UPDATE_RECIPIENTS_AMOUNT":
-        const oldAmount = parseFloat(event.oldAmount || "0");
-        const newAmount = parseFloat(event.newAmount || "0");
-        return {
-          description: `Updated recipient amount: ${event.receiver?.slice(0, 6)}...${event.receiver?.slice(-4)}`,
-          amount: newAmount,
-          tokenType,
-          oldAmount,
-          color: "bg-yellow-100 text-yellow-800 border-yellow-200",
-          label: "Amount Updated"
-        };
-      
-      case "WITHDRAWAL":
-        const withdrawAmount = parseFloat(event.amount || "0");
-        const depositWallet = event.depositWallet;
-        return {
-          description: depositWallet 
-            ? `Withdrew to fiat via ${depositWallet.slice(0, 6)}...${depositWallet.slice(-4)}`
-            : "Withdrew to crypto wallet",
-          amount: withdrawAmount,
-          tokenType,
+          fromSender: claimActivity.fromSender,
           color: "bg-orange-100 text-orange-800 border-orange-200",
-          label: "Withdrawal"
+          label: "Crypto Claimed",
+          icon: <Download className="w-4 h-4" />,
         };
-      
+
       default:
         return {
-          description: "Escrow activity",
+          description: "Activity",
           amount: 0,
           tokenType,
           color: "bg-gray-100 text-gray-800 border-gray-200",
-          label: "Unknown Event"
+          label: "Unknown Activity",
+          icon: <Activity className="w-4 h-4" />,
         };
     }
   };
 
   // Format date
-  const formatDate = (timestamp: string) => {
-    const date = new Date(parseInt(timestamp) * 1000);
-    return date.toLocaleString();
+  const formatDate = (timestamp: Date) => {
+    return timestamp.toLocaleString();
+  };
+
+  // Get page title based on user role
+  const getPageTitle = () => {
+    switch (userHasData) {
+      case "sender":
+        return "Sender Activity History";
+      case "receiver":
+        return "Receiver Claim History";
+      case "both":
+        return "Complete Activity History";
+      default:
+        return "Transaction History";
+    }
+  };
+
+  // Get page subtitle based on user role
+  const getPageSubtitle = () => {
+    switch (userHasData) {
+      case "sender":
+        return "Your escrow creation and management activities";
+      case "receiver":
+        return "Your crypto claim activities from escrows";
+      case "both":
+        return "Your complete escrow and claim activities";
+      default:
+        return "Your escrow-related activities";
+    }
   };
 
   if (isConnecting) {
@@ -673,127 +616,138 @@ function HistoryContent() {
             <>
               {/* Header */}
               <PageHeader
-                title="Transaction History"
-                subtitle="Your escrow events and activities from blockchain"
+                title={getPageTitle()}
+                subtitle={getPageSubtitle()}
                 backPath="/dashboard"
                 walletAddress={effectiveWalletAddress}
               />
 
               {/* Content */}
               <div className="space-y-6">
-                {/* Tab Navigation */}
-                <div className="flex space-x-1 bg-gray-800/50 p-1 rounded-lg">
-                  <button
-                    onClick={() => setActiveTab("sender")}
-                    className={`flex-1 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                      activeTab === "sender"
-                        ? "bg-cyan-600 text-white"
-                        : "text-gray-400 hover:text-white"
-                    }`}
-                  >
-                    Sender Events
-                  </button>
-                  <button
-                    onClick={() => setActiveTab("receiver")}
-                    className={`flex-1 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                      activeTab === "receiver"
-                        ? "bg-cyan-600 text-white"
-                        : "text-gray-400 hover:text-white"
-                    }`}
-                  >
-                    Receiver Events
-                  </button>
-                </div>
+                {userHasData !== "none" && (
+                  <>
+                    {/* Stats Cards */}
+                    <StatsCards stats={getStats()} columns={4} />
 
-                {/* Stats Cards */}
-                <StatsCards stats={getStats()} columns={4} />
+                    {/* Search and Filters */}
+                    <SearchFilterBar
+                      searchTerm={searchTerm}
+                      onSearchChange={setSearchTerm}
+                      searchPlaceholder="Search by escrow ID, token type, or description..."
+                      statusFilter={{
+                        value: eventTypeFilter,
+                        options: [
+                          { value: "all", label: "All Activities" },
+                          ...(userHasData === "sender" || userHasData === "both"
+                            ? [
+                                {
+                                  value: "ESCROW_CREATED",
+                                  label: "Escrow Created",
+                                },
+                                { value: "TOPUP", label: "Funds Added" },
+                                {
+                                  value: "MODIFY_RECIPIENTS",
+                                  label: "Recipients Modified",
+                                },
+                              ]
+                            : []),
+                          ...(userHasData === "receiver" ||
+                          userHasData === "both"
+                            ? [
+                                {
+                                  value: "CLAIM_CRYPTO",
+                                  label: "Crypto Claims",
+                                },
+                              ]
+                            : []),
+                        ],
+                        onChange: (value: string) =>
+                          setEventTypeFilter(value as any),
+                      }}
+                      dateFilter={{
+                        value: selectedTimeRange,
+                        options: [
+                          { value: "24h", label: "Last 24 Hours" },
+                          { value: "7d", label: "Last 7 Days" },
+                          { value: "30d", label: "Last 30 Days" },
+                          { value: "90d", label: "Last 90 Days" },
+                          { value: "all", label: "All Time" },
+                        ],
+                        onChange: (value: string) =>
+                          setSelectedTimeRange(value as any),
+                      }}
+                    />
+                  </>
+                )}
 
-                {/* Search and Filters */}
-                <SearchFilterBar
-                  searchTerm={searchTerm}
-                  onSearchChange={setSearchTerm}
-                  searchPlaceholder="Search by escrow ID, transaction hash, or token type..."
-                  statusFilter={{
-                    value: eventTypeFilter,
-                    options: [
-                      { value: "all", label: "All Events" },
-                      { value: "ESCROW_CREATED", label: "Escrow Created" },
-                      { value: "TOPUP_FUNDS", label: "Funds Added" },
-                      { value: "ADD_RECIPIENTS", label: "Recipients Added" },
-                      { value: "REMOVE_RECIPIENTS", label: "Recipients Removed" },
-                      { value: "UPDATE_RECIPIENTS_AMOUNT", label: "Amount Updated" },
-                      { value: "WITHDRAWAL", label: "Withdrawals" },
-                    ],
-                    onChange: (value: string) => setEventTypeFilter(value as any),
-                  }}
-                  dateFilter={{
-                    value: selectedTimeRange,
-                    options: [
-                      { value: "24h", label: "Last 24 Hours" },
-                      { value: "7d", label: "Last 7 Days" },
-                      { value: "30d", label: "Last 30 Days" },
-                      { value: "90d", label: "Last 90 Days" },
-                      { value: "all", label: "All Time" },
-                    ],
-                    onChange: (value: string) => setSelectedTimeRange(value as any),
-                  }}
-                />
-
-                {/* Events List */}
-                {loadingEvents ? (
-                  <LoadingState message="Loading events from blockchain..." />
-                ) : filteredEvents.length === 0 ? (
+                {/* Activities List */}
+                {loadingData ? (
+                  <LoadingState message="Loading your activity history..." />
+                ) : userHasData === "none" ? (
                   <EmptyState
                     icon={<Activity className="w-8 h-8 text-gray-500" />}
-                    title="No Events Found"
+                    title="No Activity Found"
+                    description="You haven't created any escrows or claimed any payments yet"
+                  />
+                ) : filteredActivities.length === 0 ? (
+                  <EmptyState
+                    icon={<Search className="w-8 h-8 text-gray-500" />}
+                    title="No Results Found"
                     description={
                       searchTerm
-                        ? `No results for "${searchTerm}"`
-                        : `No ${activeTab} events available`
+                        ? `No activities match "${searchTerm}"`
+                        : "No activities match your current filters"
                     }
                   />
                 ) : (
                   <div className="space-y-4">
-                    {filteredEvents.map((event, index) => {
-                      const eventInfo = formatEventData(event);
-                      const withdraws = withdrawEvents.filter(w => w.escrowId === event.escrowId);
+                    {filteredActivities.map((activity, index) => {
+                      const activityInfo = formatActivityData(activity);
 
                       return (
                         <div
-                          key={`${event.escrowId}-${event.eventType}-${index}`}
+                          key={`${activity.escrowId}-${activity.eventType}-${index}`}
                           className="bg-gray-800/50 backdrop-blur-sm border border-gray-700/50 rounded-xl p-4 hover:bg-gray-800/70 transition-colors"
                         >
                           <div className="flex items-start justify-between">
                             <div className="flex-1">
                               <div className="flex items-center space-x-3 mb-2">
-                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${eventInfo.color}`}>
-                                  {eventInfo.label}
+                                <div
+                                  className={`p-1.5 rounded-full ${activityInfo.color.replace("text-", "bg-").replace("-800", "-500/20")}`}
+                                >
+                                  {activityInfo.icon}
+                                </div>
+                                <span
+                                  className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${activityInfo.color}`}
+                                >
+                                  {activityInfo.label}
                                 </span>
                                 <span className="text-sm text-gray-400">
-                                  {eventInfo.tokenType}
+                                  {activityInfo.tokenType}
                                 </span>
                               </div>
 
                               <div className="mb-3">
                                 <p className="text-white font-medium">
-                                  {eventInfo.description}
+                                  {activityInfo.description}
                                 </p>
                                 <p className="text-sm text-gray-400">
-                                  Escrow: {event.escrowId}
+                                  Escrow: {activity.escrowId}
                                 </p>
-                                {eventInfo.amount > 0 && (
+                                {activityInfo.amount > 0 && (
                                   <p className="text-sm text-cyan-400">
-                                    Amount: {eventInfo.amount} {eventInfo.tokenType}
+                                    Amount:{" "}
+                                    {formatTokenAmountWithDecimals(
+                                      activityInfo.amount.toString(),
+                                      activityInfo.tokenType,
+                                    )}{" "}
+                                    {activityInfo.tokenType}
                                   </p>
                                 )}
-                                {eventInfo.oldAmount && (
-                                  <p className="text-sm text-yellow-400">
-                                    Previous: {eventInfo.oldAmount} {eventInfo.tokenType}
-                                  </p>
-                                )}
-                                {withdraws.length > 0 && (
-                                  <p className="text-sm text-orange-400">
-                                    {withdraws.length} withdrawal(s) made
+                                {activityInfo.fromSender && (
+                                  <p className="text-sm text-blue-400">
+                                    From: {activityInfo.fromSender.slice(0, 6)}
+                                    ...{activityInfo.fromSender.slice(-4)}
                                   </p>
                                 )}
                               </div>
@@ -801,17 +755,19 @@ function HistoryContent() {
 
                             <div className="text-right">
                               <p className="text-sm text-gray-400">
-                                {formatDate(event.timestamp_)}
+                                {formatDate(activity.timestamp)}
                               </p>
-                              <a
-                                href={`https://etherscan.io/tx/${event.transactionHash_}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-xs text-blue-400 hover:text-blue-300 flex items-center space-x-1"
-                              >
-                                <span>View Transaction</span>
-                                <ExternalLink className="w-3 h-3" />
-                              </a>
+                              {activity.transactionHash && (
+                                <a
+                                  href={`https://etherscan.io/tx/${activity.transactionHash}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-xs text-blue-400 hover:text-blue-300 flex items-center space-x-1"
+                                >
+                                  <span>View Transaction</span>
+                                  <ExternalLink className="w-3 h-3" />
+                                </a>
+                              )}
                             </div>
                           </div>
                         </div>
