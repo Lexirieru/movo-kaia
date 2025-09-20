@@ -3,6 +3,12 @@
 import { useState, useEffect } from "react";
 import { X, AlertCircle, CheckCircle, Loader2 } from "lucide-react";
 import { useWallet } from "@/lib/walletContext";
+import { useWalletClientHook } from "@/lib/useWalletClient";
+import {
+  withdrawUSDCToCrypto,
+  withdrawIDRXToCrypto,
+  parseTokenAmount,
+} from "@/lib/smartContract";
 
 interface ClaimModalProps {
   isOpen: boolean;
@@ -16,6 +22,7 @@ export default function ClaimModal({
   escrow,
 }: ClaimModalProps) {
   const { address } = useWallet();
+  const walletClient = useWalletClientHook();
   const [isClaimingAll, setIsClaimingAll] = useState(true);
   const [partialAmount, setPartialAmount] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
@@ -61,43 +68,200 @@ export default function ClaimModal({
   );
 
   const handleClaim = async () => {
+    if (!walletClient) {
+      setError("Wallet not connected");
+      return;
+    }
+
+    if (!address) {
+      setError("Wallet address not found");
+      return;
+    }
+
     setIsProcessing(true);
     setError("");
 
     try {
-      const claimAmount = isClaimingAll
-        ? escrow.availableAmount
-        : (
-            parseFloat(partialAmount) *
-            (escrow.originCurrency === "IDRX" ? 100 : 1000000)
-          ).toString();
+      // Enhanced debugging - log all escrow data first
+      console.log("📋 Escrow data received:", {
+        escrow,
+        availableAmount: escrow.availableAmount,
+        availableAmountType: typeof escrow.availableAmount,
+        escrowId: escrow.escrowId,
+        escrowIdType: typeof escrow.escrowId,
+        originCurrency: escrow.originCurrency,
+        address,
+        walletClient: !!walletClient,
+      });
+
+      // Validate required data
+      if (!escrow.escrowId) {
+        throw new Error("Escrow ID is missing");
+      }
+
+      if (!escrow.availableAmount || escrow.availableAmount === "0") {
+        throw new Error("No available amount to claim");
+      }
+
+      // Calculate claim amount in the correct decimal format
+      const decimals = escrow.originCurrency === "IDRX" ? 2 : 6;
+
+      // Handle different possible formats of availableAmount
+      let rawAmount;
+      if (isClaimingAll) {
+        // availableAmount should already be in wei format from the API
+        rawAmount = escrow.availableAmount.toString();
+
+        console.log("🔍 Amount format detection:", {
+          originalAmount: escrow.availableAmount,
+          rawAmount,
+          numericValue: parseFloat(rawAmount),
+          decimals,
+          expectedMaxHumanReadable: 10000,
+        });
+
+        // IMPORTANT: Do NOT convert here - availableAmount should already be in wei format
+        // The formatTokenAmount function in the UI already handles display conversion
+        // So escrow.availableAmount should be the raw wei amount ready for contract calls
+      } else {
+        // For partial claim, convert user input (human readable) to raw amount (wei format)
+        const userAmount = parseFloat(partialAmount);
+        if (isNaN(userAmount) || userAmount <= 0) {
+          throw new Error("Invalid partial amount");
+        }
+
+        // User sees formatted amount (e.g., "30000.00" IDRX), but we need wei format
+        rawAmount = (userAmount * Math.pow(10, decimals)).toString();
+
+        console.log("🔄 Partial amount conversion:", {
+          userInputAmount: partialAmount,
+          userAmount,
+          decimals,
+          convertedRawAmount: rawAmount,
+          explanation: `User input ${userAmount} * 10^${decimals} = ${rawAmount} wei`,
+        });
+      }
+
+      // Validate rawAmount is a valid number string
+      if (!/^\d+$/.test(rawAmount)) {
+        throw new Error(`Invalid amount format: ${rawAmount}`);
+      }
+
+      console.log("💰 Amount calculation:", {
+        isClaimingAll,
+        partialAmount,
+        rawAmount,
+        decimals,
+        escrowAvailableAmount: escrow.availableAmount,
+      });
+
+      // Convert to bigint for smart contract interaction
+      // rawAmount should already be in wei format, so convert directly to BigInt
+      const claimAmountBigInt = BigInt(rawAmount);
+
+      console.log("🔄 BigInt conversion:", {
+        rawAmount,
+        claimAmountBigInt: claimAmountBigInt.toString(),
+        note: "rawAmount should already be in wei format, no decimal conversion needed",
+      });
 
       console.log("🚀 Starting claim process:", {
         escrowId: escrow.escrowId,
         tokenType: escrow.originCurrency,
-        claimAmount,
+        rawAmount,
+        claimAmountBigInt: claimAmountBigInt.toString(),
+        decimals,
         isClaimingAll,
         userAddress: address,
+        walletClientConnected: !!walletClient,
       });
 
-      // Here you would implement the actual smart contract interaction
-      // For now, we'll simulate the process
-      await new Promise((resolve) => setTimeout(resolve, 2000));
+      let result;
 
-      // Simulate transaction hash
-      const simulatedTxHash = `0x${Math.random().toString(16).substr(2, 64)}`;
-      setTxHash(simulatedTxHash);
+      // Final validation before calling smart contract
+      if (!walletClient.account?.address) {
+        throw new Error("Wallet account address not found");
+      }
 
-      console.log("✅ Claim successful:", {
-        txHash: simulatedTxHash,
+      if (claimAmountBigInt <= BigInt(0)) {
+        throw new Error("Claim amount must be greater than 0");
+      }
+
+      console.log("🔗 Calling smart contract function:", {
+        function:
+          escrow.originCurrency === "IDRX"
+            ? "withdrawIDRXToCrypto"
+            : "withdrawUSDCToCrypto",
+        walletClientAccount: walletClient?.account?.address,
+        connectedAddress: address,
         escrowId: escrow.escrowId,
-        amount: claimAmount,
+        escrowIdLength: escrow.escrowId?.length,
+        claimAmountBigInt: claimAmountBigInt.toString(),
+        claimAmountBigIntType: typeof claimAmountBigInt,
       });
 
-      // Close modal after success
-      setTimeout(() => {
-        onClose();
-      }, 3000);
+      // Call the appropriate withdraw function based on token type
+      if (escrow.originCurrency === "IDRX") {
+        console.log("📞 Calling withdrawIDRXToCrypto...");
+        try {
+          result = await withdrawIDRXToCrypto(
+            walletClient,
+            escrow.escrowId,
+            claimAmountBigInt,
+          );
+        } catch (contractError) {
+          console.error(
+            "❌ Direct error from withdrawIDRXToCrypto:",
+            contractError,
+          );
+          throw contractError; // Re-throw to get the original error
+        }
+      } else {
+        console.log("📞 Calling withdrawUSDCToCrypto...");
+        try {
+          // For USDC, USDT, etc.
+          result = await withdrawUSDCToCrypto(
+            walletClient,
+            escrow.escrowId,
+            claimAmountBigInt,
+          );
+        } catch (contractError) {
+          console.error(
+            "❌ Direct error from withdrawUSDCToCrypto:",
+            contractError,
+          );
+          throw contractError; // Re-throw to get the original error
+        }
+      }
+
+      console.log("🔄 Smart contract result:", {
+        success: result.success,
+        transactionHash: result.transactionHash,
+        error: result.error,
+        fullResult: result,
+      });
+
+      if (result.success && result.transactionHash) {
+        setTxHash(result.transactionHash);
+        console.log("✅ Claim successful:", {
+          txHash: result.transactionHash,
+          escrowId: escrow.escrowId,
+          amount: rawAmount,
+        });
+
+        // Close modal after success
+        setTimeout(() => {
+          onClose();
+        }, 3000);
+      } else {
+        console.error("❌ Transaction failed details:", {
+          resultSuccess: result.success,
+          resultError: result.error,
+          hasTransactionHash: !!result.transactionHash,
+          result,
+        });
+        throw new Error(result.error || "Transaction failed");
+      }
     } catch (err: any) {
       console.error("❌ Claim failed:", err);
       setError(err.message || "Failed to claim tokens");

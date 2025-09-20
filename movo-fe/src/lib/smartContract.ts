@@ -1541,7 +1541,7 @@ export const removeRecipient = async (
       const walletType = detectWalletType(walletClient);
       const expectedChain = getChainForWallet(walletType);
       throw new Error(
-        `Please switch to ${expectedChain.name} network (Chain ID: ${expectedChain.id})`
+        `Please switch to ${expectedChain.name} network (Chain ID: ${expectedChain.id})`,
       );
     }
 
@@ -1564,7 +1564,10 @@ export const removeRecipient = async (
     }
 
     // Validate contract address
-    if (!contract.address || contract.address === "0x0000000000000000000000000000000000000000") {
+    if (
+      !contract.address ||
+      contract.address === "0x0000000000000000000000000000000000000000"
+    ) {
       throw new Error(`Invalid contract address: ${contract.address}`);
     }
 
@@ -1576,7 +1579,7 @@ export const removeRecipient = async (
     if (!escrowId.startsWith("0x")) {
       formattedEscrowId = "0x" + escrowId;
     }
-    
+
     // Pad to 32 bytes (64 hex characters + 0x prefix = 66 characters)
     if (formattedEscrowId.length < 66) {
       formattedEscrowId = formattedEscrowId.padEnd(66, "0");
@@ -1608,14 +1611,19 @@ export const removeRecipient = async (
       }
 
       // Check if the current user is the sender
-      if (escrowDetails[0].toLowerCase() !== walletClient.account.address.toLowerCase()) {
+      if (
+        escrowDetails[0].toLowerCase() !==
+        walletClient.account.address.toLowerCase()
+      ) {
         throw new Error("Only the escrow sender can remove receivers");
       }
 
       console.log("✅ Escrow validation passed");
     } catch (error) {
       console.error("❌ Escrow validation failed:", error);
-      throw new Error(`Escrow validation failed: ${error instanceof Error ? error.message : "Unknown error"}`);
+      throw new Error(
+        `Escrow validation failed: ${error instanceof Error ? error.message : "Unknown error"}`,
+      );
     }
 
     // STEP 2: Get all receivers in the escrow to verify the receiver exists
@@ -1632,20 +1640,23 @@ export const removeRecipient = async (
 
       // Check if the receiver exists in the escrow
       const receiverExists = (escrowReceivers as string[]).some(
-        (addr: string) => addr.toLowerCase() === validatedReceiverAddress.toLowerCase()
+        (addr: string) =>
+          addr.toLowerCase() === validatedReceiverAddress.toLowerCase(),
       );
 
       if (!receiverExists) {
         throw new Error(
           `Receiver ${validatedReceiverAddress} does not exist in escrow ${escrowId}. ` +
-          `Current receivers: ${(escrowReceivers as string[]).join(", ")}`
+            `Current receivers: ${(escrowReceivers as string[]).join(", ")}`,
         );
       }
 
       console.log("✅ Receiver found in escrow");
     } catch (error) {
       console.error("❌ Receiver verification failed:", error);
-      throw new Error(`Receiver verification failed: ${error instanceof Error ? error.message : "Unknown error"}`);
+      throw new Error(
+        `Receiver verification failed: ${error instanceof Error ? error.message : "Unknown error"}`,
+      );
     }
 
     // STEP 3: Get receiver details to confirm it's active
@@ -1655,20 +1666,27 @@ export const removeRecipient = async (
         address: contract.address,
         abi: abi,
         functionName: "getReceiverDetails",
-        args: [formattedEscrowId as `0x${string}`, validatedReceiverAddress as `0x${string}`],
+        args: [
+          formattedEscrowId as `0x${string}`,
+          validatedReceiverAddress as `0x${string}`,
+        ],
       });
 
       console.log("📋 Receiver details:", receiverDetails);
 
       // Check if receiver is active (index 2 should be true for active receivers)
       if (!receiverDetails[2]) {
-        throw new Error(`Receiver ${validatedReceiverAddress} is already inactive in escrow ${escrowId}`);
+        throw new Error(
+          `Receiver ${validatedReceiverAddress} is already inactive in escrow ${escrowId}`,
+        );
       }
 
       console.log("✅ Receiver is active and can be removed");
     } catch (error) {
       console.error("❌ Receiver details check failed:", error);
-      throw new Error(`Receiver details check failed: ${error instanceof Error ? error.message : "Unknown error"}`);
+      throw new Error(
+        `Receiver details check failed: ${error instanceof Error ? error.message : "Unknown error"}`,
+      );
     }
 
     // STEP 4: Simulate the transaction
@@ -1677,7 +1695,10 @@ export const removeRecipient = async (
       address: contract.address,
       abi: abi,
       functionName: "removeReceiver",
-      args: [formattedEscrowId as `0x${string}`, validatedReceiverAddress as `0x${string}`],
+      args: [
+        formattedEscrowId as `0x${string}`,
+        validatedReceiverAddress as `0x${string}`,
+      ],
       account: walletClient.account.address,
     });
 
@@ -1705,7 +1726,7 @@ export const removeRecipient = async (
         contractAddress: contract.address,
       },
       receipt,
-      contract.address
+      contract.address,
     );
 
     console.log("✅ Recipient removed successfully from blockchain");
@@ -1716,7 +1737,7 @@ export const removeRecipient = async (
     };
   } catch (error) {
     console.error("❌ Error removing recipient:", error);
-    
+
     let errorMessage = "Unknown error occurred";
     if (error instanceof Error) {
       errorMessage = error.message;
@@ -1731,7 +1752,8 @@ export const removeRecipient = async (
       errorMessage = "Insufficient funds to pay for transaction";
     } else if (errorMessage.includes("execution reverted")) {
       if (errorMessage.includes("Receiver does not exist")) {
-        errorMessage = "Receiver not found in escrow. They may have been removed already or never added to this escrow.";
+        errorMessage =
+          "Receiver not found in escrow. They may have been removed already or never added to this escrow.";
       } else {
         errorMessage = "Transaction failed: " + errorMessage;
       }
@@ -1834,6 +1856,31 @@ export const withdrawUSDCToCrypto = async (
   amount: bigint,
 ): Promise<{ success: boolean; transactionHash?: string; error?: string }> => {
   try {
+    console.log("🔧 withdrawUSDCToCrypto called with:", {
+      escrowId,
+      amount: amount.toString(),
+      escrowAddress: getEscrowAddress("USDC"),
+      walletAccount: walletClient?.account?.address,
+    });
+
+    // Try to simulate the contract call first to catch errors early
+    try {
+      console.log("🧪 Simulating USDC withdraw transaction...");
+      const simulation = await publicClient.simulateContract({
+        address: getEscrowAddress("USDC") as `0x${string}`,
+        abi: escrowAbis,
+        functionName: "withdrawTokenToCrypto",
+        args: [escrowId as `0x${string}`, amount],
+        account: walletClient.account.address,
+      });
+      console.log("✅ USDC simulation successful:", simulation);
+    } catch (simError) {
+      console.error("❌ USDC simulation failed:", simError);
+      throw new Error(
+        `Simulation failed: ${simError instanceof Error ? simError.message : "Unknown simulation error"}`,
+      );
+    }
+
     // Send transaction
     const hash = await walletClient.writeContract({
       address: getEscrowAddress("USDC"),
@@ -1841,9 +1888,16 @@ export const withdrawUSDCToCrypto = async (
       functionName: "withdrawTokenToCrypto",
       args: [escrowId, amount],
     });
+    console.log("📝 Transaction submitted:", { hash });
 
     // Wait for receipt
     const receipt = await publicClient.waitForTransactionReceipt({ hash });
+
+    console.log("🧾 Transaction receipt:", {
+      status: receipt.status,
+      transactionHash: receipt.transactionHash,
+      gasUsed: receipt.gasUsed?.toString(),
+    });
 
     if (receipt.status === "success") {
       console.log("✅ Withdraw to crypto successful:", receipt);
@@ -1868,16 +1922,39 @@ export const withdrawUSDCToCrypto = async (
         transactionHash: hash,
       };
     } else {
+      console.error("❌ Transaction receipt status not success:", receipt);
       return {
         success: false,
-        error: "Transaction failed",
+        error: `Transaction failed with status: ${receipt.status}`,
       };
     }
   } catch (error) {
     console.error("❌ Error withdrawing USDC to crypto:", error);
+
+    // Enhanced error parsing
+    let errorMessage = "Unknown error";
+    if (error instanceof Error) {
+      errorMessage = error.message;
+
+      // Parse specific contract errors
+      if (errorMessage.includes("insufficient funds")) {
+        errorMessage = "Insufficient funds for gas fees";
+      } else if (errorMessage.includes("user rejected")) {
+        errorMessage = "Transaction rejected by user";
+      } else if (errorMessage.includes("execution reverted")) {
+        // Extract revert reason if available
+        const revertMatch = errorMessage.match(/execution reverted:?\s*(.+)/i);
+        if (revertMatch) {
+          errorMessage = `Contract error: ${revertMatch[1]}`;
+        } else {
+          errorMessage = "Transaction reverted by smart contract";
+        }
+      }
+    }
+
     return {
       success: false,
-      error: error instanceof Error ? error.message : "Unknown error",
+      error: errorMessage,
     };
   }
 };
@@ -1889,6 +1966,31 @@ export const withdrawIDRXToCrypto = async (
   amount: bigint,
 ): Promise<{ success: boolean; transactionHash?: string; error?: string }> => {
   try {
+    console.log("🔧 withdrawIDRXToCrypto called with:", {
+      escrowId,
+      amount: amount.toString(),
+      escrowAddress: getEscrowAddress("IDRX_BASE"),
+      walletAccount: walletClient?.account?.address,
+    });
+
+    // Try to simulate the contract call first to catch errors early
+    try {
+      console.log("🧪 Simulating IDRX withdraw transaction...");
+      const simulation = await publicClient.simulateContract({
+        address: getEscrowAddress("IDRX_BASE") as `0x${string}`,
+        abi: escrowIdrxAbis,
+        functionName: "withdrawIDRXToCrypto",
+        args: [escrowId as `0x${string}`, amount],
+        account: walletClient.account.address,
+      });
+      console.log("✅ IDRX simulation successful:", simulation);
+    } catch (simError) {
+      console.error("❌ IDRX simulation failed:", simError);
+      throw new Error(
+        `IDRX Simulation failed: ${simError instanceof Error ? simError.message : "Unknown simulation error"}`,
+      );
+    }
+
     // Send transaction
     const hash = await walletClient.writeContract({
       address: getEscrowAddress("IDRX_BASE"),
@@ -1897,9 +1999,16 @@ export const withdrawIDRXToCrypto = async (
       functionName: "withdrawIDRXToCrypto",
       args: [escrowId, amount],
     });
+    console.log("📝 IDRX Transaction submitted:", { hash });
 
     // Wait for receipt
     const receipt = await publicClient.waitForTransactionReceipt({ hash });
+
+    console.log("🧾 IDRX Transaction receipt:", {
+      status: receipt.status,
+      transactionHash: receipt.transactionHash,
+      gasUsed: receipt.gasUsed?.toString(),
+    });
 
     if (receipt.status === "success") {
       console.log("✅ Withdraw IDRX to crypto successful:", receipt);
@@ -1925,16 +2034,39 @@ export const withdrawIDRXToCrypto = async (
         transactionHash: hash,
       };
     } else {
+      console.error("❌ IDRX Transaction receipt status not success:", receipt);
       return {
         success: false,
-        error: "Transaction failed",
+        error: `IDRX transaction failed with status: ${receipt.status}`,
       };
     }
   } catch (error) {
     console.error("❌ Error withdrawing IDRX to crypto:", error);
+
+    // Enhanced error parsing for IDRX
+    let errorMessage = "Unknown error";
+    if (error instanceof Error) {
+      errorMessage = error.message;
+
+      // Parse specific contract errors
+      if (errorMessage.includes("insufficient funds")) {
+        errorMessage = "Insufficient funds for gas fees";
+      } else if (errorMessage.includes("user rejected")) {
+        errorMessage = "Transaction rejected by user";
+      } else if (errorMessage.includes("execution reverted")) {
+        // Extract revert reason if available
+        const revertMatch = errorMessage.match(/execution reverted:?\s*(.+)/i);
+        if (revertMatch) {
+          errorMessage = `IDRX Contract error: ${revertMatch[1]}`;
+        } else {
+          errorMessage = "IDRX transaction reverted by smart contract";
+        }
+      }
+    }
+
     return {
       success: false,
-      error: error instanceof Error ? error.message : "Unknown error",
+      error: errorMessage,
     };
   }
 };
