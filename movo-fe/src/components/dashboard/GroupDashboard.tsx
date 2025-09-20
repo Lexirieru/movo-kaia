@@ -3,13 +3,14 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/lib/userContext";
 import { useWallet } from "@/lib/walletContext";
-import { GroupOfUser } from "@/types/receiverInGroupTemplate";
+import { GroupOfUser, ReceiverInGroup } from "@/types/receiverInGroupTemplate";
 import { useRouter } from "next/navigation";
 import { Plus } from "lucide-react";
 import GroupStatsCards from "./groups/GroupsStatsCards";
 import GroupFilterBar from "./groups/GroupFilterBar";
 import EscrowList from "./EscrowList";
 import TopupFundModal from "./groups/TopupFundModal";
+import CreateStreamModal from "./sender/CreateStreamModal";
 import {
   loadAllGroup,
   addGroup,
@@ -232,6 +233,21 @@ export default function GroupDashboard({
     }
   };
 
+  const handleCreateStream = (stream: ReceiverInGroup) => {
+    console.log("Creating stream:", stream);
+    // For now, just close the modal and maybe refresh
+    setIsCreateModalOpen(false);
+    // Optionally refresh escrows
+    refreshEscrows();
+  };
+
+  const handleEscrowCreated = () => {
+    console.log("Escrow created successfully");
+    setIsCreateModalOpen(false);
+    // Refresh escrows data
+    refreshEscrows();
+  };
+
   // Show loading or wallet connection message
   if (loading) {
     return (
@@ -412,7 +428,13 @@ export default function GroupDashboard({
           onTopupFund={handleTopupFund}
         />
 
-        {/* Create Stream Modal - Temporarily disabled for claimable view */}
+        {/* Create Stream Modal */}
+        <CreateStreamModal
+          isOpen={isCreateModalOpen}
+          onClose={() => setIsCreateModalOpen(false)}
+          onCreateStream={handleCreateStream}
+          onEscrowCreated={handleEscrowCreated}
+        />
 
         {/* Topup Fund Modal */}
         <TopupFundModal
