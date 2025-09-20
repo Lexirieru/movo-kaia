@@ -58,7 +58,6 @@ function DynamicDashboard({
           fetchReceiverDashboardData(effectiveWalletAddress),
         ]);
 
-
         // Set sender data
         setSenderEscrows(senderEscrowsData);
 
@@ -76,10 +75,20 @@ function DynamicDashboard({
             type: "claimable",
           })),
         ];
-        
-        
-        setAllEscrows(combinedEscrows);
 
+        console.log("📊 Combined escrows:", {
+          totalCombined: combinedEscrows.length,
+          createdCount: combinedEscrows.filter((e) => e.type === "created")
+            .length,
+          claimableCount: combinedEscrows.filter((e) => e.type === "claimable")
+            .length,
+          claimableEscrows: combinedEscrows.filter(
+            (e) => e.type === "claimable",
+          ),
+          allEscrows: combinedEscrows,
+        });
+
+        setAllEscrows(combinedEscrows);
       } catch (error) {
         console.error("Error checking user data:", error);
         setSenderEscrows([]);
@@ -93,6 +102,15 @@ function DynamicDashboard({
     checkUserData();
   }, [effectiveWalletAddress, lastCheckedAddress]);
 
+  // Helper function to get claimable sender escrows (availableBalance >= totalAllocated)
+  const getClaimableSenderEscrows = () => {
+    return senderEscrows.filter((escrow) => {
+      const availableBalance = parseFloat(escrow.availableBalance || "0");
+      const totalAllocated = parseFloat(escrow.totalAmount || "0");
+      return availableBalance >= totalAllocated;
+    });
+  };
+
   // Get filtered escrows based on active filter
   const getFilteredEscrows = () => {
     switch (activeFilter) {
@@ -100,11 +118,13 @@ function DynamicDashboard({
         return senderEscrows;
       case "claimable":
         // Use the same data source as "all" but filter for claimable escrows
-        const claimableEscrows = allEscrows.filter(escrow => escrow.type === "claimable");
+        const claimableEscrows = allEscrows.filter(
+          (escrow) => escrow.type === "claimable",
+        );
         console.log("🔍 Filtering claimable escrows:", {
           totalAllEscrows: allEscrows.length,
           claimableEscrows: claimableEscrows.length,
-          claimableData: claimableEscrows
+          claimableData: claimableEscrows,
         });
         return claimableEscrows;
       case "all":
@@ -166,7 +186,7 @@ function DynamicDashboard({
                 : "text-white/60 hover:text-white hover:bg-white/10"
             }`}
           >
-            Claimable ({allEscrows.filter(escrow => escrow.type === "claimable").length})
+            Claimable ({getClaimableSenderEscrows().length})
           </button>
         </div>
       </div>
@@ -178,10 +198,13 @@ function DynamicDashboard({
             <span className="w-2 h-2 bg-cyan-400 rounded-full mr-3"></span>
             {activeFilter === "all" && "All Escrows"}
             {activeFilter === "created" && "Escrows You Created"}
-            {activeFilter === "claimable" && "Available Payments"}
+            {activeFilter === "claimable" && "Claimable Escrows"}
           </h2>
           <span className="px-3 py-1 bg-cyan-400/20 text-cyan-400 text-sm rounded-full">
-            {filteredEscrows.length} found
+            {activeFilter === "claimable"
+              ? getClaimableSenderEscrows().length
+              : filteredEscrows.length}{" "}
+            found
           </span>
         </div>
 
@@ -192,15 +215,47 @@ function DynamicDashboard({
 
         {activeFilter === "claimable" && (
           <>
-            {console.log("🔍 Rendering claimable filter with data:", {
-              filteredEscrows: filteredEscrows,
-              filteredEscrowsLength: filteredEscrows.length,
-              isLoading: isCheckingData,
-            })}
-            <ReceiverDashboard
-              incomingTransactions={filteredEscrows}
-              isLoading={isCheckingData}
-            />
+            {(() => {
+              console.log("🔍 Rendering claimable filter - Sender POV only:", {
+                claimableSenderEscrows: getClaimableSenderEscrows().length,
+                totalSenderEscrows: senderEscrows.length,
+                isLoading: isCheckingData,
+              });
+              return null;
+            })()}
+
+            {/* Claimable Sender Escrows - Only show escrows from "All Escrows" that meet claimable condition */}
+            {getClaimableSenderEscrows().length > 0 ? (
+              <GroupDashboard
+                onRoleChange={onRoleChange}
+                viewMode="claimable-sender"
+                claimableEscrows={getClaimableSenderEscrows()}
+              />
+            ) : (
+              <div className="text-center py-12">
+                <div className="w-16 h-16 bg-orange-500/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <span className="text-2xl">⏳</span>
+                </div>
+                <h3 className="text-xl font-semibold text-white mb-2">
+                  No Claimable Escrows
+                </h3>
+                <p className="text-white/60 mb-4">
+                  None of your created escrows are ready to be claimed by
+                  recipients yet.
+                </p>
+                <div className="bg-orange-500/10 border border-orange-500/20 rounded-lg p-4 max-w-md mx-auto">
+                  <h4 className="text-orange-400 font-medium mb-2">
+                    Escrows become claimable when:
+                  </h4>
+                  <ul className="text-orange-300/80 text-sm space-y-1 text-left">
+                    <li>• Available balance ≥ Total allocated amount</li>
+                    <li>
+                      • Recipients can then withdraw their allocated funds
+                    </li>
+                  </ul>
+                </div>
+              </div>
+            )}
           </>
         )}
 
@@ -224,13 +279,17 @@ function DynamicDashboard({
               <h3 className="text-lg font-medium text-white mb-3 flex items-center">
                 <span className="w-1.5 h-1.5 bg-green-400 rounded-full mr-2"></span>
                 Available to Claim (
-                {allEscrows.filter(escrow => escrow.type === "claimable").length})
+                {
+                  allEscrows.filter((escrow) => escrow.type === "claimable")
+                    .length
+                }
+                )
               </h3>
               <div className="bg-white/5 rounded-lg p-4">
                 <ReceiverDashboard
-                  incomingTransactions={
-                    allEscrows.filter(escrow => escrow.type === "claimable")
-                  }
+                  incomingTransactions={allEscrows.filter(
+                    (escrow) => escrow.type === "claimable",
+                  )}
                   isLoading={isCheckingData}
                 />
               </div>
@@ -262,7 +321,8 @@ function DynamicDashboard({
           <div>Active Filter: {activeFilter}</div>
           <div>Created Escrows: {senderEscrows.length}</div>
           <div>
-            Claimable Escrows: {allEscrows.filter(escrow => escrow.type === "claimable").length}
+            Claimable Escrows:{" "}
+            {allEscrows.filter((escrow) => escrow.type === "claimable").length}
           </div>
           <div>Total Escrows: {allEscrows.length}</div>
           <div>Filtered Results: {filteredEscrows.length}</div>
