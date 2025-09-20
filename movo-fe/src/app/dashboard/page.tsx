@@ -4,6 +4,7 @@ import { useEffect, useState, Suspense } from "react";
 import ReceiverDashboard from "@/components/dashboard/ReceiverDashboard";
 import DashboardWrapper from "@/components/dashboard/DashboardWrapper";
 import WalletWarning from "@/components/dashboard/WalletWarning";
+import ClaimModal from "@/components/dashboard/ClaimModal";
 import {
   loadAllWithdrawHistory,
   fetchEscrowsFromIndexer,
@@ -36,16 +37,29 @@ function DynamicDashboard({
   const [senderEscrows, setSenderEscrows] = useState<any[]>([]);
   const [receiverData, setReceiverData] = useState<any>(null);
   const [allEscrows, setAllEscrows] = useState<any[]>([]);
+  const [isClaimModalOpen, setIsClaimModalOpen] = useState(false);
+  const [selectedEscrowForClaim, setSelectedEscrowForClaim] =
+    useState<any>(null);
 
   // Helper function to format token amount with proper decimals
   const formatTokenAmountWithDecimals = (amount: string, tokenType: string) => {
     const amountNumber = parseFloat(amount);
     if (isNaN(amountNumber)) return "0.00";
 
-    // USDC and USDT use 6 decimals, IDRX uses 2 decimals
-    const decimals = tokenType === "IDRX" ? 2 : 6;
-    const divisor = Math.pow(10, decimals);
-    const formattedAmount = amountNumber / divisor;
+    let formattedAmount = amountNumber;
+
+    // Handle decimal conversion based on token type
+    if (tokenType === "USDC" || tokenType === "USDT") {
+      // USDC/USDT use 6 decimals, divide by 10^6 if raw value
+      if (amountNumber > 10000) {
+        formattedAmount = amountNumber / 1000000;
+      }
+    } else if (tokenType === "IDRX") {
+      // IDRX uses 2 decimals, divide by 10^2 if raw value
+      if (amountNumber > 10000) {
+        formattedAmount = amountNumber / 100;
+      }
+    }
 
     return formattedAmount.toFixed(2); // Show 2 decimal places for display
   };
@@ -71,6 +85,19 @@ function DynamicDashboard({
           fetchEscrowsFromIndexer(effectiveWalletAddress),
           fetchReceiverDashboardData(effectiveWalletAddress),
         ]);
+
+        // Debug: Log sender escrows data with detailed token information
+        console.log("🔍 DEBUG: Sender escrows data received:", {
+          totalEscrows: senderEscrowsData.length,
+          escrows: senderEscrowsData.map((escrow: any) => ({
+            escrowId: escrow.escrowId,
+            tokenType: escrow.tokenType,
+            dataSource: escrow.dataSource,
+            availableBalance: escrow.availableBalance,
+            totalAmount: escrow.totalAmount,
+            tokenAddress: escrow.tokenAddress,
+          })),
+        });
 
         // Set sender data
         setSenderEscrows(senderEscrowsData);
@@ -118,11 +145,68 @@ function DynamicDashboard({
 
   // Helper function to get claimable sender escrows (availableBalance >= totalAllocated)
   const getClaimableSenderEscrows = () => {
-    return senderEscrows.filter((escrow) => {
-      const availableBalance = parseFloat(escrow.availableBalance || "0");
-      const totalAllocated = parseFloat(escrow.totalAmount || "0");
-      return availableBalance >= totalAllocated;
+    console.log("🔍 getClaimableSenderEscrows called with escrows:", {
+      totalSenderEscrows: senderEscrows.length,
+      escrowBreakdown: senderEscrows.map((escrow: any) => ({
+        escrowId: escrow.escrowId,
+        tokenType: escrow.tokenType,
+        dataSource: escrow.dataSource,
+        availableBalance: escrow.availableBalance,
+        totalAmount: escrow.totalAmount,
+        hasRequiredFields: !!(
+          escrow.availableBalance &&
+          escrow.totalAmount &&
+          escrow.tokenType
+        ),
+      })),
     });
+
+    const claimableEscrows = senderEscrows.filter((escrow) => {
+      let availableBalance = parseFloat(escrow.availableBalance || "0");
+      let totalAllocated = parseFloat(escrow.totalAmount || "0");
+
+      // Handle token decimals - contract returns raw values that need decimal conversion
+      if (escrow.tokenType === "USDC" || escrow.tokenType === "USDT") {
+        // USDC/USDT use 6 decimals, so raw values need to be divided by 10^6
+        availableBalance = availableBalance / 1000000;
+        totalAllocated = totalAllocated / 1000000;
+      } else if (escrow.tokenType === "IDRX") {
+        // IDRX uses 2 decimals, raw values might need to be divided by 10^2
+        // Divide if the value seems to be in raw format (>= 100 typically indicates raw format)
+        if (availableBalance >= 100) {
+          availableBalance = availableBalance / 100;
+        }
+        if (totalAllocated >= 100) {
+          totalAllocated = totalAllocated / 100;
+        }
+      }
+
+      const isClaimable = availableBalance >= totalAllocated;
+
+      console.log(`📊 Claimable check for escrow ${escrow.escrowId}:`, {
+        tokenType: escrow.tokenType,
+        rawAvailable: escrow.availableBalance,
+        rawTotal: escrow.totalAmount,
+        formattedAvailable: availableBalance,
+        formattedTotal: totalAllocated,
+        isClaimable,
+        dataSource: escrow.dataSource,
+      });
+
+      return isClaimable;
+    });
+
+    console.log("✅ Final claimable escrows:", {
+      totalClaimable: claimableEscrows.length,
+      claimableIdrx: claimableEscrows.filter((e) => e.tokenType === "IDRX")
+        .length,
+      claimableUsdc: claimableEscrows.filter((e) => e.tokenType === "USDC")
+        .length,
+      claimableUsdt: claimableEscrows.filter((e) => e.tokenType === "USDT")
+        .length,
+    });
+
+    return claimableEscrows;
   };
 
   // Helper function to get total claimable escrows (sender + receiver)
@@ -321,8 +405,8 @@ function DynamicDashboard({
                               <button
                                 className="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:shadow-lg transition-all hover:scale-105"
                                 onClick={() => {
-                                  // Handle claim action here
-                                  console.log("Claiming escrow:", escrow);
+                                  setSelectedEscrowForClaim(escrow);
+                                  setIsClaimModalOpen(true);
                                 }}
                               >
                                 Claim Now
@@ -504,6 +588,16 @@ function DynamicDashboard({
           <div>Filtered Results: {filteredEscrows.length}</div>
         </div>
       )}
+
+      {/* Claim Modal */}
+      <ClaimModal
+        isOpen={isClaimModalOpen}
+        onClose={() => {
+          setIsClaimModalOpen(false);
+          setSelectedEscrowForClaim(null);
+        }}
+        escrow={selectedEscrowForClaim}
+      />
     </div>
   );
 }

@@ -1355,10 +1355,12 @@ export const fetchEscrowsFromIndexer = async (userAddress: string) => {
           escrow.tokenAddress ||
           mapContractIdToTokenAddress(escrow.contractId_);
 
-        // Determine token type from tokenAddress or source
+        // Determine token type from source API first (most reliable)
         let tokenType: "USDC" | "USDT" | "IDRX" = "USDC";
 
-        if (escrow.tokenAddress) {
+        if (escrow.source === "IDRX_API") {
+          tokenType = "IDRX";
+        } else if (escrow.tokenAddress) {
           const detectedType = getTokenType(escrow.tokenAddress);
           tokenType =
             detectedType === "USDC" ||
@@ -1368,9 +1370,17 @@ export const fetchEscrowsFromIndexer = async (userAddress: string) => {
               : "USDC";
         } else if (escrow.contractId_) {
           tokenType = determineTokenTypeFromContract(escrow.contractId_);
-        } else if (escrow.source === "IDRX_API") {
-          tokenType = "IDRX";
+        } else {
+          // Default to USDC for USDC_API source
+          tokenType = "USDC";
         }
+
+        console.log(`🔍 Token type detection for escrow ${escrow.escrowId}:`, {
+          source: escrow.source,
+          tokenAddress: escrow.tokenAddress,
+          contractId: escrow.contractId_,
+          detectedTokenType: tokenType,
+        });
 
         // Parse timestamp if available
         const createdAt = escrow.timestamp_
@@ -1518,25 +1528,23 @@ function mapContractIdToTokenAddress(contractId: string): string {
 function determineTokenTypeFromContract(
   contractId: string,
 ): "USDC" | "USDT" | "IDRX" {
-  const tokenAddress = mapContractIdToTokenAddress(contractId);
+  // Determine token type based on contract ID patterns or use API source
+  const lowerContractId = contractId?.toLowerCase() || "";
 
-  const usdcAddress = (
-    process.env.NEXT_PUBLIC_USDC_ADDRESS ||
-    "0xf9D5a610fe990bfCdF7dd9FD64bdfe89D6D1eb4c"
-  ).toLowerCase();
-  const usdtAddress = (
-    process.env.NEXT_PUBLIC_USDT_ADDRESS ||
-    "0x80327544e61e391304ad16f0BAFb2C5c7A76dfB3"
-  ).toLowerCase();
-  const idrxAddress = (
-    process.env.NEXT_PUBLIC_IDRX_ADDRESS ||
-    "0x77fEa84656B5EF40BF33e3835A9921dAEAadb976"
-  ).toLowerCase();
+  // Check for IDRX patterns
+  if (lowerContractId.includes("idrx") || lowerContractId.includes("77fea84")) {
+    return "IDRX";
+  }
 
-  const addr = tokenAddress.toLowerCase();
+  // Check for USDT patterns
+  if (
+    lowerContractId.includes("usdt") ||
+    lowerContractId.includes("80327544")
+  ) {
+    return "USDT";
+  }
 
-  if (addr === idrxAddress) return "IDRX";
-  if (addr === usdtAddress) return "USDT";
+  // Default to USDC
   return "USDC";
 }
 
@@ -2072,10 +2080,12 @@ const fetchReceiverEscrowsSimple = async (receiverAddress: string) => {
           ? new Date(parseInt(escrow.timestamp_) * 1000)
           : new Date();
 
-        // Determine token type from tokenAddress or contractId
+        // Determine token type from source API first (most reliable)
         let tokenType: "USDC" | "USDT" | "IDRX" = "USDC";
 
-        if (escrow.tokenAddress) {
+        if (escrow.source === "IDRX_API") {
+          tokenType = "IDRX";
+        } else if (escrow.tokenAddress) {
           const detectedType = getTokenType(escrow.tokenAddress);
           tokenType =
             detectedType === "USDC" ||
@@ -2085,8 +2095,9 @@ const fetchReceiverEscrowsSimple = async (receiverAddress: string) => {
               : "USDC";
         } else if (escrow.contractId_) {
           tokenType = determineTokenTypeFromContract(escrow.contractId_);
-        } else if (escrow.source === "IDRX_API") {
-          tokenType = "IDRX";
+        } else {
+          // Default to USDC for USDC_API source
+          tokenType = "USDC";
         }
 
         // Get contract address based on token type
