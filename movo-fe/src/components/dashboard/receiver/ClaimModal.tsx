@@ -1,7 +1,15 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { X, Wallet, DollarSign, Coins, ArrowRight, Info, Clock } from "lucide-react";
+import {
+  X,
+  Wallet,
+  DollarSign,
+  Coins,
+  ArrowRight,
+  Info,
+  Clock,
+} from "lucide-react";
 import BankSelector from "./BankSelector";
 import BankForm from "./BankForm";
 import ClaimSuccess from "./ClaimSuccess";
@@ -10,7 +18,11 @@ import { getUsdcIdrxRate } from "@/app/api/api";
 import { bankDictionary } from "@/lib/dictionary";
 import { useWallet } from "@/lib/walletContext";
 import { useWalletClientHook } from "@/lib/useWalletClient";
-import { withdrawUSDCToCrypto, withdrawIDRXToCrypto, parseTokenAmount } from "@/lib/smartContract";
+import {
+  withdrawUSDCToCrypto,
+  withdrawIDRXToCrypto,
+  parseTokenAmount,
+} from "@/lib/smartContract";
 import { canReceiverClaim } from "@/lib/escrowReader";
 
 interface ClaimModalProps {
@@ -28,7 +40,7 @@ export default function ClaimModal({
 }: ClaimModalProps) {
   const { address, isConnected } = useWallet();
   const walletClient = useWalletClientHook();
-  
+
   // Helper function to format amount based on token type
   const formatTokenAmount = (amount: number, tokenType: string) => {
     // USDC and USDT use 6 decimals, IDRX uses 2 decimals
@@ -37,7 +49,8 @@ export default function ClaimModal({
   };
 
   // Get token type from selected streams (assuming all selected streams have the same token type)
-  const tokenType = selectedStreams.length > 0 ? selectedStreams[0].originCurrency : "USDC";
+  const tokenType =
+    selectedStreams.length > 0 ? selectedStreams[0].originCurrency : "USDC";
   const [step, setStep] = useState<"claim" | "selectBank" | "success">("claim");
   const [claimType, setClaimType] = useState<"crypto" | "fiat">("crypto");
   const [isProcessing, setIsProcessing] = useState(false);
@@ -66,10 +79,10 @@ export default function ClaimModal({
     fetchRate();
   }, []);
 
-  useEffect(() =>{
-    if(isOpen){
+  useEffect(() => {
+    if (isOpen) {
       setStep("claim");
-      setClaimType('crypto')
+      setClaimType("crypto");
       setIsProcessing(false);
       setCustomAmount(totalAmount.toString());
       setError(null);
@@ -81,12 +94,13 @@ export default function ClaimModal({
         bankAccountName: "",
       });
     }
-  }, [isOpen, totalAmount])
+  }, [isOpen, totalAmount]);
 
   // Fetch vesting information when modal opens
   useEffect(() => {
     const fetchVestingInfo = async () => {
-      if (!isOpen || !isConnected || !address || selectedStreams.length === 0) return;
+      if (!isOpen || !isConnected || !address || selectedStreams.length === 0)
+        return;
 
       try {
         const escrowId = selectedStreams[0]?.escrowId;
@@ -94,7 +108,7 @@ export default function ClaimModal({
 
         const claimCheck = await canReceiverClaim(escrowId, address, tokenType);
         setClaimStatus(claimCheck);
-        
+
         if (claimCheck.vestingInfo) {
           setVestingInfo(claimCheck.vestingInfo);
         }
@@ -109,16 +123,20 @@ export default function ClaimModal({
   // Protocol fee and limits calculation
   const PROTOCOL_FEE_PERCENTAGE = 0.25; // 0.25%
   const MIN_PAYOUT_AMOUNT = 2; // $2 minimum
-  const MAX_PAYOUT_AMOUNT = 5000; // $5000 maximum
+  const MAX_FIAT_PAYOUT_AMOUNT = 5000; // $5000 maximum for fiat only
   const claimAmount = parseFloat(customAmount) || 0;
   const protocolFee = claimAmount * (PROTOCOL_FEE_PERCENTAGE / 100);
   const netAmount = claimAmount - protocolFee;
-  // maxClaimAmount will be the lower of totalAmount and MAX_PAYOUT_AMOUNT
-  const maxClaimAmount = Math.min(totalAmount, MAX_PAYOUT_AMOUNT);
+
+  // maxClaimAmount depends on claim type
+  const maxClaimAmount =
+    claimType === "fiat"
+      ? Math.min(totalAmount, MAX_FIAT_PAYOUT_AMOUNT)
+      : totalAmount; // No limit for crypto
 
   // Validation functions
   const isAmountValid =
-    claimAmount >= MIN_PAYOUT_AMOUNT && 
+    claimAmount >= MIN_PAYOUT_AMOUNT &&
     claimAmount <= maxClaimAmount &&
     claimStatus?.canClaim === true;
 
@@ -144,6 +162,14 @@ export default function ClaimModal({
     }
   };
 
+  // Update amount when claim type changes to respect new limits
+  useEffect(() => {
+    const currentAmount = parseFloat(customAmount) || 0;
+    if (currentAmount > maxClaimAmount) {
+      setCustomAmount(maxClaimAmount.toString());
+    }
+  }, [claimType, maxClaimAmount]);
+
   const handleClaim = async () => {
     if (!isConnected || !address || !walletClient) {
       setError("Please connect your wallet first");
@@ -166,9 +192,17 @@ export default function ClaimModal({
 
       let result;
       if (tokenType === "USDC") {
-        result = await withdrawUSDCToCrypto(walletClient, escrowId, amountParsed);
+        result = await withdrawUSDCToCrypto(
+          walletClient,
+          escrowId,
+          amountParsed,
+        );
       } else if (tokenType === "IDRX") {
-        result = await withdrawIDRXToCrypto(walletClient, escrowId, amountParsed);
+        result = await withdrawIDRXToCrypto(
+          walletClient,
+          escrowId,
+          amountParsed,
+        );
       } else {
         throw new Error("Unsupported token type");
       }
@@ -180,7 +214,9 @@ export default function ClaimModal({
       }
     } catch (err) {
       console.error("Error during withdrawal:", err);
-      setError(err instanceof Error ? err.message : "An unexpected error occurred");
+      setError(
+        err instanceof Error ? err.message : "An unexpected error occurred",
+      );
     } finally {
       setIsProcessing(false);
     }
@@ -200,27 +236,27 @@ export default function ClaimModal({
     handleClaim();
   };
 
-  const handleBankFormCancel = () =>{
+  const handleBankFormCancel = () => {
     setBankForm({
       bankName: "",
       bankAccountNumber: "",
       bankAccountName: "",
-    })
-    onClose()
-  }
+    });
+    onClose();
+  };
 
-  const handleModalClose = () =>{
-    setStep("claim")
-    setClaimType("crypto")
+  const handleModalClose = () => {
+    setStep("claim");
+    setClaimType("crypto");
     setIsProcessing(false);
     setBankForm({
       bankName: "",
       bankAccountNumber: "",
       bankAccountName: "",
-    })
+    });
     setCustomAmount(totalAmount.toString());
     onClose();
-  }
+  };
 
   if (!isOpen) return null;
 
@@ -295,7 +331,7 @@ export default function ClaimModal({
               <div className="bg-white/5 rounded-2xl p-6 border border-white/10">
                 <div className="space-y-4">
                   <label className="text-white/80 text-sm block">
-                    Claim Amount (USDC)
+                    Claim Amount ({tokenType})
                   </label>
 
                   {/* Amount Input */}
@@ -308,7 +344,7 @@ export default function ClaimModal({
                       placeholder="0.0000"
                     />
                     <div className="absolute right-4 top-1/2 transform -translate-y-1/2 text-white/60 text-sm">
-                      USDC
+                      {tokenType}
                     </div>
                   </div>
 
@@ -320,17 +356,29 @@ export default function ClaimModal({
                         ? `Minimum payout amount is ${MIN_PAYOUT_AMOUNT} ${tokenType}`
                         : claimAmount > totalAmount
                           ? `Amount exceeds your available balance of ${formatTokenAmount(totalAmount, tokenType)} ${tokenType}`
-                          : `Maximum payout amount is ${MAX_PAYOUT_AMOUNT} ${tokenType}`}
+                          : claimType === "fiat"
+                            ? `Maximum fiat payout amount is ${MAX_FIAT_PAYOUT_AMOUNT} ${tokenType}`
+                            : "Invalid amount"}
                     </div>
                   )}
 
                   {/* Max Button */}
-                  <button
-                    onClick={() => setCustomAmount(maxClaimAmount.toString())}
-                    className="text-blue-400 hover:text-blue-300 text-sm font-medium transition-colors"
-                  >
-                    Max: {formatTokenAmount(maxClaimAmount, tokenType)} {tokenType}
-                  </button>
+                  <div className="flex items-center justify-between">
+                    <button
+                      onClick={() => setCustomAmount(maxClaimAmount.toString())}
+                      className="text-blue-400 hover:text-blue-300 text-sm font-medium transition-colors"
+                    >
+                      Max: {formatTokenAmount(maxClaimAmount, tokenType)}{" "}
+                      {tokenType}
+                    </button>
+
+                    {/* Show limit info for fiat */}
+                    {claimType === "fiat" && (
+                      <div className="text-xs text-white/50">
+                        Fiat limit: ${MAX_FIAT_PAYOUT_AMOUNT}
+                      </div>
+                    )}
+                  </div>
 
                   <div className="flex items-center justify-between mb-4">
                     <span className="text-white/60">
@@ -387,6 +435,11 @@ export default function ClaimModal({
                   <Info className="w-4 h-4" />
                   <span className="text-sm">
                     After deducting platform fee (0.25%)
+                    {claimType === "crypto" && (
+                      <span className="ml-2 text-green-400">
+                        • No withdrawal limits
+                      </span>
+                    )}
                   </span>
                 </div>
               </div>
@@ -408,12 +461,12 @@ export default function ClaimModal({
                       <div className="flex items-center space-x-3">
                         <div className="w-8 h-8 bg-gradient-to-r from-green-400 to-emerald-500 rounded-full flex items-center justify-center">
                           <span className="text-white text-sm font-bold">
-                            U
+                            {tokenType[0]}
                           </span>
                         </div>
                         <div>
                           <div className="text-white text-sm font-medium">
-                            USDC
+                            {tokenType}
                           </div>
                           <div className="text-white/60 text-xs">
                             Stream #{stream.id || index + 1}
@@ -431,7 +484,9 @@ export default function ClaimModal({
                   <div className="flex items-center space-x-2 text-red-400">
                     <Info className="w-4 h-4" />
                     <span className="text-sm">
-                      {error || claimStatus?.reason || "Unable to claim at this time"}
+                      {error ||
+                        claimStatus?.reason ||
+                        "Unable to claim at this time"}
                     </span>
                   </div>
                 </div>
@@ -441,9 +496,17 @@ export default function ClaimModal({
               {claimType === "crypto" && (
                 <button
                   onClick={handleClaim}
-                  disabled={isProcessing || !isAmountValid || claimAmount <= 0 || !claimStatus?.canClaim}
+                  disabled={
+                    isProcessing ||
+                    !isAmountValid ||
+                    claimAmount <= 0 ||
+                    !claimStatus?.canClaim
+                  }
                   className={`w-full py-4 rounded-xl font-medium transition-all flex items-center justify-center space-x-2 ${
-                    isProcessing || !isAmountValid || claimAmount <= 0 || !claimStatus?.canClaim
+                    isProcessing ||
+                    !isAmountValid ||
+                    claimAmount <= 0 ||
+                    !claimStatus?.canClaim
                       ? "bg-gray-600 text-white/50 cursor-not-allowed"
                       : "bg-gradient-to-r from-cyan-500 to-blue-600 text-white hover:shadow-lg hover:scale-105"
                   }`}
@@ -457,10 +520,9 @@ export default function ClaimModal({
                     <>
                       <Clock className="w-5 h-5" />
                       <span>
-                        {vestingInfo?.isVestingEnabled 
-                          ? "Vesting in Progress" 
-                          : "Cannot Claim"
-                        }
+                        {vestingInfo?.isVestingEnabled
+                          ? "Vesting in Progress"
+                          : "Cannot Claim"}
                       </span>
                     </>
                   ) : (
@@ -472,7 +534,6 @@ export default function ClaimModal({
                   )}
                 </button>
               )}
-
             </div>
           </div>
         )}
