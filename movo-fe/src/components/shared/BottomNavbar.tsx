@@ -29,7 +29,6 @@ const BottomNavbar = memo(() => {
     router.push("/dashboard");
   }, [router]);
 
-
   const handleCreateEscrowClick = useCallback(() => {
     router.push("/create-escrow");
   }, [router]);
@@ -79,9 +78,11 @@ const BottomNavbar = memo(() => {
         id: "history",
         label: "History",
         icon: History,
-        onClick: () => {}, // Disabled - no action
+        onClick: () => {
+          router.push("/history");
+        }, // Disabled - no action
         isActive: false,
-        disabled: true,
+        disabled: false,
       },
       {
         id: "profile",
@@ -185,8 +186,8 @@ const BottomNavbar = memo(() => {
                       isActive
                         ? "text-transparent opacity-30"
                         : isDisabled
-                        ? "text-gray-600 cursor-not-allowed opacity-50"
-                        : "text-gray-400 hover:text-white hover:bg-white/10 hover:scale-105"
+                          ? "text-gray-600 cursor-not-allowed opacity-50"
+                          : "text-gray-400 hover:text-white hover:bg-white/10 hover:scale-105"
                     }`}
                   >
                     <IconComponent className="w-5 h-5 mb-1" />

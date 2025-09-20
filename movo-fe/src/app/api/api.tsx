@@ -325,45 +325,6 @@ export const api = axios.create({
   withCredentials: true,
 });
 
-// Function to query tokenWithdrawnToFiat from Goldsky
-export const fetchTokenWithdrawnToFiat = async (receiver: string) => {
-  try {
-    const query = `
-      query FetchTokenWithdrawnToFiat($receiver: String!) {
-        tokenWithdrawnToFiat(receiver: $receiver) {
-          block_number
-          amount
-          contractId_
-          depositWallet
-          escrowId
-          id
-          receiver
-          timestamp_
-          transactionHash_
-        }
-      }
-    `;
-
-    const response = await axios.post(GOLDSKY_ESCROW_API_URL, {
-      query,
-      variables: { receiver },
-    });
-
-    if (response.data.errors) {
-      console.error("❌ GraphQL errors:", response.data.errors);
-      throw new Error(
-        `GraphQL errors: ${JSON.stringify(response.data.errors)}`,
-      );
-    }
-
-    console.log("✅ TokenWithdrawnToFiat data fetched:", response.data.data);
-    return response.data.data.tokenWithdrawnToFiat || [];
-  } catch (error) {
-    console.error("❌ Error fetching tokenWithdrawnToFiat:", error);
-    throw error;
-  }
-};
-
 // Function to trigger backend to fetch and save tokenWithdrawToFiat data
 export const saveTokenWithdrawToFiatToDatabase = async (receiver: string) => {
   try {
@@ -870,21 +831,6 @@ export const fetchComprehensiveReceiverEvents = async (
           transactionHash_
           contractId_
         }
-        tokenWithdrawnToFiats(
-          orderBy: timestamp_
-          orderDirection: desc
-          first: 1000
-        ) {
-          escrowId
-          recipient
-          amount
-          depositWallet
-          tokenAddress
-          block_number
-          timestamp_
-          transactionHash_
-          contractId_
-        }
       }
     `;
 
@@ -924,26 +870,6 @@ export const fetchComprehensiveReceiverEvents = async (
     // Process withdrawal events
     if (data.tokenWithdrawns) {
       data.tokenWithdrawns.forEach((event: any) => {
-        if (
-          event.recipient &&
-          event.recipient.toLowerCase() === receiverAddressLower
-        ) {
-          withdrawEvents.push({
-            escrowId: event.escrowId,
-            recipient: event.recipient,
-            amount: event.amount,
-            timestamp: new Date(parseInt(event.timestamp_) * 1000),
-            transactionHash: event.transactionHash_,
-            blockNumber: event.block_number,
-            depositWallet: event.depositWallet,
-            tokenType: determineTokenTypeFromContract(event.contractId_),
-          });
-        }
-      });
-    }
-
-    if (data.tokenWithdrawnToFiats) {
-      data.tokenWithdrawnToFiats.forEach((event: any) => {
         if (
           event.recipient &&
           event.recipient.toLowerCase() === receiverAddressLower
@@ -2983,51 +2909,73 @@ export const fetchSenderEvents = async (userAddress: string) => {
 };
 
 // Function to fetch receiver-specific events: WITHDRAW_FUNDS
-export const fetchReceiverEvents = async (userAddress: string) => {
+export const fetchReceiverEvents = async (
+  userAddress: string,
+  bypassCache: boolean = false,
+) => {
   try {
     const cacheKey = `receiver_events_${userAddress.toLowerCase()}`;
     const cachedData = getCachedData(cacheKey);
-    if (cachedData) {
+
+    if (cachedData && !bypassCache) {
+      console.log("📋 Using cached receiver events data");
       return cachedData;
     }
 
+    if (bypassCache) {
+      console.log("🔄 Bypassing cache for fresh receiver events data");
+    }
+
     console.log("🔍 Fetching receiver-specific events for:", userAddress);
+    console.log("🌐 API URLs:", {
+      GOLDSKY_ESCROW_API_URL,
+      GOLDSKY_ESCROW_IDRX_API_URL,
+    });
 
     const userAddressLower = userAddress.toLowerCase();
 
-    // Query for receiver-specific withdraw events from both USDC/USDT and IDRX contracts
+    // Query using correct field names from GraphQL schema introspection
+    // Using plural 'tokenWithdrawns' and only available fields (removed 'tokenAddress')
     const queries = [
       {
         url: GOLDSKY_ESCROW_API_URL,
         query: `
           query GetReceiverEvents($userAddress: String!) {
             tokenWithdrawns(
-              where: { recipient: $userAddress }
+              where: { receiver: $userAddress }
               orderBy: timestamp_
               orderDirection: desc
               first: 100
             ) {
+              id
               escrowId
-              recipient
+              receiver
               amount
               depositWallet
-              tokenAddress
               block_number
               timestamp_
               transactionHash_
               contractId_
             }
-            tokenWithdrawnToFiats(
-              where: { recipient: $userAddress }
+          }
+        `,
+        variables: { userAddress: userAddressLower },
+      },
+      {
+        url: GOLDSKY_ESCROW_IDRX_API_URL,
+        query: `
+          query GetReceiverEventsIDRX($userAddress: String!) {
+            tokenWithdrawns(
+              where: { receiver: $userAddress }
               orderBy: timestamp_
               orderDirection: desc
               first: 100
             ) {
+              id
               escrowId
-              recipient
+              receiver
               amount
               depositWallet
-              tokenAddress
               block_number
               timestamp_
               transactionHash_
@@ -3039,50 +2987,6 @@ export const fetchReceiverEvents = async (userAddress: string) => {
       },
     ];
 
-    // Add IDRX contract query if available
-    if (GOLDSKY_ESCROW_IDRX_API_URL) {
-      queries.push({
-        url: GOLDSKY_ESCROW_IDRX_API_URL,
-        query: `
-          query GetReceiverEventsIDRX($userAddress: String!) {
-            tokenWithdrawns(
-              where: { recipient: $userAddress }
-              orderBy: timestamp_
-              orderDirection: desc
-              first: 100
-            ) {
-              escrowId
-              recipient
-              amount
-              depositWallet
-              tokenAddress
-              block_number
-              timestamp_
-              transactionHash_
-              contractId_
-            }
-            tokenWithdrawnToFiats(
-              where: { recipient: $userAddress }
-              orderBy: timestamp_
-              orderDirection: desc
-              first: 100
-            ) {
-              escrowId
-              recipient
-              amount
-              depositWallet
-              tokenAddress
-              block_number
-              timestamp_
-              transactionHash_
-              contractId_
-            }
-          }
-        `,
-        variables: { userAddress: userAddressLower },
-      });
-    }
-
     const allEvents: any[] = [];
 
     // Execute queries for all contracts
@@ -3092,7 +2996,14 @@ export const fetchReceiverEvents = async (userAddress: string) => {
           console.warn("⚠️ Skipping query with undefined URL");
           continue;
         }
+
+        console.log("📡 Executing query to:", queryConfig.url);
+        console.log("🔍 Query variables:", queryConfig.variables);
+
         const response = await axios.post(queryConfig.url, queryConfig);
+
+        console.log("📥 Response status:", response.status);
+        console.log("📥 Response data:", response.data);
 
         if (response.data.errors) {
           console.error("❌ GraphQL errors:", response.data.errors);
@@ -3101,6 +3012,64 @@ export const fetchReceiverEvents = async (userAddress: string) => {
 
         const data = response.data.data;
 
+        // DEBUGGING: Try to inspect GraphQL schema to see available fields
+        try {
+          const schemaQuery = `
+            query IntrospectSchema {
+              __schema {
+                queryType {
+                  fields {
+                    name
+                    description
+                  }
+                }
+              }
+            }
+          `;
+
+          const schemaResponse = await axios.post(queryConfig.url, {
+            query: schemaQuery,
+          });
+
+          console.log(
+            "🔍 DEBUG - Available GraphQL fields:",
+            schemaResponse.data?.data?.__schema?.queryType?.fields?.map(
+              (f: any) => f.name,
+            ) || [],
+          );
+
+          // Also try a simple query to see what withdraw-related fields exist
+          const withdrawFieldsQuery = `
+            query DebugWithdrawFields {
+              __schema {
+                queryType {
+                  fields {
+                    name
+                  }
+                }
+              }
+            }
+          `;
+
+          const withdrawFieldsResponse = await axios.post(queryConfig.url, {
+            query: withdrawFieldsQuery,
+          });
+
+          const availableFields =
+            withdrawFieldsResponse.data?.data?.__schema?.queryType?.fields?.map(
+              (f: any) => f.name,
+            ) || [];
+          const withdrawFields = availableFields.filter(
+            (field: string) =>
+              field.toLowerCase().includes("withdraw") ||
+              field.toLowerCase().includes("token"),
+          );
+
+          console.log("🔍 DEBUG - Withdraw-related fields:", withdrawFields);
+        } catch (debugError) {
+          console.warn("⚠️ Schema introspection failed:", debugError);
+        }
+
         // Determine token type based on which API URL was used
         const tokenType =
           queryConfig.url === GOLDSKY_ESCROW_IDRX_API_URL ? "IDRX" : "USDC";
@@ -3108,26 +3077,71 @@ export const fetchReceiverEvents = async (userAddress: string) => {
           `🪙 Token type determined from API URL: ${tokenType} (URL: ${queryConfig.url})`,
         );
 
-        // Process token withdrawn events (crypto withdrawals)
+        console.log("📊 Raw GraphQL response data:", {
+          tokenWithdrawns: data.tokenWithdrawns?.length || 0,
+          tokenWithdraws: data.tokenWithdraws?.length || 0,
+          withdrawToCryptos: data.withdrawToCryptos?.length || 0,
+          allDataKeys: Object.keys(data),
+          sampleData: data.tokenWithdrawns?.[0] || null,
+        });
+
+        // Process token withdrawn events (crypto withdrawals) - primary event type
         if (data.tokenWithdrawns) {
+          console.log(
+            "✅ Found tokenWithdrawns events:",
+            data.tokenWithdrawns.length,
+          );
           data.tokenWithdrawns.forEach((event: any) => {
+            allEvents.push({
+              ...event,
+              // Normalize field names - use 'recipient' for consistency
+              recipient: event.receiver || event.recipient,
+              eventType: "WITHDRAW_FUNDS",
+              withdrawType: "CRYPTO",
+              tokenType: tokenType,
+              eventSource: "tokenWithdrawns",
+              // Add tokenAddress based on tokenType since it's not in the schema
+              tokenAddress:
+                tokenType === "IDRX"
+                  ? process.env.NEXT_PUBLIC_IDRX_ADDRESS ||
+                    "0x77fEa84656B5EF40BF33e3835A9921dAEAadb976"
+                  : process.env.NEXT_PUBLIC_USDC_ADDRESS ||
+                    "0xf9D5a610fe990bfCdF7dd9FD64bdfe89D6D1eb4c",
+            });
+          });
+        }
+
+        // Process alternative withdrawal event name
+        if (data.tokenWithdraws) {
+          console.log(
+            "✅ Found tokenWithdraws events:",
+            data.tokenWithdraws.length,
+          );
+          data.tokenWithdraws.forEach((event: any) => {
+            allEvents.push({
+              ...event,
+              recipient: event.receiver || event.recipient,
+              eventType: "WITHDRAW_FUNDS",
+              withdrawType: "CRYPTO",
+              tokenType: tokenType,
+              eventSource: "tokenWithdraws",
+            });
+          });
+        }
+
+        // Process withdrawToCrypto events specifically
+        if (data.withdrawToCryptos) {
+          console.log(
+            "✅ Found withdrawToCryptos events:",
+            data.withdrawToCryptos.length,
+          );
+          data.withdrawToCryptos.forEach((event: any) => {
             allEvents.push({
               ...event,
               eventType: "WITHDRAW_FUNDS",
               withdrawType: "CRYPTO",
               tokenType: tokenType,
-            });
-          });
-        }
-
-        // Process token withdrawn to fiat events
-        if (data.tokenWithdrawnToFiats) {
-          data.tokenWithdrawnToFiats.forEach((event: any) => {
-            allEvents.push({
-              ...event,
-              eventType: "WITHDRAW_FUNDS",
-              withdrawType: "FIAT",
-              tokenType: tokenType,
+              eventSource: "withdrawToCryptos",
             });
           });
         }
