@@ -50,6 +50,24 @@ export default function GroupDashboard({
   const [filterType, setFilterType] = useState<string>("all");
   const [isTopupModalOpen, setIsTopupModalOpen] = useState(false);
   const [selectedEscrowId, setSelectedEscrowId] = useState<string | null>(null);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+
+  // Debug: Log claimable escrows received
+  useEffect(() => {
+    if (viewMode === "claimable-sender") {
+      console.log("🔍 GroupDashboard: Received claimable escrows:", {
+        viewMode,
+        claimableEscrowsCount: claimableEscrows.length,
+        escrows: claimableEscrows.map((escrow) => ({
+          escrowId: escrow.escrowId,
+          tokenType: escrow.tokenType || "Unknown",
+          dataSource: escrow.dataSource || "Unknown",
+          availableBalance: escrow.availableBalance,
+          totalAmount: escrow.totalAmount,
+        })),
+      });
+    }
+  }, [viewMode, claimableEscrows]);
 
   // Function to refresh escrows data
   const refreshEscrows = async () => {
