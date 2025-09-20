@@ -2965,7 +2965,7 @@ export const fetchReceiverEvents = async (
         url: GOLDSKY_ESCROW_IDRX_API_URL,
         query: `
           query GetReceiverEventsIDRX($userAddress: String!) {
-            tokenWithdrawns(
+            idrxwithdrawns(
               where: { receiver: $userAddress }
               orderBy: timestamp_
               orderDirection: desc
@@ -3079,10 +3079,12 @@ export const fetchReceiverEvents = async (
 
         console.log("📊 Raw GraphQL response data:", {
           tokenWithdrawns: data.tokenWithdrawns?.length || 0,
+          idrxwithdrawns: data.idrxwithdrawns?.length || 0,
           tokenWithdraws: data.tokenWithdraws?.length || 0,
           withdrawToCryptos: data.withdrawToCryptos?.length || 0,
           allDataKeys: Object.keys(data),
-          sampleData: data.tokenWithdrawns?.[0] || null,
+          sampleData:
+            data.tokenWithdrawns?.[0] || data.idrxwithdrawns?.[0] || null,
         });
 
         // Process token withdrawn events (crypto withdrawals) - primary event type
@@ -3100,6 +3102,32 @@ export const fetchReceiverEvents = async (
               withdrawType: "CRYPTO",
               tokenType: tokenType,
               eventSource: "tokenWithdrawns",
+              // Add tokenAddress based on tokenType since it's not in the schema
+              tokenAddress:
+                tokenType === "IDRX"
+                  ? process.env.NEXT_PUBLIC_IDRX_ADDRESS ||
+                    "0x77fEa84656B5EF40BF33e3835A9921dAEAadb976"
+                  : process.env.NEXT_PUBLIC_USDC_ADDRESS ||
+                    "0xf9D5a610fe990bfCdF7dd9FD64bdfe89D6D1eb4c",
+            });
+          });
+        }
+
+        // Process IDRX withdrawn events (for IDRX API)
+        if (data.idrxwithdrawns) {
+          console.log(
+            "✅ Found idrxwithdrawns events:",
+            data.idrxwithdrawns.length,
+          );
+          data.idrxwithdrawns.forEach((event: any) => {
+            allEvents.push({
+              ...event,
+              // Normalize field names - use 'recipient' for consistency
+              recipient: event.receiver || event.recipient,
+              eventType: "WITHDRAW_FUNDS",
+              withdrawType: "CRYPTO",
+              tokenType: tokenType,
+              eventSource: "idrxwithdrawns",
               // Add tokenAddress based on tokenType since it's not in the schema
               tokenAddress:
                 tokenType === "IDRX"
