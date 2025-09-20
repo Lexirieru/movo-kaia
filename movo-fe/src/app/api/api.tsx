@@ -2105,12 +2105,166 @@ const fetchReceiverEscrowsSimple = async (receiverAddress: string) => {
           canClaim,
         };
       }),
-    ).then((results) =>
-      results.filter((escrow: any) => parseFloat(escrow.availableAmount) > 0),
     );
+
+    // For debugging: also create unfiltered version
+    const allTransformedEscrows = await Promise.all(
+      escrows.map(async (escrow: any, index: number) => {
+        console.log(`🔍 Processing combined escrow ${index} (unfiltered):`, {
+          escrowId: escrow.escrowId,
+          source: escrow.source,
+          receivers: escrow.receivers,
+          amounts: escrow.amounts,
+          tokenAddress: escrow.tokenAddress,
+          receiverAddress: receiverAddress.toLowerCase(),
+        });
+
+        // Parse receivers and amounts arrays
+        const receivers = escrow.receivers
+          ? escrow.receivers
+              .split(",")
+              .map((addr: string) => addr.trim().toLowerCase())
+          : [];
+        const amounts = escrow.amounts
+          ? escrow.amounts.split(",").map((amount: string) => amount.trim())
+          : [];
+
+        // Find the index of the current receiver
+        const receiverIndex = receivers.findIndex(
+          (addr: string) => addr === receiverAddress.toLowerCase(),
+        );
+
+        // Get the amount allocated to this specific receiver
+        const receiverAmount =
+          receiverIndex >= 0 && amounts[receiverIndex]
+            ? amounts[receiverIndex]
+            : "0";
+
+        // Convert timestamp to proper date
+        const createdDate = escrow.timestamp_
+          ? new Date(parseInt(escrow.timestamp_) * 1000)
+          : new Date();
+
+        // Determine token type from source API first (most reliable)
+        let tokenType: "USDC" | "USDT" | "IDRX" = "USDC";
+
+        if (escrow.source === "IDRX_API") {
+          tokenType = "IDRX";
+        } else if (escrow.tokenAddress) {
+          const detectedType = getTokenType(escrow.tokenAddress);
+          tokenType =
+            detectedType === "USDC" ||
+            detectedType === "USDT" ||
+            detectedType === "IDRX"
+              ? detectedType
+              : "USDC";
+        } else if (escrow.contractId_) {
+          tokenType = determineTokenTypeFromContract(escrow.contractId_);
+        } else {
+          // Default to USDC for USDC_API source
+          tokenType = "USDC";
+        }
+
+        // Get contract address based on token type
+        const contractAddress = getContractAddressByTokenType(tokenType);
+
+        // Read additional details from smart contract
+        const contractDetails = await getEscrowDetailsFromContract(
+          escrow.escrowId,
+          contractAddress,
+        );
+
+        // Calculate actual available amount for this receiver
+        // Receiver can only claim if availableBalance >= their allocated amount
+        const availableBalance = contractDetails?.availableBalance || "0";
+        const receiverAllocatedAmount = receiverAmount;
+
+        // Check if this receiver can claim: availableBalance should be >= receiverAllocatedAmount
+        const canClaim =
+          parseFloat(availableBalance) >= parseFloat(receiverAllocatedAmount);
+
+        // IMPORTANT: For "All Escrows" view, always show the allocated amount,
+        // but use availableAmount for claimable logic
+        const actualAvailableAmount = canClaim ? receiverAllocatedAmount : "0";
+
+        // For display purposes, always show allocated amount, but add status
+        const displayAmount = receiverAllocatedAmount;
+        const claimableAmount = actualAvailableAmount;
+
+        console.log(
+          `🔍 Receiver check for escrow ${escrow.escrowId} (unfiltered):`,
+          {
+            receiverAddress: receiverAddress.toLowerCase(),
+            receiverAllocatedAmount,
+            contractAvailableBalance: availableBalance,
+            canClaim,
+            actualAvailableAmount,
+            displayAmount,
+            claimableAmount,
+          },
+        );
+
+        return {
+          // Basic escrow info
+          id: `receiver-escrow-all-${index}`,
+          escrowId: escrow.escrowId,
+
+          // Source tracking
+          dataSource: escrow.source,
+
+          // Transaction data for receiver dashboard
+          receiverWalletAddress: receiverAddress,
+          senderWalletAddress: escrow.sender,
+          senderName: `${escrow.sender.slice(0, 6)}...${escrow.sender.slice(-4)}`,
+
+          // Amount data - Show allocated amount always, claimable amount separately
+          totalAmount: escrow.totalAmount || "0",
+          allocatedAmount: receiverAllocatedAmount, // Always show this
+          availableAmount: actualAvailableAmount, // Only non-zero if claimable
+          claimableAmount: claimableAmount, // For easier checking
+          displayAmount: displayAmount, // For UI display
+          originCurrency: tokenType,
+
+          // Token data
+          tokenAddress:
+            escrow.tokenAddress ||
+            mapContractIdToTokenAddress(escrow.contractId_ || ""),
+
+          // Transaction metadata
+          transactionHash: escrow.transactionHash_,
+          blockNumber: escrow.block_number,
+          contractId: escrow.contractId_,
+
+          // Dates
+          createdAt: createdDate,
+
+          // Status - more detailed statuses
+          status: canClaim ? "CLAIMABLE" : "PENDING_FUNDING",
+          canClaim: canClaim,
+
+          // Additional receiver data
+          receiverIndex,
+          allReceivers: receivers,
+          allAmounts: amounts,
+
+          // Additional contract data
+          depositedAmount: contractDetails?.totalDepositedAmount || "0",
+          withdrawnAmount: contractDetails?.totalWithdrawnAmount || "0",
+          availableBalance: availableBalance,
+          receiverCount: contractDetails?.receiverCount || "0",
+          activeReceiverCount: contractDetails?.activeReceiverCount || "0",
+          lastTopUpAt: contractDetails?.lastTopUpAt || "0",
+        };
+      }),
+    );
+
+    // Store both versions in cache with different keys
+    setCachedData(cacheKey, transformedEscrows); // Claimable only (existing behavior)
+    setCachedData(`${cacheKey}_all`, allTransformedEscrows); // All escrows (new)
 
     console.log("✅ Final combined and transformed receiver escrows:", {
       totalTransformed: transformedEscrows.length,
+      totalAllEscrows: allTransformedEscrows.length,
       sources: transformedEscrows.reduce((acc: any, escrow: any) => {
         acc[escrow.dataSource] = (acc[escrow.dataSource] || 0) + 1;
         return acc;
@@ -2119,6 +2273,10 @@ const fetchReceiverEscrowsSimple = async (receiverAddress: string) => {
         acc[escrow.originCurrency] = (acc[escrow.originCurrency] || 0) + 1;
         return acc;
       }, {}),
+      allEscrowsBreakdown: {
+        claimable: allTransformedEscrows.filter((e) => e.canClaim).length,
+        pending: allTransformedEscrows.filter((e) => !e.canClaim).length,
+      },
     });
 
     console.log("✅ Performance summary:", {
@@ -2139,6 +2297,44 @@ const fetchReceiverEscrowsSimple = async (receiverAddress: string) => {
       "❌ Error fetching combined simplified receiver escrows:",
       error,
     );
+    return [];
+  }
+};
+
+// New function to fetch ALL receiver escrows (including non-claimable ones)
+const fetchAllReceiverEscrows = async (receiverAddress: string) => {
+  try {
+    console.log(
+      "🚀 Fetching ALL receiver escrows (including non-claimable) for:",
+      receiverAddress,
+    );
+
+    // Try to get from cache first
+    const cacheKey = `receiver_simple_${receiverAddress.toLowerCase()}_all`;
+    const cachedData = getCachedData(cacheKey);
+    if (cachedData) {
+      console.log("✅ Returning cached ALL escrows data");
+      return cachedData;
+    }
+
+    // If not in cache, run the main function which now stores both versions
+    await fetchReceiverEscrowsSimple(receiverAddress);
+
+    // Now get the "all" version from cache
+    const allEscrowsData = getCachedData(cacheKey);
+    if (allEscrowsData) {
+      console.log("✅ Retrieved ALL escrows from cache after fetch:", {
+        totalEscrows: allEscrowsData.length,
+        claimableCount: allEscrowsData.filter((e: any) => e.canClaim).length,
+        pendingCount: allEscrowsData.filter((e: any) => !e.canClaim).length,
+      });
+      return allEscrowsData;
+    }
+
+    console.warn("⚠️ Failed to get ALL escrows data from cache");
+    return [];
+  } catch (error) {
+    console.error("❌ Error fetching ALL receiver escrows:", error);
     return [];
   }
 };
@@ -2587,6 +2783,78 @@ export const fetchReceiverDashboardData = async (
       availableWithdrawals: [],
       escrowEvents: [],
       totalAvailable: "0",
+    };
+  }
+};
+
+// New function to fetch ALL receiver dashboard data (including non-claimable escrows)
+export const fetchAllReceiverDashboardData = async (
+  walletAddress: string,
+): Promise<{
+  incomingTransactions: any[];
+  availableWithdrawals: any[];
+  allEscrows: any[];
+  escrowEvents: any[];
+  totalAvailable: string;
+  totalAllocated: string;
+}> => {
+  try {
+    console.log(
+      "📋 Fetching ALL receiver dashboard data (including non-claimable) for:",
+      walletAddress,
+    );
+
+    // Get ALL escrows (including non-claimable ones)
+    const allEscrows = await fetchAllReceiverEscrows(walletAddress);
+
+    // Separate claimable and non-claimable
+    const claimableEscrows = allEscrows.filter(
+      (escrow: any) => escrow.canClaim,
+    );
+    const pendingEscrows = allEscrows.filter((escrow: any) => !escrow.canClaim);
+
+    // Calculate totals
+    const totalAvailable = claimableEscrows
+      .reduce(
+        (sum: number, escrow: any) =>
+          sum + parseFloat(escrow.availableAmount || "0"),
+        0,
+      )
+      .toString();
+
+    const totalAllocated = allEscrows
+      .reduce(
+        (sum: number, escrow: any) =>
+          sum + parseFloat(escrow.allocatedAmount || "0"),
+        0,
+      )
+      .toString();
+
+    console.log("✅ ALL receiver dashboard data ready:", {
+      totalEscrows: allEscrows.length,
+      claimableEscrows: claimableEscrows.length,
+      pendingEscrows: pendingEscrows.length,
+      totalAvailable,
+      totalAllocated,
+    });
+
+    return {
+      incomingTransactions: allEscrows, // All escrows as incoming transactions
+      availableWithdrawals: claimableEscrows, // Only claimable ones
+      allEscrows: allEscrows, // All escrows including pending
+      escrowEvents: allEscrows,
+      totalAvailable: totalAvailable,
+      totalAllocated: totalAllocated,
+    };
+  } catch (error) {
+    console.error("❌ Error fetching ALL receiver dashboard data:", error);
+    return {
+      incomingTransactions: [],
+      availableWithdrawals: [],
+      allEscrows: [],
+      escrowEvents: [],
+      totalAvailable: "0",
+      totalAllocated: "0",
     };
   }
 };

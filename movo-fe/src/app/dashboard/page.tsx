@@ -9,6 +9,7 @@ import {
   loadAllWithdrawHistory,
   fetchEscrowsFromIndexer,
   fetchReceiverDashboardData,
+  fetchAllReceiverDashboardData,
 } from "../api/api";
 import { WithdrawHistory } from "@/types/historyTemplate";
 import { useAuth } from "@/lib/userContext";
@@ -81,9 +82,10 @@ function DynamicDashboard({
 
       try {
         // Fetch all data in parallel (no connection test needed)
+        // Use fetchAllReceiverDashboardData to get ALL escrows including non-claimable
         const [senderEscrowsData, receiverDataResult] = await Promise.all([
           fetchEscrowsFromIndexer(effectiveWalletAddress),
-          fetchReceiverDashboardData(effectiveWalletAddress),
+          fetchAllReceiverDashboardData(effectiveWalletAddress),
         ]);
 
         // Debug: Log sender escrows data with detailed token information
@@ -106,14 +108,15 @@ function DynamicDashboard({
         setReceiverData(receiverDataResult);
 
         // Combine all escrows for "all" filter
+        // Use allEscrows from receiver data to include ALL received escrows (claimable + pending)
         const combinedEscrows = [
           ...senderEscrowsData.map((escrow: any) => ({
             ...escrow,
             type: "created",
           })),
-          ...receiverDataResult.availableWithdrawals.map((escrow: any) => ({
+          ...receiverDataResult.allEscrows.map((escrow: any) => ({
             ...escrow,
-            type: "claimable",
+            type: escrow.canClaim ? "claimable" : "pending",
           })),
         ];
 
@@ -123,9 +126,19 @@ function DynamicDashboard({
             .length,
           claimableCount: combinedEscrows.filter((e) => e.type === "claimable")
             .length,
+          pendingCount: combinedEscrows.filter((e) => e.type === "pending")
+            .length,
+          receiverDataSummary: {
+            totalAllEscrows: receiverDataResult.allEscrows?.length || 0,
+            availableWithdrawals:
+              receiverDataResult.availableWithdrawals?.length || 0,
+            totalAllocated: receiverDataResult.totalAllocated || "0",
+            totalAvailable: receiverDataResult.totalAvailable || "0",
+          },
           claimableEscrows: combinedEscrows.filter(
             (e) => e.type === "claimable",
           ),
+          pendingEscrows: combinedEscrows.filter((e) => e.type === "pending"),
           allEscrows: combinedEscrows,
         });
 
@@ -231,6 +244,9 @@ function DynamicDashboard({
         console.log("🔍 Filtering claimable escrows:", {
           totalAllEscrows: allEscrows.length,
           claimableEscrows: claimableEscrows.length,
+          pendingEscrows: allEscrows.filter(
+            (escrow) => escrow.type === "pending",
+          ).length,
           claimableData: claimableEscrows,
         });
         return claimableEscrows;
@@ -548,7 +564,8 @@ function DynamicDashboard({
               <div className="bg-white/5 rounded-lg p-4">
                 <ReceiverDashboard
                   incomingTransactions={allEscrows.filter(
-                    (escrow) => escrow.type === "claimable",
+                    (escrow) =>
+                      escrow.type === "claimable" || escrow.type === "pending",
                   )}
                   isLoading={isCheckingData}
                 />

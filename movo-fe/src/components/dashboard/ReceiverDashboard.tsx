@@ -175,7 +175,8 @@ export default function ReceiverDashboard({
           console.log(`✅ Mapped transaction ${index}:`, mappedTransaction);
           return mappedTransaction;
         })
-        .filter((transaction) => parseFloat(transaction.availableAmount) > 0);
+        // Don't filter out non-claimable transactions - show all with different statuses
+        .filter(() => true);
 
       console.log("✅ Mapped transactions from props:", mappedTransactions);
       setIncomingTransactions(mappedTransactions);
@@ -265,7 +266,8 @@ export default function ReceiverDashboard({
             );
             return mappedTransaction;
           })
-          .filter((transaction) => parseFloat(transaction.availableAmount) > 0);
+          // Show all transactions, including non-claimable ones
+          .filter(() => true);
 
         console.log(
           "✅ Final mapped transactions from fetchReceiverDashboardData:",
@@ -392,9 +394,8 @@ export default function ReceiverDashboard({
                 tokenIcon: tokenIcon,
               };
             })
-            .filter(
-              (transaction) => parseFloat(transaction.availableAmount) > 0,
-            );
+            // Show all transactions regardless of availableAmount
+            .filter(() => true);
 
           setIncomingTransactions(mappedTransactions);
 
@@ -501,6 +502,12 @@ export default function ReceiverDashboard({
   );
 
   const handleSelectTransaction = (transactionIndex: number) => {
+    const transaction = filteredTransactions[transactionIndex];
+    const status = getTransactionStatus(transaction);
+
+    // Only allow selection of claimable transactions
+    if (!status.canClaim) return;
+
     const transactionKey = `${transactionIndex}`;
     setSelectedTransactions((prev) =>
       prev.includes(transactionKey)
@@ -510,9 +517,15 @@ export default function ReceiverDashboard({
   };
 
   const handleSelectAll = () => {
-    const selectableTransactions = filteredTransactions.map((_, index) =>
-      index.toString(),
-    );
+    // Only select claimable transactions
+    const selectableTransactions = filteredTransactions
+      .map((transaction, index) => ({
+        transaction,
+        index,
+        canClaim: getTransactionStatus(transaction).canClaim,
+      }))
+      .filter(({ canClaim }) => canClaim)
+      .map(({ index }) => index.toString());
 
     if (
       selectedTransactions.length === selectableTransactions.length &&
@@ -589,6 +602,55 @@ export default function ReceiverDashboard({
     return <SortAsc className="w-4 h-4 text-white/60" />;
   };
 
+  // Helper function to determine transaction status and display
+  const getTransactionStatus = (transaction: any) => {
+    const availableAmount = parseFloat(transaction.availableAmount || "0");
+    const allocatedAmount = parseFloat(
+      transaction.allocatedAmount || transaction.totalAmount || "0",
+    );
+
+    // If we have props data with type/status info, use that
+    if ((transaction as any).type) {
+      const type = (transaction as any).type;
+      if (type === "claimable") {
+        return {
+          text: "Claimable",
+          color: "text-green-400",
+          bgColor: "bg-green-500/20",
+          icon: <DollarSign className="w-4 h-4 text-green-400" />,
+          canClaim: true,
+        };
+      } else if (type === "pending") {
+        return {
+          text: "Pending Funding",
+          color: "text-orange-400",
+          bgColor: "bg-orange-500/20",
+          icon: <Clock className="w-4 h-4 text-orange-400" />,
+          canClaim: false,
+        };
+      }
+    }
+
+    // Fallback: check if available amount > 0
+    if (availableAmount > 0) {
+      return {
+        text: "Claimable",
+        color: "text-green-400",
+        bgColor: "bg-green-500/20",
+        icon: <DollarSign className="w-4 h-4 text-green-400" />,
+        canClaim: true,
+      };
+    } else {
+      return {
+        text: "Pending Funding",
+        color: "text-orange-400",
+        bgColor: "bg-orange-500/20",
+        icon: <Clock className="w-4 h-4 text-orange-400" />,
+        canClaim: false,
+      };
+    }
+  };
+
   // Debug loading state (like GroupDashboard pattern)
   console.log("🔍 ReceiverDashboard loading state:", {
     loading,
@@ -639,10 +701,11 @@ export default function ReceiverDashboard({
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
           <div>
             <h2 className="text-3xl font-bold text-white mb-2">
-              Pending Escrows
+              Received Escrows
             </h2>
             <p className="text-white/60">
-              These escrows have been created but are not yet funded.{" "}
+              All escrows sent to you. Claimable ones are ready to withdraw,
+              pending ones need more funding.
             </p>
             <p className="text-cyan-400 text-sm mt-1">
               Connected: {effectiveWalletAddress?.slice(0, 6)}...
@@ -768,7 +831,12 @@ export default function ReceiverDashboard({
                       type="checkbox"
                       checked={selectedTransactions.includes(index.toString())}
                       onChange={() => handleSelectTransaction(index)}
-                      className="w-4 h-4 text-green-600 bg-white/10 border-white/20 rounded focus:ring-green-500 focus:ring-2"
+                      disabled={!getTransactionStatus(transaction).canClaim}
+                      className={`w-4 h-4 text-green-600 border-white/20 rounded focus:ring-green-500 focus:ring-2 ${
+                        getTransactionStatus(transaction).canClaim
+                          ? "bg-white/10"
+                          : "bg-gray-500/20 cursor-not-allowed"
+                      }`}
                     />
                     <div className="w-8 h-8 rounded-full flex items-center justify-center overflow-hidden">
                       {transaction.tokenIcon ? (
@@ -801,9 +869,16 @@ export default function ReceiverDashboard({
                   </div>
 
                   <div className="flex items-center space-x-2">
-                    <span className="bg-yellow-500/20 text-yellow-400 px-2 py-1 rounded-lg text-xs">
-                      Available
-                    </span>
+                    {(() => {
+                      const status = getTransactionStatus(transaction);
+                      return (
+                        <span
+                          className={`${status.bgColor} ${status.color} px-2 py-1 rounded-lg text-xs`}
+                        >
+                          {status.text}
+                        </span>
+                      );
+                    })()}
                   </div>
                 </div>
 
@@ -831,15 +906,29 @@ export default function ReceiverDashboard({
 
                 <button
                   onClick={() => {
-                    setSelectedTransactions([index.toString()]);
-                    setShowClaimModal(true);
+                    const status = getTransactionStatus(transaction);
+                    if (status.canClaim) {
+                      setSelectedTransactions([index.toString()]);
+                      setShowClaimModal(true);
+                    }
                   }}
-                  className="w-full mt-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white py-2 rounded-lg text-sm font-medium hover:shadow-lg transition-all"
+                  disabled={!getTransactionStatus(transaction).canClaim}
+                  className={`w-full mt-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                    getTransactionStatus(transaction).canClaim
+                      ? "bg-gradient-to-r from-green-500 to-emerald-600 text-white hover:shadow-lg"
+                      : "bg-gray-500/20 text-gray-400 cursor-not-allowed"
+                  }`}
                 >
-                  Claim $
-                  {formatTokenAmount(
-                    transaction.availableAmount,
-                    transaction.originCurrency,
+                  {getTransactionStatus(transaction).canClaim ? (
+                    <>
+                      Claim $
+                      {formatTokenAmount(
+                        transaction.availableAmount,
+                        transaction.originCurrency,
+                      )}
+                    </>
+                  ) : (
+                    "Waiting for Funding"
                   )}
                 </button>
               </div>
@@ -899,7 +988,12 @@ export default function ReceiverDashboard({
                             index.toString(),
                           )}
                           onChange={() => handleSelectTransaction(index)}
-                          className="w-4 h-4 text-green-600 bg-white/10 border-white/20 rounded focus:ring-green-500 focus:ring-2"
+                          disabled={!getTransactionStatus(transaction).canClaim}
+                          className={`w-4 h-4 text-green-600 border-white/20 rounded focus:ring-green-500 focus:ring-2 ${
+                            getTransactionStatus(transaction).canClaim
+                              ? "bg-white/10"
+                              : "bg-gray-500/20 cursor-not-allowed"
+                          }`}
                         />
                       </td>
                       <td className="p-4">
@@ -945,21 +1039,38 @@ export default function ReceiverDashboard({
                       </td>
                       <td className="p-4">
                         <div className="flex items-center space-x-2">
-                          <Clock className="w-4 h-4 text-yellow-400" />
-                          <span className="text-yellow-400 text-sm">
-                            Available
-                          </span>
+                          {(() => {
+                            const status = getTransactionStatus(transaction);
+                            return (
+                              <>
+                                {status.icon}
+                                <span className={`text-sm ${status.color}`}>
+                                  {status.text}
+                                </span>
+                              </>
+                            );
+                          })()}
                         </div>
                       </td>
                       <td className="p-4">
                         <button
                           onClick={() => {
-                            setSelectedTransactions([index.toString()]);
-                            setShowClaimModal(true);
+                            const status = getTransactionStatus(transaction);
+                            if (status.canClaim) {
+                              setSelectedTransactions([index.toString()]);
+                              setShowClaimModal(true);
+                            }
                           }}
-                          className="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:shadow-lg transition-all hover:scale-105"
+                          disabled={!getTransactionStatus(transaction).canClaim}
+                          className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                            getTransactionStatus(transaction).canClaim
+                              ? "bg-gradient-to-r from-green-500 to-emerald-600 text-white hover:shadow-lg hover:scale-105"
+                              : "bg-gray-500/20 text-gray-400 cursor-not-allowed"
+                          }`}
                         >
-                          Claim
+                          {getTransactionStatus(transaction).canClaim
+                            ? "Claim"
+                            : "Pending"}
                         </button>
                       </td>
                     </tr>
