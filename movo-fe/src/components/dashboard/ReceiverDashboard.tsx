@@ -639,10 +639,10 @@ export default function ReceiverDashboard({
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
           <div>
             <h2 className="text-3xl font-bold text-white mb-2">
-              Available Withdrawals
+              Pending Escrows
             </h2>
             <p className="text-white/60">
-              Manage your incoming transactions and claim available amounts.
+              These escrows have been created but are not yet funded.{" "}
             </p>
             <p className="text-cyan-400 text-sm mt-1">
               Connected: {effectiveWalletAddress?.slice(0, 6)}...

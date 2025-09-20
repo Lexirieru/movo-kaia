@@ -4,6 +4,7 @@ import { useEffect, useState, Suspense } from "react";
 import ReceiverDashboard from "@/components/dashboard/ReceiverDashboard";
 import DashboardWrapper from "@/components/dashboard/DashboardWrapper";
 import WalletWarning from "@/components/dashboard/WalletWarning";
+import ClaimModal from "@/components/dashboard/ClaimModal";
 import {
   loadAllWithdrawHistory,
   fetchEscrowsFromIndexer,
@@ -36,6 +37,9 @@ function DynamicDashboard({
   const [senderEscrows, setSenderEscrows] = useState<any[]>([]);
   const [receiverData, setReceiverData] = useState<any>(null);
   const [allEscrows, setAllEscrows] = useState<any[]>([]);
+  const [isClaimModalOpen, setIsClaimModalOpen] = useState(false);
+  const [selectedEscrowForClaim, setSelectedEscrowForClaim] =
+    useState<any>(null);
 
   // Helper function to format token amount with proper decimals
   const formatTokenAmountWithDecimals = (amount: string, tokenType: string) => {
@@ -401,8 +405,8 @@ function DynamicDashboard({
                               <button
                                 className="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:shadow-lg transition-all hover:scale-105"
                                 onClick={() => {
-                                  // Handle claim action here
-                                  console.log("Claiming escrow:", escrow);
+                                  setSelectedEscrowForClaim(escrow);
+                                  setIsClaimModalOpen(true);
                                 }}
                               >
                                 Claim Now
@@ -584,6 +588,16 @@ function DynamicDashboard({
           <div>Filtered Results: {filteredEscrows.length}</div>
         </div>
       )}
+
+      {/* Claim Modal */}
+      <ClaimModal
+        isOpen={isClaimModalOpen}
+        onClose={() => {
+          setIsClaimModalOpen(false);
+          setSelectedEscrowForClaim(null);
+        }}
+        escrow={selectedEscrowForClaim}
+      />
     </div>
   );
 }
