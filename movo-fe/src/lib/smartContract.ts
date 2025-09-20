@@ -14,6 +14,7 @@ import {
   getEscrowAddress,
   getTokenAddress,
   getTokenDecimals,
+  TokenTypeExtended,
 } from "./contractConfig";
 
 // Import saveEscrowEventWithContext function
@@ -40,7 +41,7 @@ const saveEscrowEventWithContext = async (
   });
 };
 
-export type TokenType = "USDC" | "USDT" | "IDRX_KAIA" | "IDRX_BASE";
+export type TokenType = TokenTypeExtended;
 
 // Define Base Sepolia chain with correct Chain ID
 export const baseSepolia = defineChain({
@@ -709,6 +710,7 @@ export const createEscrowOnchain = async (
       );
     }
 
+    // Use the TokenTypeExtended that matches our new system
     const tokenAddress = validateAddress(getTokenAddress(tokenType));
 
     // Log token address for debugging

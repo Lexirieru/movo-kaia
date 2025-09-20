@@ -173,18 +173,20 @@ export default function CreateStreamModal({
     ? "Adding Receiver..."
     : "Creating Escrow...";
 
-  // Map our token types to smart contract expected types
+  // Map our token types to smart contract expected types (using new resolution system)
   const mapToSmartContractToken = (
     token: "USDC" | "USDT" | "IDRX_BASE" | "IDRX_KAIA",
-  ): "USDC" | "USDT" | "IDRX" => {
+  ): "USDC" | "USDT" | "IDRX_BASE" | "IDRX_KAIA" => {
+    // Langsung return token yang sama karena smart contract sudah support extended types
     switch (token) {
       case "USDC":
         return "USDC";
       case "USDT":
         return "USDT";
       case "IDRX_BASE":
+        return "IDRX_BASE";
       case "IDRX_KAIA":
-        return "IDRX";
+        return "IDRX_KAIA";
       default:
         return "USDC";
     }
