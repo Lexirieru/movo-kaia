@@ -97,7 +97,17 @@ interface EscrowListProps {
 }
 
 const formatDate = (timestamp: string) => {
-  const date = new Date(parseInt(timestamp) * 1000);
+  // Handle both Unix timestamp (seconds) and ISO string formats
+  let date: Date;
+  
+  if (timestamp.includes('T') || timestamp.includes('Z')) {
+    // It's an ISO string
+    date = new Date(timestamp);
+  } else {
+    // It's a Unix timestamp in seconds
+    date = new Date(parseInt(timestamp) * 1000);
+  }
+  
   return date.toLocaleDateString("en-US", {
     year: "numeric",
     month: "short",
@@ -499,7 +509,17 @@ export default function EscrowList({
 
   // Helper function to format timestamp
   const formatTimestamp = (timestamp: string) => {
-    const date = new Date(parseInt(timestamp) * 1000);
+    // Handle both Unix timestamp (seconds) and ISO string formats
+    let date: Date;
+    
+    if (timestamp.includes('T') || timestamp.includes('Z')) {
+      // It's an ISO string
+      date = new Date(timestamp);
+    } else {
+      // It's a Unix timestamp in seconds
+      date = new Date(parseInt(timestamp) * 1000);
+    }
+    
     return date.toLocaleString();
   };
 
