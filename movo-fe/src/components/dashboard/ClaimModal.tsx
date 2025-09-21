@@ -42,6 +42,30 @@ export default function ClaimModal({
 
   if (!isOpen) return null;
 
+  // Check if this escrow has vesting
+  const hasVesting = escrow?.vestingInfo && escrow?.vestingStatus;
+  const vestingStatus = escrow?.vestingStatus;
+
+  // Get available amount based on vesting or regular escrow
+  const getAvailableAmount = () => {
+    if (hasVesting && vestingStatus) {
+      // For vesting escrows, use the vested amount available to withdraw
+      return vestingStatus.availableToWithdraw;
+    }
+    // For regular escrows, use the standard available amount
+    return escrow.availableAmount || "0";
+  };
+
+  // Get raw amount for smart contract calls
+  const getAvailableRawAmount = () => {
+    if (hasVesting && escrow.vestingInfo) {
+      // Use the raw BigInt value from vesting info
+      return escrow.vestingInfo.receiverVestingInfo.availableToClaim.toString();
+    }
+    // For regular escrows, use the standard available amount
+    return escrow.availableAmount || "0";
+  };
+
   const formatTokenAmount = (amount: string, tokenType: string) => {
     const amountNumber = parseFloat(amount);
     if (isNaN(amountNumber)) return "0.00";
@@ -62,10 +86,15 @@ export default function ClaimModal({
     return formattedAmount.toFixed(2);
   };
 
-  const availableAmount = formatTokenAmount(
-    escrow.availableAmount || "0",
-    escrow.originCurrency || "IDRX",
-  );
+  // Use vesting amount if available, otherwise use regular available amount
+  const displayAvailableAmount = hasVesting
+    ? vestingStatus.availableToWithdraw
+    : formatTokenAmount(
+        escrow.availableAmount || "0",
+        escrow.originCurrency || "IDRX",
+      );
+
+  const availableAmount = displayAvailableAmount;
 
   const handleClaim = async () => {
     if (!walletClient) {
@@ -109,8 +138,18 @@ export default function ClaimModal({
       // Handle different possible formats of availableAmount
       let rawAmount;
       if (isClaimingAll) {
-        // availableAmount should already be in wei format from the API
-        rawAmount = escrow.availableAmount.toString();
+        // For vesting escrows, use the vested amount available to claim
+        if (hasVesting && escrow.vestingInfo) {
+          rawAmount = getAvailableRawAmount();
+          console.log("🔄 Using vesting available amount:", {
+            vestedAvailable: rawAmount,
+            escrowVestingInfo: escrow.vestingInfo.receiverVestingInfo,
+            note: "Using vested amount available to claim",
+          });
+        } else {
+          // availableAmount should already be in wei format from the API
+          rawAmount = escrow.availableAmount.toString();
+        }
 
         console.log("🔍 Amount format detection:", {
           originalAmount: escrow.availableAmount,
@@ -133,11 +172,25 @@ export default function ClaimModal({
         // User sees formatted amount (e.g., "30000.00" IDRX), but we need wei format
         rawAmount = (userAmount * Math.pow(10, decimals)).toString();
 
+        // For vesting escrows, validate against vested available amount
+        if (hasVesting && escrow.vestingInfo) {
+          const maxVestedAmount = parseFloat(vestingStatus.availableToWithdraw);
+          if (userAmount > maxVestedAmount) {
+            throw new Error(
+              `Amount exceeds vested available: ${maxVestedAmount} ${escrow.originCurrency}`,
+            );
+          }
+        }
+
         console.log("🔄 Partial amount conversion:", {
           userInputAmount: partialAmount,
           userAmount,
           decimals,
           convertedRawAmount: rawAmount,
+          isVesting: hasVesting,
+          maxVestedAmount: hasVesting
+            ? vestingStatus.availableToWithdraw
+            : "N/A",
           explanation: `User input ${userAmount} * 10^${decimals} = ${rawAmount} wei`,
         });
       }
@@ -350,10 +403,19 @@ export default function ClaimModal({
 
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div>
-                  <span className="text-white/60">Available:</span>
-                  <div className="text-white font-medium">
+                  <span className="text-white/60">
+                    {hasVesting ? "Vested Available:" : "Available:"}
+                  </span>
+                  <div
+                    className={`font-medium ${hasVesting ? "text-orange-400" : "text-white"}`}
+                  >
                     {availableAmount} {escrow.originCurrency}
                   </div>
+                  {hasVesting && (
+                    <div className="text-xs text-orange-400/80 mt-1">
+                      From vesting schedule
+                    </div>
+                  )}
                 </div>
                 <div>
                   <span className="text-white/60">Total Allocated:</span>
@@ -364,13 +426,61 @@ export default function ClaimModal({
                     )}{" "}
                     {escrow.originCurrency}
                   </div>
+                  {hasVesting && (
+                    <div className="text-xs text-white/60 mt-1">
+                      (Vesting in progress)
+                    </div>
+                  )}
                 </div>
               </div>
+
+              {/* Vesting Progress Information */}
+              {hasVesting && vestingStatus && (
+                <div className="mt-4 p-3 bg-orange-500/10 border border-orange-500/20 rounded-lg">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-orange-400 font-medium text-sm flex items-center">
+                      🕒 Vesting Progress
+                    </span>
+                    <span className="text-orange-400 text-sm">
+                      {vestingStatus.progressPercentage.toFixed(1)}%
+                    </span>
+                  </div>
+
+                  {/* Progress Bar */}
+                  <div className="w-full bg-white/10 rounded-full h-2 mb-2">
+                    <div
+                      className="bg-gradient-to-r from-orange-500 to-amber-500 h-2 rounded-full transition-all duration-300"
+                      style={{
+                        width: `${Math.min(100, Math.max(0, vestingStatus.progressPercentage))}%`,
+                      }}
+                    ></div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4 text-xs">
+                    <div>
+                      <span className="text-white/60">Total Vested:</span>
+                      <div className="text-orange-400">
+                        {vestingStatus.totalVested} {vestingStatus.tokenSymbol}
+                      </div>
+                    </div>
+                    <div>
+                      <span className="text-white/60">Remaining:</span>
+                      <div className="text-white">
+                        {vestingStatus.remainingDays > 0
+                          ? `${vestingStatus.remainingDays} days`
+                          : "Complete"}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Claim Options */}
             <div className="mb-6 space-y-4">
-              <h4 className="text-white font-medium">Claim Amount</h4>
+              <h4 className="text-white font-medium">
+                {hasVesting ? "Claim Vested Amount" : "Claim Amount"}
+              </h4>
 
               {/* Claim All Option */}
               <label className="flex items-center space-x-3 cursor-pointer">
@@ -381,9 +491,15 @@ export default function ClaimModal({
                   className="w-4 h-4 text-cyan-400 bg-gray-700 border-gray-600 focus:ring-cyan-400 focus:ring-2"
                 />
                 <span className="text-white">
-                  Claim all available ({availableAmount} {escrow.originCurrency}
-                  )
+                  {hasVesting
+                    ? `Claim all vested (${availableAmount} ${escrow.originCurrency})`
+                    : `Claim all available (${availableAmount} ${escrow.originCurrency})`}
                 </span>
+                {hasVesting && (
+                  <span className="text-orange-400 text-sm ml-2">
+                    • From vesting
+                  </span>
+                )}
               </label>
 
               {/* Partial Claim Option */}
@@ -392,9 +508,14 @@ export default function ClaimModal({
                   type="radio"
                   checked={!isClaimingAll}
                   onChange={() => setIsClaimingAll(false)}
-                  className="w-4 h-4 text-cyan-400 bg-gray-700 border-gray-600 focus:ring-cyan-400 focus:ring-2"
+                  disabled={hasVesting && parseFloat(availableAmount) === 0}
+                  className="w-4 h-4 text-cyan-400 bg-gray-700 border-gray-600 focus:ring-cyan-400 focus:ring-2 disabled:opacity-50"
                 />
-                <span className="text-white">Claim partial amount</span>
+                <span className="text-white">
+                  {hasVesting
+                    ? "Claim partial vested amount"
+                    : "Claim partial amount"}
+                </span>
               </label>
 
               {/* Partial Amount Input */}
@@ -416,8 +537,15 @@ export default function ClaimModal({
                     </span>
                   </div>
                   <p className="text-white/60 text-xs">
-                    Maximum: {availableAmount} {escrow.originCurrency}
+                    {hasVesting
+                      ? `Maximum vested: ${availableAmount} ${escrow.originCurrency}`
+                      : `Maximum: ${availableAmount} ${escrow.originCurrency}`}
                   </p>
+                  {hasVesting && (
+                    <p className="text-orange-400/80 text-xs mt-1">
+                      ⚠️ You can only claim vested amounts
+                    </p>
+                  )}
                 </div>
               )}
             </div>
@@ -433,7 +561,11 @@ export default function ClaimModal({
               </button>
               <button
                 onClick={handleClaim}
-                disabled={isProcessing || !validatePartialAmount()}
+                disabled={
+                  isProcessing ||
+                  !validatePartialAmount() ||
+                  (hasVesting && parseFloat(availableAmount) === 0)
+                }
                 className="flex-1 px-4 py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
               >
                 {isProcessing ? (
@@ -443,13 +575,32 @@ export default function ClaimModal({
                   </>
                 ) : (
                   <span>
-                    Claim {isClaimingAll ? "All" : partialAmount}{" "}
-                    {escrow.originCurrency}
+                    {hasVesting
+                      ? `Claim ${isClaimingAll ? "Vested" : partialAmount} ${escrow.originCurrency}`
+                      : `Claim ${isClaimingAll ? "All" : partialAmount} ${escrow.originCurrency}`}
                   </span>
                 )}
               </button>
             </div>
           </>
+        )}
+
+        {/* No Vested Amount Warning */}
+        {hasVesting && parseFloat(availableAmount) === 0 && (
+          <div className="mt-6 p-3 bg-orange-500/10 border border-orange-500/20 rounded-lg">
+            <div className="flex items-start space-x-2">
+              <AlertCircle className="w-4 h-4 text-orange-400 mt-0.5 flex-shrink-0" />
+              <div className="text-orange-300 text-xs">
+                <p className="mb-1">
+                  <strong>No Vested Amount Available</strong>
+                </p>
+                <p>
+                  No tokens have vested yet. Check back when more time has
+                  passed in the vesting schedule.
+                </p>
+              </div>
+            </div>
+          </div>
         )}
 
         {/* Additional Info */}
@@ -458,10 +609,18 @@ export default function ClaimModal({
             <AlertCircle className="w-4 h-4 text-blue-400 mt-0.5 flex-shrink-0" />
             <div className="text-blue-300 text-xs">
               <p className="mb-1">
-                <strong>Note:</strong> This action will transfer tokens directly
-                to your connected wallet.
+                <strong>Note:</strong>
+                {hasVesting
+                  ? " This action will transfer vested tokens directly to your connected wallet."
+                  : " This action will transfer tokens directly to your connected wallet."}
               </p>
               <p>Make sure you have enough ETH for gas fees.</p>
+              {hasVesting && (
+                <p className="mt-1 text-orange-300">
+                  <strong>Vesting:</strong> You can only claim tokens that have
+                  already vested according to the schedule.
+                </p>
+              )}
             </div>
           </div>
         </div>

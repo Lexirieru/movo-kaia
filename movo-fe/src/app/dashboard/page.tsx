@@ -608,13 +608,20 @@ function DynamicDashboard({
                                 <button
                                   className="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:shadow-lg transition-all hover:scale-105"
                                   onClick={() => {
-                                    setSelectedEscrowForClaim(escrow);
+                                    // Include vesting information in the escrow data
+                                    const escrowWithVesting = {
+                                      ...escrow,
+                                      vestingInfo: vestingInfo,
+                                      vestingStatus: vestingStatus,
+                                    };
+                                    setSelectedEscrowForClaim(
+                                      escrowWithVesting,
+                                    );
                                     setIsClaimModalOpen(true);
                                   }}
                                 >
                                   {vestingStatus ? "Claim Vested" : "Claim Now"}
-                                </button>
-
+                                </button>{" "}
                                 {/* Vesting Amount Info */}
                                 {vestingStatus && (
                                   <div className="text-xs text-orange-400 mt-1">
@@ -835,8 +842,6 @@ function DynamicDashboard({
                       escrow.type === "claimable" || escrow.type === "pending",
                   )}
                   isLoading={isCheckingData || isLoadingVesting}
-                  vestingInfoMap={vestingInfoMap}
-                  formatVestingStatus={formatVestingStatus}
                 />
               </div>
             </div>
