@@ -660,14 +660,14 @@ export const createEscrowOnchain = async (
       });
       if (!contractCode || contractCode === "0x") {
         throw new Error(
-          `No contract found at address ${contract.address}. Please check if the contract is deployed on Base Sepolia.`,
+          `No contract found at address ${contract.address}. Please check if the contract is deployed on Kaia Mainnet.`,
         );
       }
       console.log("✅ Contract code found at address:", contract.address);
     } catch (error) {
       console.error("Error checking contract code:", error);
       throw new Error(
-        `Contract not found at address ${contract.address}. Please check if the contract is deployed on Base Sepolia.`,
+        `Contract not found at address ${contract.address}. Please check if the contract is deployed on Kaia Mainnet.`,
       );
     }
 
@@ -688,7 +688,7 @@ export const createEscrowOnchain = async (
       });
       if (!tokenCode || tokenCode === "0x") {
         throw new Error(
-          `Token contract not found at address ${tokenAddress}. Please check if the ${tokenType} token is deployed on Base Sepolia.`,
+          `Token contract not found at address ${tokenAddress}. Please check if the ${tokenType} token is deployed on Kaia Mainnet.`,
         );
       }
       console.log(
@@ -703,8 +703,8 @@ export const createEscrowOnchain = async (
     }
 
     // Calculate vesting parameters
-    const vestingStartTime = escrowData.vestingEnabled
-      ? BigInt(Math.floor(Date.now() / 1000)) // Current timestamp
+    const vestingStartTime = escrowData.vestingEnabled && escrowData.vestingDuration
+      ? BigInt(Math.floor(Date.now() / 1000)) // Current timestamp only if vesting is enabled
       : BigInt(0);
     const vestingDuration =
       escrowData.vestingEnabled && escrowData.vestingDuration
@@ -1452,14 +1452,16 @@ export const isEscrowClosed = async (
 
     } catch (detailsError) {
       console.error("❌ Failed to get escrow details:", detailsError);
-      // If we can't read details, assume it's closed
-      return true;
+      // If we can't read details due to RPC issues, assume it's active to avoid filtering out valid escrows
+      console.log("⚠️ RPC error detected, assuming escrow is active to prevent false filtering");
+      return false; // Assume active when RPC fails
     }
 
   } catch (error) {
     console.error("❌ Error checking escrow status:", error);
-    // If there's an error, assume it's closed to be safe
-    return true;
+    // If there's an error, assume it's active to avoid filtering out valid escrows
+    console.log("⚠️ General error detected, assuming escrow is active to prevent false filtering");
+    return false; // Assume active when there's an error
   }
 };
 

@@ -84,26 +84,25 @@ const AVAILABLE_TOKENS = [
   },
   {
     symbol: "USDC",
-    name: "USD Coin (Base)",
-    icon: "/USDC-Base.png",
-    description: "USDC on Base",
+    name: "USD Coin (Kaia)",
+    icon: "/USDC-Kaia.png",
+    description: "USDC on Kaia",
     escrowType: "Escrow",
-    available: false,
-  },
-  
-  {
-    symbol: "IDRX_BASE",
-    name: "IDRX Token (Base)",
-    icon: "/IDRX-Base.png",
-    description: "IDRX on Base",
-    escrowType: "EscrowIDRX",
-    available: false,
+    available: true,
   },
   {
     symbol: "IDRX_KAIA",
     name: "IDRX Token (Kaia)",
     icon: "/IDRX-Kaia.png",
     description: "IDRX on Kaia",
+    escrowType: "EscrowIDRX",
+    available: true,
+  },
+  {
+    symbol: "IDRX_BASE",
+    name: "IDRX Token (Base)",
+    icon: "/IDRX-Base.png",
+    description: "IDRX on Base",
     escrowType: "EscrowIDRX",
     available: false,
   },
@@ -182,17 +181,17 @@ export default function CreateStreamModal({
   // Map our token types to smart contract expected types (using new resolution system)
   const mapToSmartContractToken = (
     token: "USDC" | "USDT" | "IDRX_BASE" | "IDRX_KAIA",
-  ): "USDC" | "USDT" | "IDRX_BASE" | "IDRX_KAIA" => {
-    // Langsung return token yang sama karena smart contract sudah support extended types
+  ): "USDC" | "USDT" | "IDRX" => {
+    // Map to smart contract expected types for Kaia mainnet
     switch (token) {
       case "USDC":
         return "USDC";
       case "USDT":
         return "USDT";
-      case "IDRX_BASE":
-        return "IDRX_BASE";
       case "IDRX_KAIA":
-        return "IDRX_KAIA";
+        return "IDRX"; // Map IDRX_KAIA to IDRX for smart contract
+      case "IDRX_BASE":
+        return "IDRX"; // Map IDRX_BASE to IDRX for smart contract
       default:
         return "USDC";
     }

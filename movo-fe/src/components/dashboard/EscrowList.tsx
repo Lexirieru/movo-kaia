@@ -36,6 +36,30 @@ import {
 import { getTokenAddress } from "@/lib/contractConfig";
 import { useWallet } from "@/lib/walletContext";
 import { useWalletClientHook } from "@/lib/useWalletClient";
+
+// Helper function to retry RPC calls
+const retryRpcCall = async (
+  fn: () => Promise<any>,
+  maxRetries: number = 3,
+  delay: number = 1000
+): Promise<any> => {
+  let lastError: Error;
+  
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error as Error;
+      console.warn(`⚠️ RPC call failed (attempt ${i + 1}/${maxRetries}):`, error);
+      
+      if (i < maxRetries - 1) {
+        await new Promise(resolve => setTimeout(resolve, delay * (i + 1)));
+      }
+    }
+  }
+  
+  throw lastError!;
+};
 import TopUpModal from "./sender/TopUpModal";
 import {
   getEscrowVestingInfo,
@@ -381,17 +405,21 @@ export default function EscrowList({
     });
 
     try {
-      // Call getEscrowDetails directly on the contract
-      const escrowDetails = await contract.read.getEscrowDetails([
-        formattedEscrowId as `0x${string}`,
-      ]);
+      console.log("🔍 Attempting to load contract details with retry...");
+      
+      // Call getEscrowDetails directly on the contract with retry
+      const escrowDetails = await retryRpcCall(
+        () => contract.read.getEscrowDetails([formattedEscrowId as `0x${string}`]),
+        3
+      );
 
       console.log("✅ Escrow details from contract:", escrowDetails);
 
-      // Get receiver addresses
-      const receiverAddresses = await contract.read.getEscrowReceivers([
-        formattedEscrowId as `0x${string}`,
-      ]);
+      // Get receiver addresses with retry
+      const receiverAddresses = await retryRpcCall(
+        () => contract.read.getEscrowReceivers([formattedEscrowId as `0x${string}`]),
+        3
+      );
 
       console.log("✅ Receiver addresses:", receiverAddresses);
 
@@ -399,10 +427,13 @@ export default function EscrowList({
       const receivers = [];
       for (const receiverAddress of receiverAddresses) {
         try {
-          const receiverDetails = await contract.read.getReceiverDetails([
-            formattedEscrowId as `0x${string}`,
-            receiverAddress,
-          ]);
+          const receiverDetails = await retryRpcCall(
+            () => contract.read.getReceiverDetails([
+              formattedEscrowId as `0x${string}`,
+              receiverAddress,
+            ]),
+            2
+          );
           receivers.push({
             receiverAddress,
             currentAllocation: receiverDetails[0],

@@ -12,10 +12,10 @@ const kaia = defineChain({
   },
   rpcUrls: {
     default: {
-      http: ['https://klaytn.drpc.org'],
+      http: ['https://public-en.node.kaia.io'],
     },
     public: {
-      http: ['https://klaytn.drpc.org'],
+      http: ['https://public-en.node.kaia.io'],
     },
   },
   blockExplorers: {

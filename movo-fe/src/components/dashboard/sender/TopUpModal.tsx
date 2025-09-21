@@ -14,6 +14,7 @@ import {
 //   getTokenAddress,
 } from "@/lib/smartContract";
 import { TokenType } from "@/app/api/api";
+import { clearCacheAfterTopup } from "@/app/api/api";
 
 interface TopUpModalProps {
   isOpen: boolean;
@@ -135,7 +136,7 @@ export default function TopUpModal({
 
       // Step 2: Check balance
       updateStepStatus(1, "processing");
-      const decimals = tokenType === "IDRX_BASE" || tokenType === "IDRX_KAIA" ? 2 : 6;
+      const decimals = tokenType === "IDRX" ? 2 : 6;
       const amountInWei = parseTokenAmount(amount.toString(), decimals);
 
       const userBalance = await checkTokenBalance(tokenType, address);
@@ -188,6 +189,9 @@ export default function TopUpModal({
 
         setSuccessDetails(details);
         setShowSuccessModal(true);
+        
+        // Clear cache to refresh escrow data
+        clearCacheAfterTopup(escrowId, address || "");
         
         // Call success callback
         onTopUpSuccess(details);

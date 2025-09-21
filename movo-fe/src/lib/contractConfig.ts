@@ -18,14 +18,14 @@ export const CONTRACT_CONFIG = {
     chainId: 8217,
     chainName: "Kaia Mainnet",
     blockExplorer: "https://scope.klaytn.com",
-    rpcUrl: "https://klaytn.drpc.org",
+    rpcUrl: "https://public-en.node.kaia.io",
   },
 };
 
 // Type definitions for better type safety
-export type TokenTypeExtended = "USDC" | "USDT" | "IDRX" | "MYRC" | "PHPC" | "TNSGD";
+export type TokenTypeExtended = "USDC" | "USDT" | "IDRX" | "IDRX_BASE" | "IDRX_KAIA" | "MYRC" | "PHPC" | "TNSGD";
 export type NetworkType = "kaia";
-export type SimpleTokenType = "USDC" | "USDT" | "IDRX" | "MYRC" | "PHPC" | "TNSGD";
+export type SimpleTokenType = "USDC" | "USDT" | "IDRX" | "IDRX_BASE" | "IDRX_KAIA" | "MYRC" | "PHPC" | "TNSGD";
 
 // Helper function to determine network from context or chain ID
 export const getCurrentNetwork = (): NetworkType => {
@@ -80,6 +80,8 @@ export const getEscrowAddress = (
     case "USDT":
       return getContractAddress("escrow", currentNetwork);
     case "IDRX":
+    case "IDRX_KAIA":
+    case "IDRX_BASE":
     case "MYRC":
     case "PHPC":
     case "TNSGD":
@@ -111,6 +113,10 @@ export const getTokenAddress = (
     case "USDT":
       return getContractAddress("mockUSDT", currentNetwork);
     case "IDRX":
+    case "IDRX_KAIA":
+      return getContractAddress("mockIDRX", currentNetwork);
+    case "IDRX_BASE":
+      // For IDRX_BASE, we don't have a contract on Kaia, so return IDRX address
       return getContractAddress("mockIDRX", currentNetwork);
     case "MYRC":
       return getContractAddress("mockMYRC", currentNetwork);

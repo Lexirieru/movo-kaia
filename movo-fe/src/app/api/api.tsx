@@ -79,6 +79,128 @@ export const clearContractCache = () => {
   console.log("🗑️ Contract details cache cleared");
 };
 
+// Function to clear cache after topup
+export const clearCacheAfterTopup = (escrowId: string, walletAddress: string) => {
+  // Clear general cache
+  clearCache(walletAddress);
+  
+  // Clear contract details cache for this specific escrow
+  const contractAddresses = [
+    "0x0d837aD954F4f9F06E303A86150ad0F322Ec5EB1", // USDC/USDT escrow
+    "0x4ce1D1E0e9C769221E03e661abBf043cceD84F1f", // IDRX escrow
+  ];
+  
+  contractAddresses.forEach(contractAddress => {
+    const cacheKey = `${contractAddress}-${escrowId}`;
+    contractDetailsCache.delete(cacheKey);
+  });
+  
+  console.log("🔄 Cache cleared after topup for escrow:", escrowId);
+};
+
+// Function to calculate accurate availableAmount using Goldsky fundsTopUps data
+const calculateAvailableAmountFromTopups = async (
+  escrowId: string,
+  receiverAddress: string,
+  tokenType: string
+): Promise<{ availableAmount: string; totalTopups: string; canClaim: boolean }> => {
+  try {
+    console.log("💰 Calculating availableAmount from topups for escrow:", escrowId);
+    console.log("💰 Receiver address:", receiverAddress);
+    console.log("💰 Token type:", tokenType);
+    
+    // Query Goldsky for fundsTopUps for this specific escrow
+    const query = `
+      query GetTopupsForEscrow($escrowId: String!) {
+        fundsTopUps(where: { escrowId: $escrowId }) {
+          amount
+          sender
+          escrowId
+          newCycleBalance
+          tokenAddress
+          block_number
+          timestamp_
+        }
+      }
+    `;
+
+    console.log("🔍 Querying Goldsky with escrowId:", escrowId);
+    const response = await axios.post(GOLDSKY_ESCROW_API_URL, {
+      query,
+      variables: { escrowId },
+    });
+
+    console.log("🔍 Goldsky response:", response.data);
+    const topups = response.data.data.fundsTopUps || [];
+    console.log("📊 Topups found for escrow:", topups.length);
+    console.log("📊 Topups data:", topups);
+
+    // Calculate total topup amount
+    const totalTopups = topups.reduce((sum: bigint, topup: any) => {
+      return sum + BigInt(topup.amount || "0");
+    }, BigInt(0));
+
+    console.log("💰 Total topups amount:", totalTopups.toString());
+
+    // If no topups found, return zero
+    if (totalTopups === BigInt(0)) {
+      console.log("❌ No topups found for escrow:", escrowId);
+      return { availableAmount: "0", totalTopups: "0", canClaim: false };
+    }
+
+    // Get receiver's allocated amount from smart contract
+    const contractAddress = tokenType === "IDRX" 
+      ? "0x4ce1D1E0e9C769221E03e661abBf043cceD84F1f" 
+      : "0x0d837aD954F4f9F06E303A86150ad0F322Ec5EB1";
+    
+    console.log("🔍 Getting contract details from:", contractAddress);
+    const contractDetails = await getEscrowDetailsFromContract(escrowId, contractAddress);
+    if (!contractDetails) {
+      console.log("❌ Could not get contract details for escrow:", escrowId);
+      return { availableAmount: "0", totalTopups: totalTopups.toString(), canClaim: false };
+    }
+
+    console.log("🔍 Contract details:", contractDetails);
+
+    // Find receiver's allocated amount
+    const receiverIndex = contractDetails.receiverAddresses.findIndex(
+      (addr: string) => addr.toLowerCase() === receiverAddress.toLowerCase()
+    );
+
+    if (receiverIndex === -1) {
+      console.log("❌ Receiver not found in escrow");
+      return { availableAmount: "0", totalTopups: totalTopups.toString(), canClaim: false };
+    }
+
+    // Get receiver's allocated amount (simplified approach)
+    const receiverAllocatedAmount = BigInt(contractDetails.totalAllocatedAmount) / BigInt(contractDetails.receiverCount);
+    
+    console.log("📊 Receiver allocated amount:", receiverAllocatedAmount.toString());
+    console.log("📊 Total topups:", totalTopups.toString());
+
+    // Calculate available amount: min(totalTopups, receiverAllocatedAmount)
+    const availableAmount = totalTopups < receiverAllocatedAmount ? totalTopups : receiverAllocatedAmount;
+    const canClaim = totalTopups >= receiverAllocatedAmount;
+
+    console.log("✅ Calculated availableAmount:", {
+      availableAmount: availableAmount.toString(),
+      totalTopups: totalTopups.toString(),
+      receiverAllocatedAmount: receiverAllocatedAmount.toString(),
+      canClaim
+    });
+
+    return {
+      availableAmount: availableAmount.toString(),
+      totalTopups: totalTopups.toString(),
+      canClaim
+    };
+
+  } catch (error) {
+    console.error("❌ Error calculating availableAmount from topups:", error);
+    return { availableAmount: "0", totalTopups: "0", canClaim: false };
+  }
+};
+
 // Check if URLs are properly defined
 if (!GOLDSKY_ESCROW_API_URL) {
   console.error("❌ GOLDSKY_ESCROW_API_URL is not defined!");
@@ -1855,7 +1977,9 @@ const fetchReceiverEscrowsSimple = async (receiverAddress: string) => {
     const cacheKey = `receiver_simple_${receiverAddress.toLowerCase()}`;
     const cachedData = getCachedData(cacheKey);
     if (cachedData) {
-      return cachedData;
+      console.log("📦 Using cached data for:", cacheKey);
+      // TEMPORARILY DISABLE CACHE TO TEST TOPUP CALCULATION
+      // return cachedData;
     }
 
     const query = `
@@ -2061,15 +2185,22 @@ const fetchReceiverEscrowsSimple = async (receiverAddress: string) => {
           contractAddress,
         );
 
-        // Calculate actual available amount for this receiver
-        // Receiver can only claim if availableBalance >= their allocated amount
+        // Calculate actual available amount using Goldsky topup data
+        console.log("🔍 Calling calculateAvailableAmountFromTopups for escrow:", escrow.escrowId);
+        const topupData = await calculateAvailableAmountFromTopups(
+          escrow.escrowId,
+          receiverAddress,
+          tokenType
+        );
+        console.log("🔍 Topup data result:", topupData);
+
         const availableBalance = contractDetails?.availableBalance || "0";
         const receiverAllocatedAmount = receiverAmount;
 
-        // Check if this receiver can claim: availableBalance should be >= receiverAllocatedAmount
-        const canClaim =
-          parseFloat(availableBalance) >= parseFloat(receiverAllocatedAmount);
-        const actualAvailableAmount = canClaim ? receiverAllocatedAmount : "0";
+        // Use topup data for more accurate calculation
+        const hasBeenFunded = parseFloat(topupData.totalTopups) > 0;
+        const canClaim = topupData.canClaim;
+        const actualAvailableAmount = topupData.availableAmount;
 
         console.log(`🔍 Receiver claim check for escrow ${escrow.escrowId}:`, {
           receiverAddress: receiverAddress.toLowerCase(),
@@ -2200,18 +2331,24 @@ const fetchReceiverEscrowsSimple = async (receiverAddress: string) => {
           contractAddress,
         );
 
-        // Calculate actual available amount for this receiver
-        // Receiver can only claim if availableBalance >= their allocated amount
+        // Calculate actual available amount using Goldsky topup data
+        console.log("🔍 Calling calculateAvailableAmountFromTopups for escrow (all):", escrow.escrowId);
+        const topupData = await calculateAvailableAmountFromTopups(
+          escrow.escrowId,
+          receiverAddress,
+          tokenType
+        );
+        console.log("🔍 Topup data result (all):", topupData);
+
         const availableBalance = contractDetails?.availableBalance || "0";
         const receiverAllocatedAmount = receiverAmount;
 
-        // Check if this receiver can claim: availableBalance should be >= receiverAllocatedAmount
-        const canClaim =
-          parseFloat(availableBalance) >= parseFloat(receiverAllocatedAmount);
+        // Use topup data for more accurate calculation
+        const hasBeenFunded = parseFloat(topupData.totalTopups) > 0;
+        const canClaim = topupData.canClaim;
 
-        // IMPORTANT: For "All Escrows" view, always show the allocated amount,
-        // but use availableAmount for claimable logic
-        const actualAvailableAmount = canClaim ? receiverAllocatedAmount : "0";
+        // Use topup data for available amount
+        const actualAvailableAmount = topupData.availableAmount;
 
         // For display purposes, always show allocated amount, but add status
         const displayAmount = receiverAllocatedAmount;
@@ -2265,7 +2402,7 @@ const fetchReceiverEscrowsSimple = async (receiverAddress: string) => {
           createdAt: createdDate,
 
           // Status - more detailed statuses
-          status: canClaim ? "CLAIMABLE" : "PENDING_FUNDING",
+          status: canClaim ? "CLAIMABLE" : (hasBeenFunded ? "FUNDED" : "PENDING_FUNDING"),
           canClaim: canClaim,
 
           // Additional receiver data

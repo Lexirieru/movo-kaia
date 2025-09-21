@@ -5,7 +5,7 @@ export const chains: Chain[] = [
     id: 8217, // Kaia Mainnet
     name: "Kaia Mainnet",
     logo: "/chain/kaia-logo.svg",
-    rpcUrl: "https://klaytn.drpc.org",
+    rpcUrl: "https://public-en.node.kaia.io",
     blockExplorer: "https://scope.klaytn.com",
     contracts: {
       escrow: "0x0d837aD954F4f9F06E303A86150ad0F322Ec5EB1",
