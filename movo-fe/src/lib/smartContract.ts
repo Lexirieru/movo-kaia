@@ -1114,6 +1114,231 @@ export const createEscrowOnchain = async (
 //   }
 // }
 
+// Add this function after the existing functions
+
+// Close/Delete escrow function
+export const closeEscrow = async (
+  walletClient: any,
+  tokenType: TokenType,
+  escrowId: string,
+): Promise<{ success: boolean; transactionHash?: string; error?: string }> => {
+  try {
+    console.log("🗑️ Closing escrow:", {
+      tokenType,
+      escrowId,
+    });
+
+    // Verify network first
+    const isCorrectNetwork = await verifyNetwork(walletClient);
+    if (!isCorrectNetwork) {
+      const walletType = detectWalletType(walletClient);
+      const expectedChain = getChainForWallet(walletType);
+      throw new Error(
+        `Please switch to ${expectedChain.name} network (Chain ID: ${expectedChain.id})`
+      );
+    }
+
+    // Validate wallet client
+    if (!walletClient.account || !walletClient.account.address) {
+      throw new Error(
+        "Wallet client account is not available. Please reconnect your wallet.",
+      );
+    }
+
+    // Get the correct contract based on token type
+    let contract;
+    let abi;
+    if (tokenType === "IDRX_BASE" || tokenType === "IDRX_KAIA") {
+      contract = escrowIdrxContract;
+      abi = escrowIdrxAbis;
+    } else {
+      contract = escrowContract; // For USDC and USDT
+      abi = escrowAbis;
+    }
+
+    // Validate contract address
+    if (!contract.address || contract.address === "0x0000000000000000000000000000000000000000") {
+      throw new Error(`Invalid contract address: ${contract.address}`);
+    }
+
+    // Format escrow ID properly as bytes32
+    let formattedEscrowId = escrowId;
+    if (!escrowId.startsWith("0x")) {
+      formattedEscrowId = "0x" + escrowId;
+    }
+    
+    // Pad to 32 bytes (64 hex characters + 0x prefix = 66 characters)
+    if (formattedEscrowId.length < 66) {
+      formattedEscrowId = formattedEscrowId.padEnd(66, "0");
+    }
+
+    console.log("📋 Close escrow parameters:", {
+      contractAddress: contract.address,
+      originalEscrowId: escrowId,
+      formattedEscrowId,
+      sender: walletClient.account.address,
+    });
+
+    // STEP 1: Verify the escrow exists and get its details
+    console.log("🔍 Step 1: Verifying escrow exists...");
+    try {
+      const escrowDetails = await publicClient.readContract({
+        address: contract.address,
+        abi: abi,
+        functionName: "getEscrowDetails",
+        args: [formattedEscrowId as `0x${string}`],
+      });
+
+      console.log("✅ Escrow details found:", escrowDetails);
+
+      // Check if escrow exists (sender should not be zero address)
+      if (escrowDetails[0] === "0x0000000000000000000000000000000000000000") {
+        throw new Error(`Escrow with ID ${escrowId} does not exist`);
+      }
+
+      // Check if the current user is the sender
+      if (escrowDetails[0].toLowerCase() !== walletClient.account.address.toLowerCase()) {
+        throw new Error("Only the escrow sender can close the escrow");
+      }
+
+      // Check if escrow has available balance that needs to be withdrawn first
+      const availableBalance = escrowDetails[5]; // availableBalance is at index 5
+      if (availableBalance > BigInt(0)) {
+        throw new Error(
+          `Cannot close escrow with remaining balance. Please withdraw ${formatTokenAmount(
+            availableBalance,
+            (tokenType === "IDRX_BASE" || tokenType === "IDRX_KAIA") ? 2 : 6
+          )} ${tokenType} first.`
+        );
+      }
+
+      console.log("✅ Escrow validation passed");
+    } catch (error) {
+      console.error("❌ Escrow validation failed:", error);
+      throw new Error(`Escrow validation failed: ${error instanceof Error ? error.message : "Unknown error"}`);
+    }
+
+    // STEP 2: Get all receivers to check if any are still active with unclaimed funds
+    console.log("🔍 Step 2: Checking active receivers...");
+    try {
+      const escrowReceivers = await publicClient.readContract({
+        address: contract.address,
+        abi: abi,
+        functionName: "getEscrowReceivers",
+        args: [formattedEscrowId as `0x${string}`],
+      });
+
+      console.log("📋 Current receivers in escrow:", escrowReceivers);
+
+      // Check each receiver's status
+      for (const receiverAddress of escrowReceivers as string[]) {
+        try {
+          const receiverDetails = await publicClient.readContract({
+            address: contract.address,
+            abi: abi,
+            functionName: "getReceiverDetails",
+            args: [formattedEscrowId as `0x${string}`, receiverAddress as `0x${string}`],
+          });
+
+          // Check if receiver has unclaimed allocation
+          const currentAllocation = receiverDetails[0];
+          const withdrawnAmount = receiverDetails[1];
+          const isActive = receiverDetails[2];
+
+          if (isActive && currentAllocation > withdrawnAmount) {
+            throw new Error(
+              `Cannot close escrow. Receiver ${receiverAddress} still has unclaimed allocation of ${formatTokenAmount(
+                currentAllocation - withdrawnAmount,
+                (tokenType === "IDRX_BASE" || tokenType === "IDRX_KAIA") ? 2 : 6
+              )} ${tokenType}`
+            );
+          }
+        } catch (receiverError) {
+          console.warn("Failed to get details for receiver:", receiverAddress, receiverError);
+        }
+      }
+
+      console.log("✅ All receivers have claimed their allocations or are inactive");
+    } catch (error) {
+      console.error("❌ Receiver check failed:", error);
+      throw new Error(`Receiver check failed: ${error instanceof Error ? error.message : "Unknown error"}`);
+    }
+
+    // STEP 3: Simulate the transaction
+    console.log("🔍 Step 3: Simulating closeEscrow transaction...");
+    const { request } = await publicClient.simulateContract({
+      address: contract.address,
+      abi: abi,
+      functionName: "closeEscrow", 
+      args: [formattedEscrowId as `0x${string}`],
+      account: walletClient.account.address,
+    });
+
+    console.log("✅ Close escrow simulation successful");
+
+    // STEP 4: Execute the transaction
+    console.log("🔍 Step 4: Executing transaction...");
+    const hash = await walletClient.writeContract(request);
+    console.log("📝 Close escrow transaction submitted:", hash);
+
+    // Wait for transaction confirmation
+    const receipt = await publicClient.waitForTransactionReceipt({ hash });
+    console.log("✅ Close escrow transaction confirmed:", receipt);
+
+    // Save event for tracking
+    // await saveEscrowEventWithContext(
+    //   "CLOSE_ESCROW",
+    //   escrowId,
+    //   hash,
+    //   walletClient.account.address,
+    //   tokenType,
+    //   {
+    //     closedEscrowId: formattedEscrowId,
+    //     contractAddress: contract.address,
+    //     closedAt: new Date().toISOString(),
+    //   },
+    //   receipt,
+    //   contract.address
+    // );
+
+    console.log("✅ Escrow closed successfully from blockchain");
+
+    return {
+      success: true,
+      transactionHash: hash,
+    };
+  } catch (error) {
+    console.error("❌ Error closing escrow:", error);
+    
+    let errorMessage = "Unknown error occurred";
+    if (error instanceof Error) {
+      errorMessage = error.message;
+    } else if (typeof error === "string") {
+      errorMessage = error;
+    }
+
+    // Handle specific error cases
+    if (errorMessage.includes("User rejected")) {
+      errorMessage = "Transaction was rejected by user";
+    } else if (errorMessage.includes("insufficient funds")) {
+      errorMessage = "Insufficient funds to pay for transaction";
+    } else if (errorMessage.includes("execution reverted")) {
+      if (errorMessage.includes("Escrow does not exist")) {
+        errorMessage = "Escrow not found or has already been closed.";
+      } else if (errorMessage.includes("Only sender")) {
+        errorMessage = "Only the escrow creator can close this escrow.";
+      } else {
+        errorMessage = "Transaction failed: " + errorMessage;
+      }
+    }
+
+    return {
+      success: false,
+      error: errorMessage,
+    };
+  }
+};
+
 export const addReceiver = async (
   walletClient: any,
   tokenType: string,

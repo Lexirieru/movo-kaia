@@ -31,6 +31,7 @@ import {
   checkTokenBalance,
   checkTokenAllowance,
   approveTokens,
+  closeEscrow,
 } from "@/lib/smartContract";
 import { getTokenAddress } from "@/lib/contractConfig";
 import { useWallet } from "@/lib/walletContext";
@@ -195,7 +196,13 @@ export default function EscrowList({
   const [topUpAmount, setTopUpAmount] = useState<string>("");
   const [isTopUpLoading, setIsTopUpLoading] = useState(false);
   const [userTokenBalance, setUserTokenBalance] = useState<string>("0");
-
+  const [closingEscrowId, setClosingEscrowId] = useState<string | null>(null);
+  const [closeConfirmModal, setCloseConfirmModal] = useState<{
+    isOpen: boolean;
+    escrowId: string;
+    tokenAddress: string;
+    tokenType: TokenType;
+  } | null>(null);
   // Auto-refresh vesting info for expanded escrows every 60 seconds
   useEffect(() => {
     if (expandedEscrows.size === 0) return;
@@ -527,12 +534,6 @@ export default function EscrowList({
         maxAmount = details.escrowRoom.totalAllocatedAmount.toString();
       }
     }
-
-    // For top up, use the allocated amount directly without multiplication
-    // This prevents the issue where we're multiplying an already correctly formatted amount
-    // The user can still top up more than the allocated amount by entering a custom value
-    // No multiplication needed - use the amount as-is
-
     console.log("🔍 Max amount calculation debug:", {
       escrowData: escrowData
         ? {
@@ -764,6 +765,59 @@ export default function EscrowList({
     }
   };
 
+  const openCloseConfirmModal = (escrowId: string, tokenAddress: string) => {
+    const tokenType = getTokenType(tokenAddress);
+    setCloseConfirmModal({
+      isOpen: true,
+      escrowId,
+      tokenAddress,
+      tokenType,
+    });
+  };
+
+  const closeCloseConfirmModal = () => {
+    setCloseConfirmModal(null);
+  };
+
+  const handleCloseEscrow = async () => {
+    if (!closeConfirmModal || !address || !isConnected || !walletClient) return;
+
+    setClosingEscrowId(closeConfirmModal.escrowId);
+    try {
+      const { escrowId, tokenType } = closeConfirmModal;
+      console.log("starting escrow closure process");
+
+      const result = await closeEscrow(walletClient, tokenType, escrowId);
+      if (result.success) {
+        console.log("escrow closure successful:", result.transactionHash);
+
+        closeCloseConfirmModal();
+        onEscrowDeleted();
+        alert("Escrow close successfully");
+      } else {
+        throw new Error(result.error);
+      }
+    } catch (err) {
+      console.error("Escrow closure failed", err);
+      let errorMessage = err instanceof Error ? err.message : "Unknown error";
+
+      // Provide more helpful error messages
+      if (errorMessage.includes("remaining balance")) {
+        errorMessage =
+          "Cannot close escrow with remaining balance. Please withdraw all funds first or ensure all receivers have claimed their allocations.";
+      } else if (errorMessage.includes("unclaimed allocation")) {
+        errorMessage =
+          "Cannot close escrow while receivers still have unclaimed allocations. Please ensure all allocations are claimed first.";
+      } else if (errorMessage.includes("Only the escrow sender")) {
+        errorMessage = "Only the escrow creator can close this escrow.";
+      }
+
+      alert(`❌ Error: ${errorMessage}`);
+    } finally {
+      setClosingEscrowId(null);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="space-y-4">
@@ -918,13 +972,34 @@ export default function EscrowList({
                       </button>
                       <button
                         onClick={() => {
-                          onEscrowDeleted();
+                          openCloseConfirmModal(
+                            escrow.escrowId,
+                            escrow.tokenAddress,
+                          );
                           setSelectedEscrow(null);
                         }}
-                        className="w-full px-4 py-3 text-left text-red-400 hover:bg-red-500/10 flex items-center space-x-2"
+                        disabled={closingEscrowId === escrow.escrowId}
+                        className={`w-full px-4 py-3 text-left flex items-center space-x-3 transition-colors ${
+                          closingEscrowId === escrow.escrowId
+                            ? "cursor-not-allowed opacity-50"
+                            : "hover:bg-red-500/10"
+                        }`}
                       >
-                        <Trash2 className="w-4 h-4" />
-                        <span>Delete</span>
+                        <div className="p-1 bg-red-500/20 rounded">
+                          {closingEscrowId === escrow.escrowId ? (
+                            <div className="w-3 h-3 border border-red-400 border-t-transparent rounded-full animate-spin" />
+                          ) : (
+                            <X className="w-3 h-3 text-red-400" />
+                          )}
+                        </div>
+                        <div>
+                          <p className={`text-sm font-medium ${
+                            closingEscrowId === escrow.escrowId ? "text-red-600" : "text-red-400"
+                          }`}>
+                            {closingEscrowId === escrow.escrowId ? "Closing..." : "Close Escrow"}
+                          </p>
+                          <p className="text-xs text-red-400/60">Permanently close this escrow</p>
+                        </div>
                       </button>
                     </div>
                   )}
@@ -1553,6 +1628,116 @@ export default function EscrowList({
             </div>
           </div>
         </div>
+      )}
+
+      {closeConfirmModal && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-gray-900/95 border border-orange-400/20 rounded-2xl w-full max-w-md">
+            {/* Header */}
+            <div className="flex justify-between items-center p-6 border-b border-white/10">
+              <div>
+                <h3 className="text-white text-xl font-semibold">
+                  Close Escrow
+                </h3>
+                <p className="text-orange-400 text-sm">
+                  This action will close the escrow permanently
+                </p>
+              </div>
+              <button
+                onClick={closeCloseConfirmModal}
+                className="text-gray-400 hover:text-white transition-colors p-2 hover:bg-white/10 rounded-lg"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-6">
+              {/* Warning Info */}
+              <div className="bg-gradient-to-r from-orange-500/10 to-red-500/10 border border-orange-500/20 rounded-xl p-4">
+                <h4 className="text-orange-300 font-medium mb-2">
+                  ⚠️ Warning
+                </h4>
+                <div className="space-y-1 text-sm text-white/80">
+                  <p>This will permanently close the escrow on the blockchain:</p>
+                  <ul className="list-disc list-inside ml-2 space-y-1">
+                    <li>Escrow will be marked as closed</li>
+                    <li>No further operations allowed</li>
+                    <li>Transaction history preserved</li>
+                  </ul>
+                  <p className="text-orange-400 font-medium mt-2">
+                    Make sure all funds are withdrawn and all receivers have claimed their allocations.
+                  </p>
+                </div>
+              </div>
+
+              {/* Escrow Info */}
+              <div className="bg-gradient-to-r from-gray-500/10 to-gray-600/10 border border-gray-500/20 rounded-xl p-4">
+                <h4 className="text-gray-300 font-medium mb-2">
+                  Escrow Details
+                </h4>
+                <div className="space-y-1 text-sm">
+                  <p className="text-white/60">
+                    Escrow ID:{" "}
+                    <span className="text-white font-mono">
+                      {closeConfirmModal.escrowId.slice(0, 8)}...
+                    </span>
+                  </p>
+                  <p className="text-white/60">
+                    Token:{" "}
+                    <span className="text-white font-medium">
+                      {closeConfirmModal.tokenType}
+                    </span>
+                  </p>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex space-x-3">
+                <button
+                  onClick={closeCloseConfirmModal}
+                  className="flex-1 px-4 py-3 bg-white/10 text-white rounded-xl hover:bg-white/20 transition-colors"
+                  disabled={closingEscrowId === closeConfirmModal.escrowId}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleCloseEscrow}
+                  disabled={
+                    closingEscrowId === closeConfirmModal.escrowId ||
+                    !walletClient ||
+                    !isConnected
+                  }
+                  className={`flex-1 px-4 py-3 rounded-xl font-medium transition-all duration-300 flex items-center justify-center space-x-2 ${
+                    closingEscrowId === closeConfirmModal.escrowId ||
+                    !walletClient ||
+                    !isConnected
+                      ? "bg-gray-500/50 text-gray-300 cursor-not-allowed"
+                      : "bg-gradient-to-r from-orange-500 to-red-600 text-white hover:shadow-lg hover:shadow-orange-500/25 hover:scale-105"
+                  }`}
+                >
+                  {closingEscrowId === closeConfirmModal.escrowId ? (
+                    <>
+                      <RefreshCw className="w-5 h-5 animate-spin" />
+                      <span>Closing...</span>
+                    </>
+                  ) : (
+                    <>
+                      <X className="w-5 h-5" />
+                      <span>Close Escrow</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {selectedEscrow && (
+        <div 
+          className="fixed inset-0 z-5" 
+          onClick={() => setSelectedEscrow(null)}
+        />
       )}
     </div>
   );

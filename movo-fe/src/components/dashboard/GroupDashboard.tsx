@@ -165,6 +165,7 @@ export default function GroupDashboard({
   const handleEscrowDeleted = () => {
     // Reset fetch flag supaya useEffect dijalankan lagi
     setHasFetched(false);
+    refreshEscrows()
   };
 
   const handleTopupFund = (escrowId: string) => {
@@ -176,62 +177,62 @@ export default function GroupDashboard({
     router.push(`/dashboard/sender/${escrowId}`);
   };
 
-  const handleCreateGroup = async (groupData: { nameOfGroup: string }) => {
-    try {
-      // Tunggu user siap
-      if (loading || !user?._id || !user?.email) {
-        console.log("Waiting for user to load...");
-        await new Promise((resolve) => {
-          const checkUser = setInterval(() => {
-            if (!loading && user?._id && user?.email) {
-              clearInterval(checkUser);
-              resolve(true);
-            }
-          }, 50);
-        });
-      }
-      console.log(user);
-      // Generate unique group ID
-      const groupId = `group_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      // Create new group object
-      const newGroup: GroupOfUser = {
-        groupId,
-        nameOfGroup: groupData.nameOfGroup,
-        senderId: user?._id || "",
-        senderName: user?.fullname || "",
-        Receivers: [],
-        totalReceiver: 0,
-        createdAt: new Date().toString(),
-      };
-      if (!user || !address)
-        throw new Error("User or wallet address not found");
-      const response = await addGroup(
-        user._id,
-        user.email,
-        groupId,
-        groupData.nameOfGroup,
-        address,
-      );
+  // const handleCreateGroup = async (groupData: { nameOfGroup: string }) => {
+  //   try {
+  //     // Tunggu user siap
+  //     if (loading || !user?._id || !user?.email) {
+  //       console.log("Waiting for user to load...");
+  //       await new Promise((resolve) => {
+  //         const checkUser = setInterval(() => {
+  //           if (!loading && user?._id && user?.email) {
+  //             clearInterval(checkUser);
+  //             resolve(true);
+  //           }
+  //         }, 50);
+  //       });
+  //     }
+  //     console.log(user);
+  //     // Generate unique group ID
+  //     const groupId = `group_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  //     // Create new group object
+  //     const newGroup: GroupOfUser = {
+  //       groupId,
+  //       nameOfGroup: groupData.nameOfGroup,
+  //       senderId: user?._id || "",
+  //       senderName: user?.fullname || "",
+  //       Receivers: [],
+  //       totalReceiver: 0,
+  //       createdAt: new Date().toString(),
+  //     };
+  //     if (!user || !address)
+  //       throw new Error("User or wallet address not found");
+  //     const response = await addGroup(
+  //       user._id,
+  //       user.email,
+  //       groupId,
+  //       groupData.nameOfGroup,
+  //       address,
+  //     );
 
-      const giveRoleSender = await updateWalletAddressRole(
-        user._id,
-        address,
-        "sender",
-      );
+  //     const giveRoleSender = await updateWalletAddressRole(
+  //       user._id,
+  //       address,
+  //       "sender",
+  //     );
 
-      console.log("Role update response:", giveRoleSender);
+  //     console.log("Role update response:", giveRoleSender);
 
-      if (response && response.data) {
-        if (onRoleChange) {
-          onRoleChange();
-        }
-        router.push(`/dashboard/sender/${groupId}`);
-      }
-    } catch (err) {
-      console.error("Failed to create group", err);
-      //   setGroups(prev => prev.filter(g => g.groupId != groupId))
-    }
-  };
+  //     if (response && response.data) {
+  //       if (onRoleChange) {
+  //         onRoleChange();
+  //       }
+  //       router.push(`/dashboard/sender/${groupId}`);
+  //     }
+  //   } catch (err) {
+  //     console.error("Failed to create group", err);
+  //     //   setGroups(prev => prev.filter(g => g.groupId != groupId))
+  //   }
+  // };
 
   const handleCreateStream = (stream: ReceiverInGroup) => {
     console.log("Creating stream:", stream);

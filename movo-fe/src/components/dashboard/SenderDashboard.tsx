@@ -634,23 +634,6 @@ export default function SenderDashboard({
             </div>
           </div>
         )}
-        {/* {existingEscrow && (
-          <div className="bg-cyan-500/10 border border-cyan-500/20 rounded-xl p-4">
-            <div className="flex items-center space-x-3">
-              <div className="text-2xl">
-                {existingEscrow.tokenType === "USDC" ? "💵" : "🔗"}
-              </div>
-              <div>
-                <p className="text-cyan-300 font-medium">
-                  Active Escrow: {existingEscrow.tokenType}
-                </p>
-                <p className="text-cyan-400/80 text-sm">
-                  ID: {existingEscrow.escrowId}
-                </p>
-              </div>
-            </div>
-          </div>
-        )} */}
 
         {/* Stats */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
