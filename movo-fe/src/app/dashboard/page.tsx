@@ -539,8 +539,8 @@ function DynamicDashboard({
                     )
                     {isLoadingVesting && (
                       <div className="flex items-center ml-2">
-                        <div className="w-4 h-4 border-2 border-orange-400 border-t-transparent rounded-full animate-spin"></div>
-                        <span className="text-orange-400 text-xs ml-1">
+                        <div className="w-4 h-4 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin"></div>
+                        <span className="text-cyan-400 text-xs ml-1">
                           Loading vesting...
                         </span>
                       </div>
@@ -625,7 +625,7 @@ function DynamicDashboard({
                                 </button>{" "}
                                 {/* Vesting Amount Info */}
                                 {vestingStatus && (
-                                  <div className="text-xs text-orange-400 mt-1">
+                                  <div className="text-xs text-cyan-400 mt-1">
                                     {vestingStatus.availableToWithdraw}{" "}
                                     {vestingStatus.tokenSymbol} vested
                                   </div>
@@ -657,7 +657,7 @@ function DynamicDashboard({
                                       <>
                                         {vestingStatus.availableToWithdraw}{" "}
                                         {vestingStatus.tokenSymbol}
-                                        <div className="text-xs text-orange-400">
+                                        <div className="text-xs text-cyan-400">
                                           (of {vestingStatus.totalVested} total
                                           vested)
                                         </div>
@@ -703,7 +703,7 @@ function DynamicDashboard({
 
                               {/* Vesting Progress Details */}
                               {vestingStatus && (
-                                <div className="mt-4 p-3 bg-orange-500/10 border border-orange-500/20 rounded-lg">
+                                <div className="mt-4 p-3 bg-cyan-500/10 border border-cyan-500/20 rounded-lg">
                                   <div className="flex items-center justify-between mb-2">
                                     <span className="text-orange-400 font-medium text-sm flex items-center">
                                       <Clock className="w-4 h-4 mr-2" />

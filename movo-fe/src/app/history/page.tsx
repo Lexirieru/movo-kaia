@@ -605,7 +605,7 @@ function HistoryContent() {
   return (
     <MainLayout>
       <div className="px-4 py-6 min-h-[calc(100vh-9rem)]">
-        <div className="container mx-auto">
+        <div className="container mx-auto max-w-6xl">
           {!isConnected || !address ? (
             <WalletWarning />
           ) : !effectiveWalletAddress ? (
@@ -710,7 +710,7 @@ function HistoryContent() {
                           className="bg-gray-800/50 backdrop-blur-sm border border-gray-700/50 rounded-xl p-4 hover:bg-gray-800/70 transition-colors"
                         >
                           <div className="flex items-start justify-between">
-                            <div className="flex-1">
+                            <div className="flex-1 w-1/2">
                               <div className="flex items-center space-x-3 mb-2">
                                 <div
                                   className={`p-1.5 rounded-full ${activityInfo.color.replace("text-", "bg-").replace("-800", "-500/20")}`}
@@ -732,7 +732,8 @@ function HistoryContent() {
                                   {activityInfo.description}
                                 </p>
                                 <p className="text-sm text-gray-400">
-                                  Escrow: {activity.escrowId}
+                                  Escrow: {activity.escrowId.slice(0, 8)}...
+                                  {activity.escrowId.slice(-4)}
                                 </p>
                                 {activityInfo.amount > 0 && (
                                   <p className="text-sm text-cyan-400">
@@ -754,9 +755,17 @@ function HistoryContent() {
                             </div>
 
                             <div className="text-right">
-                              <p className="text-sm text-gray-400">
-                                {formatDate(activity.timestamp)}
-                              </p>
+                              <div className="text-sm text-gray-400">
+                                <div className="text-xs">
+                                  {activity.timestamp.toLocaleDateString()}
+                                </div>
+                                <div className="text-xs">
+                                  {activity.timestamp.toLocaleTimeString([], {
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                  })}
+                                </div>
+                              </div>
                               {activity.transactionHash && (
                                 <a
                                   href={`https://etherscan.io/tx/${activity.transactionHash}`}
