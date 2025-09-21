@@ -302,7 +302,8 @@ export const EscrowEventHistory: React.FC<EventHistoryProps> = ({
                     {!escrowId && (
                       <div>
                         <p className="text-sm text-gray-700">
-                          Escrow: {event.escrowId}
+                          Escrow: {event.escrowId.slice(0, 8)}...
+                          {event.escrowId.slice(-4)}
                         </p>
                       </div>
                     )}
