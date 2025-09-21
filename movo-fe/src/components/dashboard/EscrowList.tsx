@@ -99,15 +99,15 @@ interface EscrowListProps {
 const formatDate = (timestamp: string) => {
   // Handle both Unix timestamp (seconds) and ISO string formats
   let date: Date;
-  
-  if (timestamp.includes('T') || timestamp.includes('Z')) {
+
+  if (timestamp.includes("T") || timestamp.includes("Z")) {
     // It's an ISO string
     date = new Date(timestamp);
   } else {
     // It's a Unix timestamp in seconds
     date = new Date(parseInt(timestamp) * 1000);
   }
-  
+
   return date.toLocaleDateString("en-US", {
     year: "numeric",
     month: "short",
@@ -511,15 +511,15 @@ export default function EscrowList({
   const formatTimestamp = (timestamp: string) => {
     // Handle both Unix timestamp (seconds) and ISO string formats
     let date: Date;
-    
-    if (timestamp.includes('T') || timestamp.includes('Z')) {
+
+    if (timestamp.includes("T") || timestamp.includes("Z")) {
       // It's an ISO string
       date = new Date(timestamp);
     } else {
       // It's a Unix timestamp in seconds
       date = new Date(parseInt(timestamp) * 1000);
     }
-    
+
     return date.toLocaleString();
   };
 
@@ -898,7 +898,9 @@ export default function EscrowList({
             key={escrow.id}
             className="bg-white/5 border border-white/10 rounded-xl p-6 hover:bg-white/10 transition-all duration-200 group"
           >
-            <div className="flex items-center justify-between">
+            {/* Main content area - flex column on mobile, row on desktop */}
+            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between">
+              {/* Escrow Info Section */}
               <div className="flex-1">
                 <div className="flex items-center space-x-3 mb-2">
                   <div className="w-10 h-10 bg-gradient-to-r from-cyan-400 to-blue-500 rounded-full flex items-center justify-center">
@@ -944,22 +946,23 @@ export default function EscrowList({
                 </div>
               </div>
 
-              <div className="flex items-center space-x-2">
+              {/* Action Buttons Section - moves below on mobile, stays right on desktop */}
+              <div className="flex items-center justify-end space-x-2 mt-4 lg:mt-0 lg:ml-4 shrink-0">
                 <button
                   onClick={() =>
                     openTopUpModal(escrow.escrowId, escrow.tokenAddress)
                   }
-                  className="px-4 py-2 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg text-sm font-medium hover:shadow-lg hover:shadow-green-500/25 transition-all duration-200 flex items-center space-x-2"
+                  className="md:px-4 md:py-2 p-2 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg text-sm font-medium hover:shadow-lg hover:shadow-green-500/25 transition-all duration-200 flex items-center md:space-x-2"
                 >
                   <ArrowUp className="w-4 h-4" />
-                  <span>Top Up</span>
+                  <span className="inline">Top Up</span>
                 </button>
 
                 <button
                   onClick={() =>
                     toggleDetails(escrow.escrowId, escrow.tokenAddress)
                   }
-                  className="px-4 py-2 bg-gradient-to-r from-cyan-500 to-blue-600 text-white rounded-lg text-sm font-medium hover:shadow-lg hover:shadow-cyan-500/25 transition-all duration-200 flex items-center space-x-2"
+                  className="md:px-4 md:py-2 p-2 bg-gradient-to-r from-cyan-500 to-blue-600 text-white rounded-lg text-sm font-medium hover:shadow-lg hover:shadow-cyan-500/25 transition-all duration-200 flex items-center md:space-x-2"
                 >
                   {isLoadingDetails ? (
                     <RefreshCw className="w-4 h-4 animate-spin" />
@@ -968,7 +971,7 @@ export default function EscrowList({
                   ) : (
                     <ChevronDown className="w-4 h-4" />
                   )}
-                  <span>Details</span>
+                  <span className="inline">Details</span>
                 </button>
 
                 <div className="relative">
@@ -1164,7 +1167,7 @@ export default function EscrowList({
                     </div>
 
                     {/* Receiver Information */}
-                    <div className="bg-gradient-to-r from-purple-500/10 to-pink-500/10 border border-purple-500/20 rounded-xl p-4">
+                    <div className="bg-gradient-to-r from-cyan-400/10 to-blue-500/10 border border-cyan-400/20 rounded-xl p-4">
                       <h4 className="text-lg font-semibold text-white mb-4">
                         Receiver Information
                       </h4>
@@ -1200,10 +1203,10 @@ export default function EscrowList({
                                 className="flex items-center justify-between p-2 bg-white/5 rounded-lg"
                               >
                                 <div className="flex items-center space-x-2">
-                                  <span className="text-purple-400 text-sm font-medium">
+                                  <span className="text-cyan-400 text-xs md:text-sm font-medium">
                                     {index + 1}.
                                   </span>
-                                  <span className="text-white font-mono text-sm">
+                                  <span className="text-white font-mono text-xs md:text-sm">
                                     {formatAddress(receiver.receiverAddress)}
                                   </span>
                                 </div>
@@ -1245,15 +1248,15 @@ export default function EscrowList({
 
                     {/* Vesting Information */}
                     {(escrowVestingInfo !== undefined || isLoadingVesting) && (
-                      <div className="bg-gradient-to-r from-orange-500/10 to-amber-500/10 border border-orange-500/20 rounded-xl p-4">
+                      <div className="bg-gradient-to-r from-green-400/10 to-emerald-500/10 border border-green-400/20 rounded-xl p-4">
                         <h4 className="text-lg font-semibold text-white mb-4 flex items-center space-x-2">
-                          <Calendar className="w-5 h-5 text-orange-400" />
+                          <Calendar className="w-5 h-5 text-green-400" />
                           <span>Vesting Information</span>
                         </h4>
 
                         {isLoadingVesting ? (
                           <div className="flex items-center justify-center space-x-3 py-4">
-                            <RefreshCw className="w-5 h-5 animate-spin text-orange-400" />
+                            <RefreshCw className="w-5 h-5 animate-spin text-cyan-400" />
                             <span className="text-white/60">
                               Loading vesting info...
                             </span>
@@ -1425,7 +1428,7 @@ export default function EscrowList({
                                     <Award className="w-4 h-4 text-purple-400" />
                                     <span>Receiver Vesting Progress</span>
                                   </h5>
-                                  <div className="space-y-2 max-h-40 overflow-y-auto">
+                                  <div className="space-y-2 max-h-40 overflow-y-auto scrollbar-hide">
                                     {escrowVestingInfo.receivers.map(
                                       (receiver, index) => (
                                         <div
@@ -1550,7 +1553,8 @@ export default function EscrowList({
             No Active Escrows
           </h3>
           <p className="text-white/60 mb-6">
-            You haven't created any active escrows yet. Create your first escrow to get started.
+            You haven't created any active escrows yet. Create your first escrow
+            to get started.
           </p>
         </div>
       )}
