@@ -140,7 +140,7 @@ export default function SyncWalletForm() {
               </div>
               <button
                 onClick={handleDisconnectWallet}
-                className="text-xs text-red-400 hover:text-red-300 transition-colors duration-200"
+                className="text-xs text-red-400 hover:text-red-300  transition-colors duration-200"
               >
                 Disconnect
               </button>

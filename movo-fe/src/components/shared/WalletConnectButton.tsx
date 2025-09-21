@@ -5,7 +5,8 @@ import { useWallet } from "@/lib/walletContext";
 import { Wallet, LogOut, Copy, Check, AlertCircle } from "lucide-react";
 
 export default function WalletConnectButton() {
-  const { isConnected, address, isConnecting, connectWallet, disconnect } = useWallet();
+  const { isConnected, address, isConnecting, connectWallet, disconnect } =
+    useWallet();
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -50,7 +51,7 @@ export default function WalletConnectButton() {
           <Wallet className="w-4 h-4" />
           <span>{isConnecting ? "Connecting..." : "Connect Wallet"}</span>
         </button>
-        
+
         {error && (
           <div className="flex items-center space-x-2 px-3 py-2 bg-red-500/10 border border-red-500/20 rounded-lg">
             <AlertCircle className="w-4 h-4 text-red-400" />
@@ -85,7 +86,7 @@ export default function WalletConnectButton() {
       {/* Disconnect Button */}
       <button
         onClick={handleDisconnect}
-        className="flex items-center space-x-2 px-3 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-lg transition-colors duration-200"
+        className="md:flex items-center space-x-2 hidden px-3 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-lg transition-colors duration-200"
         title="Disconnect wallet"
       >
         <LogOut className="w-4 h-4" />

@@ -1,8 +1,8 @@
-'use client';
+"use client";
 
-import React, { useState } from 'react';
-import { useWalletConnection } from '@/lib/contexts/WalletContext';
-import WalletConnectModal from './WalletConnectModal';
+import React, { useState } from "react";
+import { useWalletConnection } from "@/lib/contexts/WalletContext";
+import WalletConnectModal from "./WalletConnectModal";
 
 interface WalletButtonProps {
   className?: string;
@@ -10,47 +10,47 @@ interface WalletButtonProps {
   showNetwork?: boolean;
 }
 
-export default function WalletButton({ 
-  className = '', 
-  showBalance = false, 
-  showNetwork = false 
+export default function WalletButton({
+  className = "",
+  showBalance = false,
+  showNetwork = false,
 }: WalletButtonProps) {
-  const { 
-    wallet, 
-    isConnecting, 
-    isDisconnected, 
-    isConnected, 
-    address, 
-    chainId 
+  const {
+    wallet,
+    isConnecting,
+    isDisconnected,
+    isConnected,
+    address,
+    chainId,
   } = useWalletConnection();
-  
+
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   const formatAddress = (addr: string) => {
-    if (!addr) return '';
+    if (!addr) return "";
     return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
   };
 
   const getNetworkName = (chainId?: number) => {
     switch (chainId) {
       case 84532:
-        return 'Base Sepolia';
+        return "Base Sepolia";
       case 8453:
-        return 'Base Mainnet';
+        return "Base Mainnet";
       case 1001:
-        return 'Kaia Testnet';
+        return "Kaia Testnet";
       default:
-        return 'Unknown Network';
+        return "Unknown Network";
     }
   };
 
   const getWalletIcon = () => {
     const icons: Record<string, string> = {
-      MetaMask: '🦊',
-      WalletConnect: '🔗',
-      LINE: '📱',
-      OKX: '⭕',
-      UNKNOWN: '❓',
+      MetaMask: "🦊",
+      WalletConnect: "🔗",
+      LINE: "📱",
+      OKX: "⭕",
+      UNKNOWN: "❓",
     };
     return icons[wallet.type] || icons.UNKNOWN;
   };
@@ -69,13 +69,13 @@ export default function WalletButton({
               <span>Connecting...</span>
             </div>
           ) : (
-            'Connect Wallet'
+            "Connect Wallet"
           )}
         </button>
-        
-        <WalletConnectModal 
-          isOpen={isModalOpen} 
-          onClose={() => setIsModalOpen(false)} 
+
+        <WalletConnectModal
+          isOpen={isModalOpen}
+          onClose={() => setIsModalOpen(false)}
         />
       </>
     );
@@ -112,7 +112,7 @@ export default function WalletButton({
         <button
           onClick={() => {
             // Add disconnect logic here
-            console.log('Disconnect wallet');
+            console.log("Disconnect wallet");
           }}
           className="px-3 py-2 text-sm text-gray-500 hover:text-gray-700 transition-colors"
         >
@@ -130,12 +130,16 @@ export default function WalletButton({
 }
 
 // Compact version for mobile
-export function WalletButtonCompact({ className = '' }: { className?: string }) {
+export function WalletButtonCompact({
+  className = "",
+}: {
+  className?: string;
+}) {
   const { isConnected, address, wallet } = useWalletConnection();
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   const formatAddress = (addr: string) => {
-    if (!addr) return '';
+    if (!addr) return "";
     return `${addr.slice(0, 4)}...${addr.slice(-2)}`;
   };
 
@@ -148,10 +152,10 @@ export function WalletButtonCompact({ className = '' }: { className?: string }) 
         >
           Connect
         </button>
-        
-        <WalletConnectModal 
-          isOpen={isModalOpen} 
-          onClose={() => setIsModalOpen(false)} 
+
+        <WalletConnectModal
+          isOpen={isModalOpen}
+          onClose={() => setIsModalOpen(false)}
         />
       </>
     );
@@ -159,8 +163,10 @@ export function WalletButtonCompact({ className = '' }: { className?: string }) 
 
   return (
     <div className={`flex items-center space-x-1 ${className}`}>
-      <span className="text-sm">{wallet.type === 'LINE' ? '📱' : '🦊'}</span>
-      <span className="text-sm font-medium">{formatAddress(address || '')}</span>
+      <span className="text-sm">{wallet.type === "LINE" ? "📱" : "🦊"}</span>
+      <span className="text-sm font-medium">
+        {formatAddress(address || "")}
+      </span>
     </div>
   );
 }

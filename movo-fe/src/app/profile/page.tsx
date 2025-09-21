@@ -9,7 +9,8 @@ import TokenBalanceCard from "@/components/profile/TokenBalanceCard";
 import NetworkSwitch from "@/components/shared/NetworkSwitch";
 
 const ProfilePage = () => {
-  const { isConnected, address } = useWallet();
+  const { isConnected, address, disconnect, connectWallet, isConnecting } =
+    useWallet();
   const { balances, loading, error, refetch } = useTokenBalances();
 
   return (
@@ -48,32 +49,120 @@ const ProfilePage = () => {
             </p>
           </div>
 
-          {/* Network Controls Section */}
-          {isConnected && (
-            <div className="bg-white/5 backdrop-blur-sm rounded-2xl p-6 border border-white/10 mb-8">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-semibold text-white flex items-center gap-2">
-                  <Wallet className="w-5 h-5 text-cyan-400" />
-                  Network Controls
-                </h2>
-              </div>
+          {/* Wallet Connection & Network Controls Section */}
+          <div className="bg-white/5 backdrop-blur-sm rounded-2xl p-6 border border-white/10 mb-8">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-semibold text-white flex items-center gap-2">
+                <Wallet className="w-5 h-5 text-cyan-400" />
+                Wallet & Network
+              </h2>
+            </div>
 
-              <div className="flex flex-col sm:flex-row gap-4">
-                <div className="flex-1">
+            {isConnected ? (
+              <div className="space-y-6">
+                {/* Connected Status */}
+                <div className="flex items-center gap-3 p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
+                  <div className="w-3 h-3 bg-green-400 rounded-full animate-pulse"></div>
+                  <span className="text-green-400 font-medium">
+                    Wallet Connected
+                  </span>
+                </div>
+
+                {/* Address Display */}
+                {address && (
+                  <div className="p-3 bg-gray-800/50 rounded-lg">
+                    <p className="text-sm text-gray-400 mb-1">
+                      Connected Address
+                    </p>
+                    <p className="text-sm text-white font-mono break-all">
+                      {address}
+                    </p>
+                  </div>
+                )}
+
+                {/* Network Controls */}
+                <div className="space-y-3">
+                  <h3 className="text-sm font-medium text-gray-300 flex items-center gap-2">
+                    <div className="w-3 h-3 bg-gradient-to-r from-cyan-400 to-blue-600 rounded-full"></div>
+                    Network Settings
+                  </h3>
                   <NetworkSwitch />
                 </div>
-              </div>
 
-              {address && (
-                <div className="mt-4 p-3 bg-gray-800/50 rounded-lg">
-                  <p className="text-sm text-gray-400 mb-1">Connected Address</p>
-                  <p className="text-sm text-white font-mono break-all">
-                    {address}
-                  </p>
+                {/* Wallet Controls */}
+                <div className="flex flex-col sm:flex-row gap-3 pt-2">
+                  <button
+                    onClick={async () => {
+                      try {
+                        await disconnect();
+                        console.log("✅ Wallet disconnected successfully");
+                      } catch (error) {
+                        console.error("❌ Error disconnecting wallet:", error);
+                      }
+                    }}
+                    className="flex-1 px-4 py-2 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 hover:border-red-500/30 text-red-400 rounded-lg transition-all duration-200 text-sm font-medium"
+                  >
+                    Disconnect Wallet
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(address || "");
+                      // You can add a toast notification here
+                    }}
+                    className="flex-1 px-4 py-2 bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/20 hover:border-cyan-500/30 text-cyan-400 rounded-lg transition-all duration-200 text-sm font-medium"
+                  >
+                    Copy Address
+                  </button>
                 </div>
-              )}
-            </div>
-          )}
+              </div>
+            ) : (
+              <div className="text-center py-4">
+                <div className="flex items-center gap-3 p-3 bg-orange-500/10 border border-orange-500/20 rounded-lg mb-4">
+                  <AlertCircle className="w-4 h-4 text-orange-400" />
+                  <span className="text-orange-400 text-sm">
+                    No wallet connected
+                  </span>
+                </div>
+                <p className="text-gray-400 text-sm mb-4">
+                  Connect your wallet to access all features including token
+                  balances and escrow management
+                </p>
+
+                {/* Connect Wallet Button */}
+                <button
+                  onClick={async () => {
+                    try {
+                      await connectWallet();
+                      console.log(
+                        "✅ Wallet connected successfully from profile",
+                      );
+                    } catch (error) {
+                      console.error("❌ Error connecting wallet:", error);
+                    }
+                  }}
+                  disabled={isConnecting}
+                  className={`px-6 py-3 rounded-xl font-medium transition-all duration-300 flex items-center justify-center space-x-2 mx-auto ${
+                    isConnecting
+                      ? "bg-gray-500/50 text-gray-300 cursor-not-allowed"
+                      : "bg-gradient-to-r from-cyan-500 to-blue-600 text-white hover:shadow-lg hover:shadow-cyan-500/25 hover:scale-105"
+                  }`}
+                >
+                  {isConnecting ? (
+                    <>
+                      <div className="w-5 h-5 border-2 border-gray-300 border-t-transparent rounded-full animate-spin"></div>
+                      <span>Connecting...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Wallet className="w-5 h-5" />
+                      <span>Connect Wallet</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            )}
+          </div>
 
           {/* Token Balances Section */}
           {isConnected ? (
@@ -117,11 +206,43 @@ const ProfilePage = () => {
                 Connect Your Wallet
               </h3>
               <p className="text-gray-400 mb-6">
-                Connect your wallet using the button in the top navigation bar to view your token balances and manage your profile
+                Connect your wallet to view your token balances and manage your
+                profile
               </p>
+
+              {/* Connect Wallet Button */}
+              <button
+                onClick={async () => {
+                  try {
+                    await connectWallet();
+                    console.log(
+                      "✅ Wallet connected successfully from profile",
+                    );
+                  } catch (error) {
+                    console.error("❌ Error connecting wallet:", error);
+                  }
+                }}
+                disabled={isConnecting}
+                className={`px-8 py-4 rounded-xl font-medium transition-all duration-300 flex items-center justify-center space-x-3 mx-auto ${
+                  isConnecting
+                    ? "bg-gray-500/50 text-gray-300 cursor-not-allowed"
+                    : "bg-gradient-to-r from-cyan-500 to-blue-600 text-white hover:shadow-lg hover:shadow-cyan-500/25 hover:scale-105"
+                }`}
+              >
+                {isConnecting ? (
+                  <>
+                    <div className="w-6 h-6 border-2 border-gray-300 border-t-transparent rounded-full animate-spin"></div>
+                    <span>Connecting...</span>
+                  </>
+                ) : (
+                  <>
+                    <Wallet className="w-6 h-6" />
+                    <span>Connect Wallet</span>
+                  </>
+                )}
+              </button>
             </div>
           )}
-
 
           {/* Background decorations */}
           <div className="fixed inset-0 pointer-events-none">
