@@ -36,7 +36,7 @@ import {
 import { getTokenAddress } from "@/lib/contractConfig";
 import { useWallet } from "@/lib/walletContext";
 import { useWalletClientHook } from "@/lib/useWalletClient";
-import { Token } from "@/types";
+import TopUpModal from "./sender/TopUpModal";
 import {
   getEscrowVestingInfo,
   getEscrowVestingProgress,
@@ -203,8 +203,6 @@ export default function EscrowList({
     maxAmountFormatted: string;
     tokenSymbol: string;
   } | null>(null);
-  const [topUpAmount, setTopUpAmount] = useState<string>("");
-  const [isTopUpLoading, setIsTopUpLoading] = useState(false);
   const [userTokenBalance, setUserTokenBalance] = useState<string>("0");
   const [closingEscrowId, setClosingEscrowId] = useState<string | null>(null);
   const [closeConfirmModal, setCloseConfirmModal] = useState<{
@@ -528,91 +526,126 @@ export default function EscrowList({
     return `${address.slice(0, 6)}...${address.slice(-4)}`;
   };
 
-  // Function to open top up modal
+  // // Function to open top up modal
+  // const openTopUpModal = async (escrowId: string, tokenAddress: string) => {
+  //   const tokenType = getTokenType(tokenAddress);
+
+  //   // Find the escrow data to get pre-fetched contract details
+  //   const escrowData = escrows.find((escrow) => escrow.escrowId === escrowId);
+
+  //   // Calculate max amount based on pre-fetched data
+  //   // For top up, we can use a reasonable default since there's no hard limit in the contract
+  //   // The actual limit will be the user's token balance
+  //   let maxAmount = "1000000000000"; // Default max (1000 tokens with 6 decimals)
+
+  //   // Use allocated amount as a reference, but allow topping up more
+  //   if (escrowData?.allocatedAmount) {
+  //     // Use allocated amount as a reasonable reference
+  //     maxAmount = escrowData.allocatedAmount;
+  //   } else if (escrowData?.totalAmount) {
+  //     // Fallback to total amount from indexer
+  //     maxAmount = escrowData.totalAmount;
+  //   } else {
+  //     // If no pre-fetched data, try to get it from contract details if available
+  //     const details = contractDetails.get(escrowId);
+  //     if (details?.escrowRoom?.totalAllocatedAmount) {
+  //       maxAmount = details.escrowRoom.totalAllocatedAmount.toString();
+  //     }
+  //   }
+  //   console.log("🔍 Max amount calculation debug:", {
+  //     escrowData: escrowData
+  //       ? {
+  //           allocatedAmount: escrowData.allocatedAmount,
+  //           totalAmount: escrowData.totalAmount,
+  //         }
+  //       : null,
+  //     originalMaxAmount:
+  //       escrowData?.allocatedAmount || escrowData?.totalAmount || "default",
+  //     maxAmount: maxAmount,
+  //   });
+
+  //   // Get user's token balance
+  //   const balance = await getUserTokenBalance(tokenType);
+  //   const decimals =
+  //     tokenType === "IDRX_BASE" || tokenType === "IDRX_KAIA" ? 2 : 6;
+  //   const balanceFormatted = formatTokenAmount(balance, decimals);
+  //   setUserTokenBalance(balanceFormatted);
+
+  //   // Format max amount with proper decimals
+  //   const maxAmountFormatted = formatTokenAmount(BigInt(maxAmount), decimals);
+  //   const tokenSymbol = getTokenSymbol(tokenAddress);
+
+  //   console.log("🚀 Opening top up modal with max amount:", {
+  //     escrowId,
+  //     tokenType,
+  //     maxAmount,
+  //     maxAmountFormatted,
+  //     tokenSymbol,
+  //     userBalance: balance.toString(),
+  //     userBalanceFormatted: balanceFormatted,
+  //     tokenAddress,
+  //     decimals:
+  //       tokenAddress.toLowerCase() ===
+  //       "0x77fea84656b5ef40bf33e3835a9921daeaadb976"
+  //         ? 2
+  //         : 6,
+  //     allocatedAmount: escrowData?.allocatedAmount,
+  //     totalAmount: escrowData?.totalAmount,
+  //     hasContractDetails: contractDetails.has(escrowId),
+  //   });
+
+  //   setTopUpModal({
+  //     isOpen: true,
+  //     escrowId,
+  //     tokenAddress,
+  //     tokenType: tokenType,
+  //     // tokenType: tokenType as "USDC" | "IDRX",
+  //     maxAmount,
+  //     maxAmountFormatted,
+  //     tokenSymbol,
+  //   });
+  //   setTopUpAmount("");
+  // };
+
   const openTopUpModal = async (escrowId: string, tokenAddress: string) => {
     const tokenType = getTokenType(tokenAddress);
-
-    // Find the escrow data to get pre-fetched contract details
     const escrowData = escrows.find((escrow) => escrow.escrowId === escrowId);
 
-    // Calculate max amount based on pre-fetched data
-    // For top up, we can use a reasonable default since there's no hard limit in the contract
-    // The actual limit will be the user's token balance
-    let maxAmount = "1000000000000"; // Default max (1000 tokens with 6 decimals)
+    let maxAmount = "1000000000000"; // Default max
 
-    // Use allocated amount as a reference, but allow topping up more
     if (escrowData?.allocatedAmount) {
-      // Use allocated amount as a reasonable reference
       maxAmount = escrowData.allocatedAmount;
     } else if (escrowData?.totalAmount) {
-      // Fallback to total amount from indexer
       maxAmount = escrowData.totalAmount;
     } else {
-      // If no pre-fetched data, try to get it from contract details if available
       const details = contractDetails.get(escrowId);
       if (details?.escrowRoom?.totalAllocatedAmount) {
         maxAmount = details.escrowRoom.totalAllocatedAmount.toString();
       }
     }
-    console.log("🔍 Max amount calculation debug:", {
-      escrowData: escrowData
-        ? {
-            allocatedAmount: escrowData.allocatedAmount,
-            totalAmount: escrowData.totalAmount,
-          }
-        : null,
-      originalMaxAmount:
-        escrowData?.allocatedAmount || escrowData?.totalAmount || "default",
-      maxAmount: maxAmount,
-    });
 
     // Get user's token balance
     const balance = await getUserTokenBalance(tokenType);
-    const decimals =
-      tokenType === "IDRX_BASE" || tokenType === "IDRX_KAIA" ? 2 : 6;
+    const decimals = tokenType === "IDRX_BASE" || tokenType === "IDRX_KAIA" ? 2 : 6;
     const balanceFormatted = formatTokenAmount(balance, decimals);
     setUserTokenBalance(balanceFormatted);
 
-    // Format max amount with proper decimals
     const maxAmountFormatted = formatTokenAmount(BigInt(maxAmount), decimals);
     const tokenSymbol = getTokenSymbol(tokenAddress);
-
-    console.log("🚀 Opening top up modal with max amount:", {
-      escrowId,
-      tokenType,
-      maxAmount,
-      maxAmountFormatted,
-      tokenSymbol,
-      userBalance: balance.toString(),
-      userBalanceFormatted: balanceFormatted,
-      tokenAddress,
-      decimals:
-        tokenAddress.toLowerCase() ===
-        "0x77fea84656b5ef40bf33e3835a9921daeaadb976"
-          ? 2
-          : 6,
-      allocatedAmount: escrowData?.allocatedAmount,
-      totalAmount: escrowData?.totalAmount,
-      hasContractDetails: contractDetails.has(escrowId),
-    });
 
     setTopUpModal({
       isOpen: true,
       escrowId,
       tokenAddress,
       tokenType: tokenType,
-      // tokenType: tokenType as "USDC" | "IDRX",
       maxAmount,
       maxAmountFormatted,
       tokenSymbol,
     });
-    setTopUpAmount("");
   };
-
   // Function to close top up modal
   const closeTopUpModal = () => {
     setTopUpModal(null);
-    setTopUpAmount("");
   };
 
   // Function to get token contract based on token type
@@ -657,132 +690,160 @@ export default function EscrowList({
   };
 
   // Function to handle top up transaction
-  const handleTopUp = async () => {
-    if (!topUpModal || !address || !isConnected || !walletClient) return;
+  // const handleTopUp = async () => {
+  //   if (!topUpModal || !address || !isConnected || !walletClient) return;
 
-    setIsTopUpLoading(true);
+  //   // setIsTopUpLoading(true);
 
-    try {
-      const { escrowId, tokenAddress, tokenType } = topUpModal;
-      const amount = parseFloat(topUpAmount);
+  //   try {
+  //     const { escrowId, tokenAddress, tokenType } = topUpModal;
+  //     const amount = parseFloat(topUpAmount);
 
-      if (isNaN(amount) || amount <= 0) {
-        alert("Please enter a valid amount");
-        return;
-      }
+  //     if (isNaN(amount) || amount <= 0) {
+  //       alert("Please enter a valid amount");
+  //       return;
+  //     }
 
-      // Check if amount exceeds max
-      const maxAmountNumber = parseFloat(topUpModal.maxAmountFormatted);
-      const userBalanceNumber = parseFloat(userTokenBalance);
-      const actualMax = Math.min(maxAmountNumber, userBalanceNumber);
+  //     // Check if amount exceeds max
+  //     const maxAmountNumber = parseFloat(topUpModal.maxAmountFormatted);
+  //     const userBalanceNumber = parseFloat(userTokenBalance);
+  //     const actualMax = Math.min(maxAmountNumber, userBalanceNumber);
 
-      if (amount > actualMax) {
-        alert(
-          `Amount cannot exceed maximum allowed: ${actualMax} ${topUpModal.tokenSymbol}`,
-        );
-        return;
-      }
+  //     if (amount > actualMax) {
+  //       alert(
+  //         `Amount cannot exceed maximum allowed: ${actualMax} ${topUpModal.tokenSymbol}`,
+  //       );
+  //       return;
+  //     }
 
-      console.log("🚀 Starting top up process:", {
-        escrowId,
-        tokenAddress,
-        tokenType,
-        tokenSymbol: topUpModal.tokenSymbol,
-        amount,
-        maxAmount: maxAmountNumber,
-        userBalance: userBalanceNumber,
-        actualMax,
+  //     console.log("🚀 Starting top up process:", {
+  //       escrowId,
+  //       tokenAddress,
+  //       tokenType,
+  //       tokenSymbol: topUpModal.tokenSymbol,
+  //       amount,
+  //       maxAmount: maxAmountNumber,
+  //       userBalance: userBalanceNumber,
+  //       actualMax,
+  //     });
+
+  //     // Convert amount to proper decimals using viem's parseUnits
+  //     const decimals =
+  //       tokenType === "IDRX_BASE" || tokenType === "IDRX_KAIA" ? 2 : 6;
+  //     // const decimals = tokenType === "IDRX" ? 2 : 6;
+  //     const amountInWei = parseTokenAmount(amount.toString(), decimals);
+
+  //     console.log("💰 Amount in wei:", amountInWei.toString());
+
+  //     // Check if user has enough balance
+  //     const userBalance = await checkTokenBalance(tokenType, address);
+  //     if (userBalance < amountInWei) {
+  //       throw new Error(
+  //         `Insufficient balance. You have ${formatTokenAmount(userBalance, decimals)} ${tokenType}`,
+  //       );
+  //     }
+
+  //     // Check current allowance
+  //     const currentAllowance = await checkTokenAllowance(
+  //       tokenType,
+  //       address,
+  //       escrowId,
+  //     );
+  //     console.log("🔍 Current allowance:", currentAllowance.toString());
+
+  //     // Approve tokens if needed
+  //     if (currentAllowance < amountInWei) {
+  //       console.log("🔐 Approving tokens...");
+
+  //       const approvalSuccess = await approveTokens(
+  //         walletClient,
+  //         tokenType,
+  //         escrowId,
+  //         amountInWei,
+  //       );
+
+  //       if (!approvalSuccess) {
+  //         throw new Error("Failed to approve tokens for escrow contract");
+  //       }
+  //     }
+
+  //     // Perform topup using the smart contract function
+  //     const result = await topUpFunds(
+  //       walletClient,
+  //       escrowId,
+  //       amountInWei,
+  //       tokenType,
+  //     );
+
+  //     if (result.success) {
+  //       console.log("✅ Top up successful:", result.transactionHash);
+
+  //       // Close modal and refresh data
+  //       closeTopUpModal();
+
+  //       // Refresh vesting info after topup
+  //       const escrowData = escrows.find((e) => e.escrowId === escrowId);
+  //       if (escrowData) {
+  //         // Clear existing vesting cache and reload
+  //         setVestingInfo((prev) => {
+  //           const newMap = new Map(prev);
+  //           newMap.delete(escrowId);
+  //           return newMap;
+  //         });
+  //         setVestingTimeline((prev) => {
+  //           const newMap = new Map(prev);
+  //           newMap.delete(escrowId);
+  //           return newMap;
+  //         });
+
+  //         // Reload vesting info
+  //         setTimeout(() => {
+  //           loadVestingInfo(escrowId, escrowData.tokenAddress);
+  //         }, 1000);
+  //       }
+
+  //       // Call the parent's onTopupFund callback
+  //       onTopupFund(escrowId);
+  //     } else {
+  //       throw new Error(result.error || "Failed to topup funds");
+  //     }
+  //   } catch (error) {
+  //     console.error("❌ Top up failed:", error);
+  //     alert(
+  //       "Top up failed: " +
+  //         (error instanceof Error ? error.message : "Unknown error"),
+  //     );
+  //   } finally {
+  //     setIsTopUpLoading(false);
+  //   }
+  // };
+
+  const handleTopUpSuccess = (details: any) => {
+    console.log("✅ Top up successful:", details);
+    
+    // Refresh vesting info after topup
+    const escrowData = escrows.find((e) => e.escrowId === details.escrowId);
+    if (escrowData) {
+      // Clear existing vesting cache and reload
+      setVestingInfo((prev) => {
+        const newMap = new Map(prev);
+        newMap.delete(details.escrowId);
+        return newMap;
+      });
+      setVestingTimeline((prev) => {
+        const newMap = new Map(prev);
+        newMap.delete(details.escrowId);
+        return newMap;
       });
 
-      // Convert amount to proper decimals using viem's parseUnits
-      const decimals =
-        tokenType === "IDRX_BASE" || tokenType === "IDRX_KAIA" ? 2 : 6;
-      // const decimals = tokenType === "IDRX" ? 2 : 6;
-      const amountInWei = parseTokenAmount(amount.toString(), decimals);
-
-      console.log("💰 Amount in wei:", amountInWei.toString());
-
-      // Check if user has enough balance
-      const userBalance = await checkTokenBalance(tokenType, address);
-      if (userBalance < amountInWei) {
-        throw new Error(
-          `Insufficient balance. You have ${formatTokenAmount(userBalance, decimals)} ${tokenType}`,
-        );
-      }
-
-      // Check current allowance
-      const currentAllowance = await checkTokenAllowance(
-        tokenType,
-        address,
-        escrowId,
-      );
-      console.log("🔍 Current allowance:", currentAllowance.toString());
-
-      // Approve tokens if needed
-      if (currentAllowance < amountInWei) {
-        console.log("🔐 Approving tokens...");
-
-        const approvalSuccess = await approveTokens(
-          walletClient,
-          tokenType,
-          escrowId,
-          amountInWei,
-        );
-
-        if (!approvalSuccess) {
-          throw new Error("Failed to approve tokens for escrow contract");
-        }
-      }
-
-      // Perform topup using the smart contract function
-      const result = await topUpFunds(
-        walletClient,
-        escrowId,
-        amountInWei,
-        tokenType,
-      );
-
-      if (result.success) {
-        console.log("✅ Top up successful:", result.transactionHash);
-
-        // Close modal and refresh data
-        closeTopUpModal();
-
-        // Refresh vesting info after topup
-        const escrowData = escrows.find((e) => e.escrowId === escrowId);
-        if (escrowData) {
-          // Clear existing vesting cache and reload
-          setVestingInfo((prev) => {
-            const newMap = new Map(prev);
-            newMap.delete(escrowId);
-            return newMap;
-          });
-          setVestingTimeline((prev) => {
-            const newMap = new Map(prev);
-            newMap.delete(escrowId);
-            return newMap;
-          });
-
-          // Reload vesting info
-          setTimeout(() => {
-            loadVestingInfo(escrowId, escrowData.tokenAddress);
-          }, 1000);
-        }
-
-        // Call the parent's onTopupFund callback
-        onTopupFund(escrowId);
-      } else {
-        throw new Error(result.error || "Failed to topup funds");
-      }
-    } catch (error) {
-      console.error("❌ Top up failed:", error);
-      alert(
-        "Top up failed: " +
-          (error instanceof Error ? error.message : "Unknown error"),
-      );
-    } finally {
-      setIsTopUpLoading(false);
+      // Reload vesting info
+      setTimeout(() => {
+        loadVestingInfo(details.escrowId, escrowData.tokenAddress);
+      }, 1000);
     }
+
+    // Call the parent's onTopupFund callback
+    onTopupFund(details.escrowId);
   };
 
   const openCloseConfirmModal = (escrowId: string, tokenAddress: string) => {
@@ -1561,132 +1622,23 @@ export default function EscrowList({
 
       {/* Topup Modal */}
       {topUpModal && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-gray-900/95 border border-cyan-400/20 rounded-2xl w-full max-w-md">
-            {/* Header */}
-            <div className="flex justify-between items-center p-6 border-b border-white/10">
-              <div>
-                <h3 className="text-white text-xl font-semibold">
-                  Topup Funds
-                </h3>
-                <p className="text-white/60 text-sm">
-                  Add more {topUpModal.tokenSymbol} to your escrow
-                </p>
-              </div>
-              <button
-                onClick={closeTopUpModal}
-                className="text-gray-400 hover:text-white transition-colors p-2 hover:bg-white/10 rounded-lg"
-              >
-                <X className="w-6 h-6" />
-              </button>
-            </div>
-
-            <div className="p-6 space-y-6">
-              {/* Escrow Info */}
-              <div className="bg-gradient-to-r from-cyan-500/10 to-blue-500/10 border border-cyan-500/20 rounded-xl p-4">
-                <h4 className="text-cyan-300 font-medium mb-2">
-                  Escrow Details
-                </h4>
-                <div className="space-y-1 text-sm">
-                  <p className="text-white/60">
-                    Escrow ID:{" "}
-                    <span className="text-white font-mono">
-                      {topUpModal.escrowId.slice(0, 8)}...
-                    </span>
-                  </p>
-                  <p className="text-white/60">
-                    Token:{" "}
-                    <span className="text-white font-medium">
-                      {topUpModal.tokenSymbol}
-                    </span>
-                  </p>
-                  <p className="text-white/60">
-                    Your Balance:{" "}
-                    <span className="text-white font-medium">
-                      {userTokenBalance} {topUpModal.tokenSymbol}
-                    </span>
-                  </p>
-                </div>
-              </div>
-
-              {/* Amount Input */}
-              <div>
-                <label className="block text-white/80 text-sm font-medium mb-2">
-                  Amount to Topup ({topUpModal.tokenSymbol})
-                </label>
-                <div className="relative">
-                  <input
-                    type="number"
-                    step="1"
-                    // step="0.01"
-                    min="0"
-                    value={topUpAmount}
-                    onChange={(e) => setTopUpAmount(e.target.value)}
-                    placeholder="0.0"
-                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 focus:border-cyan-500/50 transition-all pr-20"
-                    disabled={isTopUpLoading}
-                  />
-                  <div className="absolute right-3 top-1/2 transform -translate-y-1/2 text-white/60 text-sm">
-                    {topUpModal.tokenSymbol}
-                  </div>
-                </div>
-                <p className="text-white/60 text-xs mt-1">
-                  Max: {topUpModal.maxAmountFormatted} {topUpModal.tokenSymbol}
-                </p>
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex space-x-3">
-                <button
-                  onClick={closeTopUpModal}
-                  className="flex-1 px-4 py-3 bg-white/10 text-white rounded-xl hover:bg-white/20 transition-colors"
-                  disabled={isTopUpLoading}
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleTopUp}
-                  disabled={
-                    isTopUpLoading ||
-                    !topUpAmount ||
-                    parseFloat(topUpAmount) <= 0 ||
-                    !walletClient ||
-                    !isConnected
-                  }
-                  className={`flex-1 px-4 py-3 rounded-xl font-medium transition-all duration-300 flex items-center justify-center space-x-2 ${
-                    isTopUpLoading ||
-                    !topUpAmount ||
-                    parseFloat(topUpAmount) <= 0 ||
-                    !walletClient ||
-                    !isConnected
-                      ? "bg-gray-500/50 text-gray-300 cursor-not-allowed"
-                      : "bg-gradient-to-r from-green-500 to-emerald-600 text-white hover:shadow-lg hover:shadow-green-500/25 hover:scale-105"
-                  }`}
-                >
-                  {isTopUpLoading ? (
-                    <>
-                      <RefreshCw className="w-5 h-5 animate-spin" />
-                      <span>Processing...</span>
-                    </>
-                  ) : (
-                    <>
-                      <ArrowUp className="w-5 h-5" />
-                      <span>
-                        Topup {topUpAmount} {topUpModal.tokenSymbol}
-                      </span>
-                    </>
-                  )}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <TopUpModal
+          isOpen={topUpModal.isOpen}
+          onClose={closeTopUpModal}
+          escrowId={topUpModal.escrowId}
+          tokenAddress={topUpModal.tokenAddress}
+          tokenType={topUpModal.tokenType}
+          maxAmount={topUpModal.maxAmount}
+          maxAmountFormatted={topUpModal.maxAmountFormatted}
+          tokenSymbol={topUpModal.tokenSymbol}
+          userTokenBalance={userTokenBalance}
+          onTopUpSuccess={handleTopUpSuccess}
+        />
       )}
 
       {closeConfirmModal && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-gray-900/95 border border-orange-400/20 rounded-2xl w-full max-w-md">
-            {/* Header */}
             <div className="flex justify-between items-center p-6 border-b border-white/10">
               <div>
                 <h3 className="text-white text-xl font-semibold">
@@ -1705,7 +1657,6 @@ export default function EscrowList({
             </div>
 
             <div className="p-6 space-y-6">
-              {/* Warning Info */}
               <div className="bg-gradient-to-r from-orange-500/10 to-red-500/10 border border-orange-500/20 rounded-xl p-4">
                 <h4 className="text-orange-300 font-medium mb-2">⚠️ Warning</h4>
                 <div className="space-y-1 text-sm text-white/80">
@@ -1724,7 +1675,6 @@ export default function EscrowList({
                 </div>
               </div>
 
-              {/* Escrow Info */}
               <div className="bg-gradient-to-r from-gray-500/10 to-gray-600/10 border border-gray-500/20 rounded-xl p-4">
                 <h4 className="text-gray-300 font-medium mb-2">
                   Escrow Details
@@ -1745,7 +1695,6 @@ export default function EscrowList({
                 </div>
               </div>
 
-              {/* Action Buttons */}
               <div className="flex space-x-3">
                 <button
                   onClick={closeCloseConfirmModal}

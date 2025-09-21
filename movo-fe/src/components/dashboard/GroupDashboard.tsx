@@ -9,16 +9,11 @@ import { Plus } from "lucide-react";
 import GroupStatsCards from "./groups/GroupsStatsCards";
 import GroupFilterBar from "./groups/GroupFilterBar";
 import EscrowList from "./EscrowList";
-import TopupFundModal from "./groups/TopupFundModal";
 import CreateStreamModal from "./sender/CreateStreamModal";
 import {
-  loadAllGroup,
-  addGroup,
-  updateWalletAddressRole,
   fetchEscrowsFromIndexer,
 } from "@/app/api/api";
-import { checkMultipleEscrowsStatus } from "@/lib/smartContract";
-import { ref } from "process";
+
 
 interface GroupDashboardProps {
   onRoleChange?: () => void;
@@ -458,12 +453,7 @@ export default function GroupDashboard({
           onEscrowCreated={handleEscrowCreated}
         />
 
-        {/* Topup Fund Modal */}
-        <TopupFundModal
-          isOpen={isTopupModalOpen}
-          onClose={() => setIsTopupModalOpen(false)}
-          escrowId={selectedEscrowId || ""}
-        />
+
       </div>
     </div>
   );
