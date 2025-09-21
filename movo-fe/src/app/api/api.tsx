@@ -11,9 +11,11 @@ interface ErrorResponse {
   message?: string;
 }
 // Goldsky API URLs for Kaia mainnet escrow contracts
-const GOLDSKY_ESCROW_API_URL = process.env.NEXT_PUBLIC_GOLDSKY_ESCROW_API_URL || 
+const GOLDSKY_ESCROW_API_URL =
+  process.env.NEXT_PUBLIC_USDC_ESCROW_KAIA_MAINNET ||
   "https://api.goldsky.com/api/public/project_cmfnod75l9o1r01xy81lz52hq/subgraphs/MovoUSDCEscrowKaiaMainnet/1.0.0/gn";
-const GOLDSKY_ESCROW_IDRX_API_URL = process.env.NEXT_PUBLIC_GOLDSKY_ESCROW_IDRX_API_URL ||
+const GOLDSKY_ESCROW_IDRX_API_URL =
+  process.env.NEXT_PUBLIC_IDRX_ESCROW_KAIA_MAINNET ||
   "https://api.goldsky.com/api/public/project_cmfnod75l9o1r01xy81lz52hq/subgraphs/MovoIDRXEscrowKaiaMainnet/1.0.0/gn";
 
 // Simple in-memory cache for API responses
@@ -80,21 +82,24 @@ export const clearContractCache = () => {
 };
 
 // Function to clear cache after topup
-export const clearCacheAfterTopup = (escrowId: string, walletAddress: string) => {
+export const clearCacheAfterTopup = (
+  escrowId: string,
+  walletAddress: string,
+) => {
   // Clear general cache
   clearCache(walletAddress);
-  
+
   // Clear contract details cache for this specific escrow
   const contractAddresses = [
     "0x0d837aD954F4f9F06E303A86150ad0F322Ec5EB1", // USDC/USDT escrow
     "0x4ce1D1E0e9C769221E03e661abBf043cceD84F1f", // IDRX escrow
   ];
-  
-  contractAddresses.forEach(contractAddress => {
+
+  contractAddresses.forEach((contractAddress) => {
     const cacheKey = `${contractAddress}-${escrowId}`;
     contractDetailsCache.delete(cacheKey);
   });
-  
+
   console.log("🔄 Cache cleared after topup for escrow:", escrowId);
 };
 
@@ -102,13 +107,20 @@ export const clearCacheAfterTopup = (escrowId: string, walletAddress: string) =>
 const calculateAvailableAmountFromTopups = async (
   escrowId: string,
   receiverAddress: string,
-  tokenType: string
-): Promise<{ availableAmount: string; totalTopups: string; canClaim: boolean }> => {
+  tokenType: string,
+): Promise<{
+  availableAmount: string;
+  totalTopups: string;
+  canClaim: boolean;
+}> => {
   try {
-    console.log("💰 Calculating availableAmount from topups for escrow:", escrowId);
+    console.log(
+      "💰 Calculating availableAmount from topups for escrow:",
+      escrowId,
+    );
     console.log("💰 Receiver address:", receiverAddress);
     console.log("💰 Token type:", tokenType);
-    
+
     // Query Goldsky for fundsTopUps for this specific escrow
     const query = `
       query GetTopupsForEscrow($escrowId: String!) {
@@ -149,52 +161,71 @@ const calculateAvailableAmountFromTopups = async (
     }
 
     // Get receiver's allocated amount from smart contract
-    const contractAddress = tokenType === "IDRX" 
-      ? "0x4ce1D1E0e9C769221E03e661abBf043cceD84F1f" 
-      : "0x0d837aD954F4f9F06E303A86150ad0F322Ec5EB1";
-    
+    const contractAddress =
+      tokenType === "IDRX"
+        ? "0x4ce1D1E0e9C769221E03e661abBf043cceD84F1f"
+        : "0x0d837aD954F4f9F06E303A86150ad0F322Ec5EB1";
+
     console.log("🔍 Getting contract details from:", contractAddress);
-    const contractDetails = await getEscrowDetailsFromContract(escrowId, contractAddress);
+    const contractDetails = await getEscrowDetailsFromContract(
+      escrowId,
+      contractAddress,
+    );
     if (!contractDetails) {
       console.log("❌ Could not get contract details for escrow:", escrowId);
-      return { availableAmount: "0", totalTopups: totalTopups.toString(), canClaim: false };
+      return {
+        availableAmount: "0",
+        totalTopups: totalTopups.toString(),
+        canClaim: false,
+      };
     }
 
     console.log("🔍 Contract details:", contractDetails);
 
     // Find receiver's allocated amount
     const receiverIndex = contractDetails.receiverAddresses.findIndex(
-      (addr: string) => addr.toLowerCase() === receiverAddress.toLowerCase()
+      (addr: string) => addr.toLowerCase() === receiverAddress.toLowerCase(),
     );
 
     if (receiverIndex === -1) {
       console.log("❌ Receiver not found in escrow");
-      return { availableAmount: "0", totalTopups: totalTopups.toString(), canClaim: false };
+      return {
+        availableAmount: "0",
+        totalTopups: totalTopups.toString(),
+        canClaim: false,
+      };
     }
 
     // Get receiver's allocated amount (simplified approach)
-    const receiverAllocatedAmount = BigInt(contractDetails.totalAllocatedAmount) / BigInt(contractDetails.receiverCount);
-    
-    console.log("📊 Receiver allocated amount:", receiverAllocatedAmount.toString());
+    const receiverAllocatedAmount =
+      BigInt(contractDetails.totalAllocatedAmount) /
+      BigInt(contractDetails.receiverCount);
+
+    console.log(
+      "📊 Receiver allocated amount:",
+      receiverAllocatedAmount.toString(),
+    );
     console.log("📊 Total topups:", totalTopups.toString());
 
     // Calculate available amount: min(totalTopups, receiverAllocatedAmount)
-    const availableAmount = totalTopups < receiverAllocatedAmount ? totalTopups : receiverAllocatedAmount;
+    const availableAmount =
+      totalTopups < receiverAllocatedAmount
+        ? totalTopups
+        : receiverAllocatedAmount;
     const canClaim = totalTopups >= receiverAllocatedAmount;
 
     console.log("✅ Calculated availableAmount:", {
       availableAmount: availableAmount.toString(),
       totalTopups: totalTopups.toString(),
       receiverAllocatedAmount: receiverAllocatedAmount.toString(),
-      canClaim
+      canClaim,
     });
 
     return {
       availableAmount: availableAmount.toString(),
       totalTopups: totalTopups.toString(),
-      canClaim
+      canClaim,
     };
-
   } catch (error) {
     console.error("❌ Error calculating availableAmount from topups:", error);
     return { availableAmount: "0", totalTopups: "0", canClaim: false };
@@ -1287,7 +1318,7 @@ export const fetchEscrowsFromIndexer = async (userAddress: string) => {
       // IDRX API
       axios
         .post(
-          process.env.NEXT_PUBLIC_GOLDSKY_ESCROW_IDRX_API_URL!,
+          process.env.NEXT_PUBLIC_IDRX_ESCROW_KAIA_MAINNET!,
           {
             query,
             variables: { userAddress: userAddress.toLowerCase() },
@@ -1307,7 +1338,7 @@ export const fetchEscrowsFromIndexer = async (userAddress: string) => {
       // USDC/USDT API
       axios
         .post(
-          process.env.NEXT_PUBLIC_GOLDSKY_ESCROW_API_URL!,
+          process.env.NEXT_PUBLIC_USDC_ESCROW_KAIA_MAINNET!,
           {
             query,
             variables: { userAddress: userAddress.toLowerCase() },
@@ -1401,7 +1432,6 @@ export const fetchEscrowsFromIndexer = async (userAddress: string) => {
 
     console.log("📊 Raw combined escrows from indexer:", escrows);
     console.log("📊 Number of combined escrows found:", escrows.length);
-
 
     if (escrows.length === 0) {
       console.log("⚠️ No escrows found for sender address:", userAddress);
@@ -1501,20 +1531,22 @@ export const fetchEscrowsFromIndexer = async (userAddress: string) => {
       }, {}),
     });
 
-    const {checkMultipleEscrowsStatus} = await import("../../lib/smartContract")
+    const { checkMultipleEscrowsStatus } = await import(
+      "../../lib/smartContract"
+    );
 
     const escrowsToCheck = transformedEscrows.map((escrow) => ({
       escrowId: escrow.escrowId,
       tokenAddress: escrow.tokenAddress,
-    }))
-    const statusResults = await checkMultipleEscrowsStatus(escrowsToCheck)
+    }));
+    const statusResults = await checkMultipleEscrowsStatus(escrowsToCheck);
     const activeEscrows = transformedEscrows.filter((escrow) => {
-      const isClosed = statusResults[escrow.escrowId]
-      if(isClosed){
-        return false
+      const isClosed = statusResults[escrow.escrowId];
+      if (isClosed) {
+        return false;
       }
-      return true
-    })
+      return true;
+    });
     console.log("✅ Final active escrows after blockchain filtering:", {
       originalCount: transformedEscrows.length,
       activeCount: activeEscrows.length,
@@ -2011,7 +2043,7 @@ const fetchReceiverEscrowsSimple = async (receiverAddress: string) => {
       // IDRX API
       axios
         .post(
-          process.env.NEXT_PUBLIC_GOLDSKY_ESCROW_IDRX_API_URL!,
+          process.env.NEXT_PUBLIC_IDRX_ESCROW_KAIA_MAINNET!,
           {
             query,
             variables: { receiverAddress: receiverAddress.toLowerCase() },
@@ -2031,7 +2063,7 @@ const fetchReceiverEscrowsSimple = async (receiverAddress: string) => {
       // USDC/USDT API
       axios
         .post(
-          process.env.NEXT_PUBLIC_GOLDSKY_ESCROW_API_URL!,
+          process.env.NEXT_PUBLIC_USDC_ESCROW_KAIA_MAINNET!,
           {
             query,
             variables: { receiverAddress: receiverAddress.toLowerCase() },
@@ -2186,11 +2218,14 @@ const fetchReceiverEscrowsSimple = async (receiverAddress: string) => {
         );
 
         // Calculate actual available amount using Goldsky topup data
-        console.log("🔍 Calling calculateAvailableAmountFromTopups for escrow:", escrow.escrowId);
+        console.log(
+          "🔍 Calling calculateAvailableAmountFromTopups for escrow:",
+          escrow.escrowId,
+        );
         const topupData = await calculateAvailableAmountFromTopups(
           escrow.escrowId,
           receiverAddress,
-          tokenType
+          tokenType,
         );
         console.log("🔍 Topup data result:", topupData);
 
@@ -2332,11 +2367,14 @@ const fetchReceiverEscrowsSimple = async (receiverAddress: string) => {
         );
 
         // Calculate actual available amount using Goldsky topup data
-        console.log("🔍 Calling calculateAvailableAmountFromTopups for escrow (all):", escrow.escrowId);
+        console.log(
+          "🔍 Calling calculateAvailableAmountFromTopups for escrow (all):",
+          escrow.escrowId,
+        );
         const topupData = await calculateAvailableAmountFromTopups(
           escrow.escrowId,
           receiverAddress,
-          tokenType
+          tokenType,
         );
         console.log("🔍 Topup data result (all):", topupData);
 
@@ -2402,7 +2440,11 @@ const fetchReceiverEscrowsSimple = async (receiverAddress: string) => {
           createdAt: createdDate,
 
           // Status - more detailed statuses
-          status: canClaim ? "CLAIMABLE" : (hasBeenFunded ? "FUNDED" : "PENDING_FUNDING"),
+          status: canClaim
+            ? "CLAIMABLE"
+            : hasBeenFunded
+              ? "FUNDED"
+              : "PENDING_FUNDING",
           canClaim: canClaim,
 
           // Additional receiver data
@@ -3688,10 +3730,7 @@ export const getEscrowVestingInfo = async (
         ? getEscrowAddress("IDRX")
         : getEscrowAddress("USDC");
 
-    const abi =
-      tokenType === "IDRX"
-        ? escrowIdrxAbis
-        : escrowAbis;
+    const abi = tokenType === "IDRX" ? escrowIdrxAbis : escrowAbis;
 
     // Format escrow ID sebagai bytes32
     let formattedEscrowId = escrowId;
@@ -3749,10 +3788,7 @@ export const getReceiverVestingInfo = async (
         ? getEscrowAddress("IDRX")
         : getEscrowAddress("USDC");
 
-    const abi =
-      tokenType === "IDRX"
-        ? escrowIdrxAbis
-        : escrowAbis;
+    const abi = tokenType === "IDRX" ? escrowIdrxAbis : escrowAbis;
 
     // Format escrow ID sebagai bytes32
     let formattedEscrowId = escrowId;
@@ -3819,10 +3855,7 @@ export const calculateVestedAmount = async (
         ? getEscrowAddress("IDRX")
         : getEscrowAddress("USDC");
 
-    const abi =
-      tokenType === "IDRX"
-        ? escrowIdrxAbis
-        : escrowAbis;
+    const abi = tokenType === "IDRX" ? escrowIdrxAbis : escrowAbis;
 
     // Format escrow ID sebagai bytes32
     let formattedEscrowId = escrowId;
@@ -3906,10 +3939,7 @@ export const getEscrowVestingProgress = async (
             ? getEscrowAddress("IDRX")
             : getEscrowAddress("USDC");
 
-        const abi =
-          tokenType === "IDRX"
-            ? escrowIdrxAbis
-            : escrowAbis;
+        const abi = tokenType === "IDRX" ? escrowIdrxAbis : escrowAbis;
 
         let formattedEscrowId = escrowId;
         if (!escrowId.startsWith("0x")) {
