@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, Suspense } from "react";
+import { Clock } from "lucide-react";
 import ReceiverDashboard from "@/components/dashboard/ReceiverDashboard";
 import DashboardWrapper from "@/components/dashboard/DashboardWrapper";
 import WalletWarning from "@/components/dashboard/WalletWarning";
@@ -704,8 +705,9 @@ function DynamicDashboard({
                               {vestingStatus && (
                                 <div className="mt-4 p-3 bg-orange-500/10 border border-orange-500/20 rounded-lg">
                                   <div className="flex items-center justify-between mb-2">
-                                    <span className="text-orange-400 font-medium text-sm">
-                                      🕒 Vesting Progress
+                                    <span className="text-orange-400 font-medium text-sm flex items-center">
+                                      <Clock className="w-4 h-4 mr-2" />
+                                      Vesting Progress
                                     </span>
                                     <span className="text-orange-400 text-sm">
                                       {vestingStatus.remainingDays > 0
