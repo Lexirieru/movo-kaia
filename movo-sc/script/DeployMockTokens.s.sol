@@ -5,6 +5,9 @@ import "forge-std/Script.sol";
 import "../src/mocks/MockUSDC.sol";
 import "../src/mocks/MockUSDT.sol";
 import "../src/mocks/MockIDRX.sol";
+import "../src/mocks/MockMYRC.sol";
+import "../src/mocks/MockPHPC.sol";
+import "../src/mocks/MockTNSGD.sol";
 
 /*
 ███╗░░░███╗░█████╗░██╗░░░██║░█████╗░
@@ -34,19 +37,32 @@ contract DeployMockTokens is Script {
         vm.startBroadcast(deployerPrivateKey);
         
         // Deploy MockUSDC (6 decimals)
-        MockUSDC mockUSDC = new MockUSDC();
+        // MockUSDC mockUSDC = new MockUSDC();
         // vm.stopBroadcast();
         // logTokenDetails("MockUSDC", address(mockUSDC), mockUSDC.name(), mockUSDC.symbol(), mockUSDC.decimals(), mockUSDC.totalSupply(), "USDC (6 decimals)");
         
         // Deploy MockUSDT (6 decimals)
-        MockUSDT mockUSDT = new MockUSDT();
+        // MockUSDT mockUSDT = new MockUSDT();
         // vm.stopBroadcast();
         // logTokenDetails("MockUSDT", address(mockUSDT), mockUSDT.name(), mockUSDT.symbol(), mockUSDT.decimals(), mockUSDT.totalSupply(), "USDT (6 decimals)");
         
         // Deploy MockIDRX (2 decimals)
-        MockIDRX mockIDRX = new MockIDRX();
+        // MockIDRX mockIDRX = new MockIDRX();
+        
+        // Deploy MockMYRC (18 decimals)
+        MockMYRC mockMYRC = new MockMYRC();
+        
+        // Deploy MockPHPC (6 decimals)
+        MockPHPC mockPHPC = new MockPHPC();
+        
+        // Deploy MockTNSGD (6 decimals)
+        MockTNSGD mockTNSGD = new MockTNSGD();
+        
         vm.stopBroadcast();
         // logTokenDetails("MockIDRX", address(mockIDRX), mockIDRX.name(), mockIDRX.symbol(), mockIDRX.decimals(), mockIDRX.totalSupply(), "IDRX (2 decimals)");
+        logTokenDetails("MockMYRC", address(mockMYRC), mockMYRC.name(), mockMYRC.symbol(), mockMYRC.decimals(), mockMYRC.totalSupply(), "MYRC (18 decimals)");
+        logTokenDetails("MockPHPC", address(mockPHPC), mockPHPC.name(), mockPHPC.symbol(), mockPHPC.decimals(), mockPHPC.totalSupply(), "PHPC (6 decimals)");
+        logTokenDetails("MockTNSGD", address(mockTNSGD), mockTNSGD.name(), mockTNSGD.symbol(), mockTNSGD.decimals(), mockTNSGD.totalSupply(), "TNSGD (6 decimals)");
     }
     
     /**
