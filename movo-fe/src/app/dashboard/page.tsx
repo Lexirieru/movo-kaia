@@ -10,6 +10,14 @@ import {
   fetchEscrowsFromIndexer,
   fetchReceiverDashboardData,
   fetchAllReceiverDashboardData,
+  getReceiverVestingInfo,
+  calculateVestedAmount,
+  getVestingTimeline,
+  isVestingEnabled,
+  formatVestingAmount,
+  VestingInfo,
+  ReceiverVestingInfo,
+  TokenType,
 } from "../api/api";
 import { WithdrawHistory } from "@/types/historyTemplate";
 import { useAuth } from "@/lib/userContext";
@@ -42,6 +50,12 @@ function DynamicDashboard({
   const [selectedEscrowForClaim, setSelectedEscrowForClaim] =
     useState<any>(null);
 
+  // Vesting state management
+  const [vestingInfoMap, setVestingInfoMap] = useState<Map<string, any>>(
+    new Map(),
+  );
+  const [isLoadingVesting, setIsLoadingVesting] = useState(false);
+
   // Helper function to format token amount with proper decimals
   const formatTokenAmountWithDecimals = (amount: string, tokenType: string) => {
     const amountNumber = parseFloat(amount);
@@ -63,6 +77,111 @@ function DynamicDashboard({
     }
 
     return formattedAmount.toFixed(2); // Show 2 decimal places for display
+  };
+
+  // Function to load vesting information for receiver escrows
+  const loadVestingInfo = async (escrows: any[]) => {
+    setIsLoadingVesting(true);
+    const newVestingMap = new Map();
+
+    try {
+      // Load vesting info for each escrow that the receiver has
+      const vestingPromises = escrows.map(async (escrow) => {
+        try {
+          const escrowKey = `${escrow.escrowId}-${effectiveWalletAddress}`;
+
+          // Map token type to our TokenType format
+          let tokenType: TokenType = "USDC"; // default
+          if (escrow.originCurrency === "IDRX") {
+            tokenType = "IDRX_BASE"; // assume IDRX_BASE as default IDRX
+          } else if (escrow.originCurrency === "USDT") {
+            tokenType = "USDT";
+          } else if (escrow.originCurrency === "USDC") {
+            tokenType = "USDC";
+          }
+
+          // Check if vesting is enabled for this escrow
+          const vestingEnabled = await isVestingEnabled(
+            escrow.escrowId,
+            tokenType,
+          );
+
+          if (!vestingEnabled) {
+            console.log(`⚠️ Vesting not enabled for escrow ${escrow.escrowId}`);
+            return null;
+          }
+
+          console.log(
+            `🔍 Loading vesting info for escrow ${escrow.escrowId} with token ${tokenType}`,
+          );
+
+          // Get receiver vesting info
+          const receiverVestingInfo = await getReceiverVestingInfo(
+            escrow.escrowId,
+            effectiveWalletAddress,
+            tokenType,
+          );
+
+          // Get vesting timeline
+          const vestingTimeline = await getVestingTimeline(
+            escrow.escrowId,
+            tokenType,
+          );
+
+          // Calculate vested amount
+          const vestedAmountData = await calculateVestedAmount(
+            escrow.escrowId,
+            effectiveWalletAddress,
+            tokenType,
+          );
+
+          if (receiverVestingInfo && vestingTimeline) {
+            const vestingData = {
+              escrowId: escrow.escrowId,
+              tokenType,
+              receiverVestingInfo,
+              vestingTimeline,
+              vestedAmountData,
+              // Additional computed properties
+              totalAllocated: BigInt(escrow.allocatedAmount || "0"),
+              availableToWithdraw: receiverVestingInfo.availableToClaim,
+              vestingProgress:
+                Number(receiverVestingInfo.vestingProgress) / 100, // Convert from basis points to percentage
+              isVestingActive: vestingTimeline.status === "IN_PROGRESS",
+              isVestingCompleted: vestingTimeline.status === "COMPLETED",
+            };
+
+            console.log(
+              `✅ Vesting info loaded for ${escrow.escrowId}:`,
+              vestingData,
+            );
+            return { key: escrowKey, data: vestingData };
+          }
+        } catch (error) {
+          console.error(
+            `❌ Error loading vesting info for escrow ${escrow.escrowId}:`,
+            error,
+          );
+        }
+        return null;
+      });
+
+      const vestingResults = await Promise.all(vestingPromises);
+
+      // Add results to map
+      vestingResults.forEach((result) => {
+        if (result) {
+          newVestingMap.set(result.key, result.data);
+        }
+      });
+
+      console.log(`📊 Loaded vesting info for ${newVestingMap.size} escrows`);
+      setVestingInfoMap(newVestingMap);
+    } catch (error) {
+      console.error("❌ Error loading vesting info:", error);
+    } finally {
+      setIsLoadingVesting(false);
+    }
   };
 
   useEffect(() => {
@@ -143,6 +262,13 @@ function DynamicDashboard({
         });
 
         setAllEscrows(combinedEscrows);
+
+        // Load vesting information for receiver escrows
+        const receiverEscrows = receiverDataResult.allEscrows || [];
+        if (receiverEscrows.length > 0) {
+          console.log("🔄 Loading vesting info for receiver escrows...");
+          await loadVestingInfo(receiverEscrows);
+        }
       } catch (error) {
         console.error("Error checking user data:", error);
         setSenderEscrows([]);
@@ -220,6 +346,39 @@ function DynamicDashboard({
     });
 
     return claimableEscrows;
+  };
+
+  // Helper function to get vesting info for an escrow
+  const getVestingInfo = (escrowId: string) => {
+    const vestingKey = `${escrowId}-${effectiveWalletAddress}`;
+    return vestingInfoMap.get(vestingKey);
+  };
+
+  // Helper function to format vesting status
+  const formatVestingStatus = (vestingData: any) => {
+    if (!vestingData) return null;
+
+    const { vestingTimeline, receiverVestingInfo, tokenType } = vestingData;
+
+    return {
+      status: vestingTimeline.status,
+      progressPercentage: vestingTimeline.progressPercentage,
+      vestedAmount: formatVestingAmount(
+        receiverVestingInfo.vestedAmount,
+        tokenType,
+      ),
+      availableToWithdraw: formatVestingAmount(
+        receiverVestingInfo.availableToClaim,
+        tokenType,
+      ),
+      totalVested: formatVestingAmount(
+        receiverVestingInfo.totalVestedAmount,
+        tokenType,
+      ),
+      remainingDays: vestingTimeline.remainingDays,
+      endDate: vestingTimeline.endDate,
+      tokenSymbol: tokenType === "IDRX_BASE" ? "IDRX" : tokenType,
+    };
   };
 
   // Helper function to get total claimable escrows (sender + receiver)
@@ -377,104 +536,212 @@ function DynamicDashboard({
                         .length
                     }
                     )
+                    {isLoadingVesting && (
+                      <div className="flex items-center ml-2">
+                        <div className="w-4 h-4 border-2 border-orange-400 border-t-transparent rounded-full animate-spin"></div>
+                        <span className="text-orange-400 text-xs ml-1">
+                          Loading vesting...
+                        </span>
+                      </div>
+                    )}
                   </h4>
                   <div className="space-y-4">
                     {allEscrows
                       .filter((escrow) => escrow.type === "claimable")
-                      .map((escrow, index) => (
-                        <div
-                          key={`claimable-${escrow.escrowId}-${index}`}
-                          className="bg-white/5 rounded-lg p-4 border border-white/10"
-                        >
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center space-x-4">
-                              <div className="w-12 h-12 bg-gradient-to-r from-green-400 to-emerald-500 rounded-full flex items-center justify-center">
-                                <span className="text-white font-bold">
-                                  {escrow.originCurrency?.charAt(0) || "T"}
-                                </span>
+                      .map((escrow, index) => {
+                        const vestingInfo = getVestingInfo(escrow.escrowId);
+                        const vestingStatus = formatVestingStatus(vestingInfo);
+
+                        return (
+                          <div
+                            key={`claimable-${escrow.escrowId}-${index}`}
+                            className="bg-white/5 rounded-lg p-4 border border-white/10"
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center space-x-4">
+                                <div className="w-12 h-12 bg-gradient-to-r from-green-400 to-emerald-500 rounded-full flex items-center justify-center">
+                                  <span className="text-white font-bold">
+                                    {escrow.originCurrency?.charAt(0) || "T"}
+                                  </span>
+                                </div>
+                                <div>
+                                  <h4 className="text-white font-medium">
+                                    From:{" "}
+                                    {escrow.senderName ||
+                                      `${escrow.senderWalletAddress?.slice(0, 6)}...${escrow.senderWalletAddress?.slice(-4)}`}
+                                  </h4>
+                                  <p className="text-white/60 text-sm">
+                                    {formatTokenAmountWithDecimals(
+                                      escrow.availableAmount || "0",
+                                      escrow.originCurrency || "IDRX",
+                                    )}{" "}
+                                    {escrow.originCurrency} available
+                                  </p>
+                                  <p className="text-white/40 text-xs">
+                                    Escrow ID: {escrow.escrowId?.slice(0, 8)}...
+                                  </p>
+
+                                  {/* Vesting Status Indicator */}
+                                  {vestingStatus && (
+                                    <div className="flex items-center space-x-2 mt-1">
+                                      <div className="w-2 h-2 bg-orange-400 rounded-full"></div>
+                                      <span className="text-orange-400 text-xs">
+                                        {vestingStatus.status === "IN_PROGRESS"
+                                          ? `Vesting (${vestingStatus.progressPercentage.toFixed(1)}%)`
+                                          : vestingStatus.status === "COMPLETED"
+                                            ? "Vesting Complete"
+                                            : "Vesting Not Started"}
+                                      </span>
+                                    </div>
+                                  )}
+                                </div>
                               </div>
-                              <div>
-                                <h4 className="text-white font-medium">
-                                  From:{" "}
-                                  {escrow.senderName ||
-                                    `${escrow.senderWalletAddress?.slice(0, 6)}...${escrow.senderWalletAddress?.slice(-4)}`}
-                                </h4>
-                                <p className="text-white/60 text-sm">
-                                  {formatTokenAmountWithDecimals(
-                                    escrow.availableAmount || "0",
-                                    escrow.originCurrency || "IDRX",
-                                  )}{" "}
-                                  {escrow.originCurrency} available
-                                </p>
-                                <p className="text-white/40 text-xs">
-                                  Escrow ID: {escrow.escrowId?.slice(0, 8)}...
-                                </p>
+                              <div className="text-right">
+                                <div className="flex items-center space-x-2 mb-2">
+                                  <span className="w-2 h-2 bg-green-400 rounded-full"></span>
+                                  <span className="text-green-400 text-sm">
+                                    {vestingStatus
+                                      ? "Vested Available"
+                                      : "Claimable"}
+                                  </span>
+                                </div>
+                                <button
+                                  className="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:shadow-lg transition-all hover:scale-105"
+                                  onClick={() => {
+                                    setSelectedEscrowForClaim(escrow);
+                                    setIsClaimModalOpen(true);
+                                  }}
+                                >
+                                  {vestingStatus ? "Claim Vested" : "Claim Now"}
+                                </button>
+
+                                {/* Vesting Amount Info */}
+                                {vestingStatus && (
+                                  <div className="text-xs text-orange-400 mt-1">
+                                    {vestingStatus.availableToWithdraw}{" "}
+                                    {vestingStatus.tokenSymbol} vested
+                                  </div>
+                                )}
                               </div>
                             </div>
-                            <div className="text-right">
-                              <div className="flex items-center space-x-2 mb-2">
-                                <span className="w-2 h-2 bg-green-400 rounded-full"></span>
-                                <span className="text-green-400 text-sm">
-                                  Claimable
-                                </span>
+                            <div className="mt-3 pt-3 border-t border-white/10">
+                              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                                <div>
+                                  <span className="text-white/60">
+                                    Total Allocated:
+                                  </span>
+                                  <div className="text-white">
+                                    {formatTokenAmountWithDecimals(
+                                      escrow.allocatedAmount || "0",
+                                      escrow.originCurrency || "IDRX",
+                                    )}{" "}
+                                    {escrow.originCurrency}
+                                  </div>
+                                </div>
+                                <div>
+                                  <span className="text-white/60">
+                                    {vestingStatus
+                                      ? "Vested Available:"
+                                      : "Available:"}
+                                  </span>
+                                  <div className="text-white">
+                                    {vestingStatus ? (
+                                      <>
+                                        {vestingStatus.availableToWithdraw}{" "}
+                                        {vestingStatus.tokenSymbol}
+                                        <div className="text-xs text-orange-400">
+                                          (of {vestingStatus.totalVested} total
+                                          vested)
+                                        </div>
+                                      </>
+                                    ) : (
+                                      <>
+                                        {formatTokenAmountWithDecimals(
+                                          escrow.availableAmount || "0",
+                                          escrow.originCurrency || "IDRX",
+                                        )}{" "}
+                                        {escrow.originCurrency}
+                                      </>
+                                    )}
+                                  </div>
+                                </div>
+                                <div>
+                                  <span className="text-white/60">
+                                    Created:
+                                  </span>
+                                  <div className="text-white">
+                                    {escrow.createdAt
+                                      ? new Date(
+                                          escrow.createdAt,
+                                        ).toLocaleDateString()
+                                      : "N/A"}
+                                  </div>
+                                </div>
+                                <div>
+                                  <span className="text-white/60">Status:</span>
+                                  <div
+                                    className={
+                                      vestingStatus
+                                        ? "text-orange-400"
+                                        : "text-green-400"
+                                    }
+                                  >
+                                    {vestingStatus
+                                      ? `Vesting ${vestingStatus.progressPercentage.toFixed(1)}%`
+                                      : "Ready to Claim"}
+                                  </div>
+                                </div>
                               </div>
-                              <button
-                                className="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:shadow-lg transition-all hover:scale-105"
-                                onClick={() => {
-                                  setSelectedEscrowForClaim(escrow);
-                                  setIsClaimModalOpen(true);
-                                }}
-                              >
-                                Claim Now
-                              </button>
+
+                              {/* Vesting Progress Details */}
+                              {vestingStatus && (
+                                <div className="mt-4 p-3 bg-orange-500/10 border border-orange-500/20 rounded-lg">
+                                  <div className="flex items-center justify-between mb-2">
+                                    <span className="text-orange-400 font-medium text-sm">
+                                      🕒 Vesting Progress
+                                    </span>
+                                    <span className="text-orange-400 text-sm">
+                                      {vestingStatus.remainingDays > 0
+                                        ? `${vestingStatus.remainingDays} days remaining`
+                                        : "Vesting complete"}
+                                    </span>
+                                  </div>
+
+                                  {/* Progress Bar */}
+                                  <div className="w-full bg-white/10 rounded-full h-2 mb-2">
+                                    <div
+                                      className="bg-gradient-to-r from-orange-500 to-amber-500 h-2 rounded-full transition-all duration-300"
+                                      style={{
+                                        width: `${Math.min(100, Math.max(0, vestingStatus.progressPercentage))}%`,
+                                      }}
+                                    ></div>
+                                  </div>
+
+                                  <div className="grid grid-cols-2 gap-4 text-xs">
+                                    <div>
+                                      <span className="text-white/60">
+                                        Total Vested:
+                                      </span>
+                                      <div className="text-orange-400">
+                                        {vestingStatus.totalVested}{" "}
+                                        {vestingStatus.tokenSymbol}
+                                      </div>
+                                    </div>
+                                    <div>
+                                      <span className="text-white/60">
+                                        Vesting Ends:
+                                      </span>
+                                      <div className="text-white">
+                                        {vestingStatus.endDate.toLocaleDateString()}
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
                             </div>
                           </div>
-                          <div className="mt-3 pt-3 border-t border-white/10">
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                              <div>
-                                <span className="text-white/60">
-                                  Total Allocated:
-                                </span>
-                                <div className="text-white">
-                                  {formatTokenAmountWithDecimals(
-                                    escrow.allocatedAmount || "0",
-                                    escrow.originCurrency || "IDRX",
-                                  )}{" "}
-                                  {escrow.originCurrency}
-                                </div>
-                              </div>
-                              <div>
-                                <span className="text-white/60">
-                                  Available:
-                                </span>
-                                <div className="text-white">
-                                  {formatTokenAmountWithDecimals(
-                                    escrow.availableAmount || "0",
-                                    escrow.originCurrency || "IDRX",
-                                  )}{" "}
-                                  {escrow.originCurrency}
-                                </div>
-                              </div>
-                              <div>
-                                <span className="text-white/60">Created:</span>
-                                <div className="text-white">
-                                  {escrow.createdAt
-                                    ? new Date(
-                                        escrow.createdAt,
-                                      ).toLocaleDateString()
-                                    : "N/A"}
-                                </div>
-                              </div>
-                              <div>
-                                <span className="text-white/60">Status:</span>
-                                <div className="text-green-400">
-                                  Ready to Claim
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                   </div>
                 </div>
               ) : (
@@ -567,7 +834,9 @@ function DynamicDashboard({
                     (escrow) =>
                       escrow.type === "claimable" || escrow.type === "pending",
                   )}
-                  isLoading={isCheckingData}
+                  isLoading={isCheckingData || isLoadingVesting}
+                  vestingInfoMap={vestingInfoMap}
+                  formatVestingStatus={formatVestingStatus}
                 />
               </div>
             </div>
