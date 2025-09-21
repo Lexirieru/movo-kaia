@@ -1,18 +1,9 @@
-import { createConfig, http } from 'wagmi';
+import { getDefaultConfig } from '@rainbow-me/rainbowkit';
 import { base, baseSepolia } from 'wagmi/chains';
-import { injected, walletConnect } from 'wagmi/connectors';
 
-export const config = createConfig({
+export const config = getDefaultConfig({
+  appName: 'Movo Kaia',
+  projectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || 'your-project-id',
   chains: [base, baseSepolia],
-  connectors: [
-    injected(),
-    walletConnect({
-      projectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || 'your-project-id',
-    }),
-  ],
-  transports: {
-    [base.id]: http(),
-    [baseSepolia.id]: http(),
-  },
   ssr: true,
 });

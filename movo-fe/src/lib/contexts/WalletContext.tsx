@@ -1,35 +1,21 @@
 'use client';
 
-import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { useWallet, useWalletStatus } from '@/hooks';
-import { detectWalletType } from '../smartContract';
-
-export interface WalletInfo {
-  type: 'MetaMask' | 'WalletConnect' | 'LINE' | 'OKX' | 'UNKNOWN';
-  isInstalled: boolean;
-  isConnected: boolean;
-  address?: string;
-  chainId?: number;
-  balance?: string;
-  error?: string;
-}
+import React, { createContext, useContext, ReactNode } from 'react';
+import { useAccount, useConnect, useDisconnect, useSwitchChain } from 'wagmi';
 
 export interface WalletContextType {
   // Wallet state
-  wallet: WalletInfo;
+  isConnected: boolean;
   isConnecting: boolean;
   isDisconnected: boolean;
+  address?: string;
+  chainId?: number;
+  error?: string;
   
   // Actions
-  connect: (walletType?: string) => Promise<void>;
+  connect: () => Promise<void>;
   disconnect: () => Promise<void>;
   switchNetwork: (chainId: number) => Promise<void>;
-  refresh: () => void;
-  
-  // Utility functions
-  getWalletIcon: (walletType: string) => string;
-  getWalletName: (walletType: string) => string;
-  isWalletSupported: (walletType: string) => boolean;
 }
 
 const WalletContext = createContext<WalletContextType | undefined>(undefined);
@@ -47,128 +33,50 @@ interface WalletProviderProps {
 }
 
 export function WalletProvider({ children }: WalletProviderProps) {
-  const walletHook = useWallet();
-  const walletStatus = useWalletStatus();
-  const [walletInfo, setWalletInfo] = useState<WalletInfo>({
-    type: 'UNKNOWN',
-    isInstalled: false,
-    isConnected: false,
-  });
+  const { address, isConnected, chainId } = useAccount();
+  const { connect, connectors, isPending: isConnecting } = useConnect();
+  const { disconnect: wagmiDisconnect } = useDisconnect();
+  const { switchChain: wagmiSwitchChain } = useSwitchChain();
 
-  // Detect wallet type and update wallet info
-  useEffect(() => {
-    const detectWallet = async () => {
-      try {
-        const walletType = await detectWalletType();
-        const isInstalled = walletType !== 'UNKNOWN';
-        
-        setWalletInfo(prev => ({
-          ...prev,
-          type: walletType as any,
-          isInstalled,
-          isConnected: walletStatus.isConnected,
-          address: walletStatus.address,
-          chainId: walletStatus.chainId,
-          error: walletHook.error?.message,
-        }));
-      } catch (error) {
-        console.error('Error detecting wallet:', error);
-        setWalletInfo(prev => ({
-          ...prev,
-          error: error instanceof Error ? error.message : 'Unknown error',
-        }));
-      }
-    };
-
-    detectWallet();
-  }, [walletStatus.isConnected, walletStatus.address, walletStatus.chainId, walletHook.error]);
-
-  const connect = async (walletType?: string) => {
+  const connectWallet = async () => {
     try {
-      if (walletType) {
-        // Connect to specific wallet type
-        await walletHook.connect(walletType);
-      } else {
-        // Auto-connect to detected wallet
-        await walletHook.connect();
+      if (connectors.length === 0) {
+        throw new Error('No wallet connectors available');
       }
+      await connect({ connector: connectors[0] });
     } catch (error) {
       console.error('Failed to connect wallet:', error);
-      setWalletInfo(prev => ({
-        ...prev,
-        error: error instanceof Error ? error.message : 'Connection failed',
-      }));
       throw error;
     }
   };
 
-  const disconnect = async () => {
+  const disconnectWallet = async () => {
     try {
-      await walletHook.disconnect();
-      setWalletInfo(prev => ({
-        ...prev,
-        isConnected: false,
-        address: undefined,
-        chainId: undefined,
-        error: undefined,
-      }));
+      await wagmiDisconnect();
     } catch (error) {
       console.error('Failed to disconnect wallet:', error);
       throw error;
     }
   };
 
-  const switchNetwork = async (chainId: number) => {
+  const switchNetworkWallet = async (targetChainId: number) => {
     try {
-      await walletHook.switchChain(chainId);
+      await wagmiSwitchChain({ chainId: targetChainId });
     } catch (error) {
       console.error('Failed to switch network:', error);
       throw error;
     }
   };
 
-  const refresh = () => {
-    walletHook.refresh();
-  };
-
-  const getWalletIcon = (walletType: string): string => {
-    const icons: Record<string, string> = {
-      MetaMask: '🦊',
-      WalletConnect: '🔗',
-      LINE: '📱',
-      OKX: '⭕',
-      UNKNOWN: '❓',
-    };
-    return icons[walletType] || icons.UNKNOWN;
-  };
-
-  const getWalletName = (walletType: string): string => {
-    const names: Record<string, string> = {
-      MetaMask: 'MetaMask',
-      WalletConnect: 'WalletConnect',
-      LINE: 'LINE Wallet',
-      OKX: 'OKX Wallet',
-      UNKNOWN: 'Unknown Wallet',
-    };
-    return names[walletType] || names.UNKNOWN;
-  };
-
-  const isWalletSupported = (walletType: string): boolean => {
-    const supportedWallets = ['MetaMask', 'WalletConnect', 'LINE', 'OKX'];
-    return supportedWallets.includes(walletType);
-  };
-
   const contextValue: WalletContextType = {
-    wallet: walletInfo,
-    isConnecting: walletHook.isConnecting,
-    isDisconnected: walletHook.isDisconnected,
-    connect,
-    disconnect,
-    switchNetwork,
-    refresh,
-    getWalletIcon,
-    getWalletName,
-    isWalletSupported,
+    isConnected,
+    isConnecting,
+    isDisconnected: !isConnected,
+    address: address || undefined,
+    chainId: chainId || undefined,
+    connect: connectWallet,
+    disconnect: disconnectWallet,
+    switchNetwork: switchNetworkWallet,
   };
 
   return (
@@ -178,29 +86,22 @@ export function WalletProvider({ children }: WalletProviderProps) {
   );
 }
 
-// Higher-order component for wallet connection
-export function withWallet<P extends object>(
-  Component: React.ComponentType<P & { wallet: WalletInfo }>
-) {
-  return function WrappedComponent(props: P) {
-    const { wallet } = useWalletContext();
-    return <Component {...props} wallet={wallet} />;
-  };
-}
-
-// Hook for wallet connection status
+// Hook for wallet connection status (for backward compatibility)
 export function useWalletConnection() {
-  const { wallet, isConnecting, isDisconnected } = useWalletContext();
+  const { isConnected, isConnecting, isDisconnected, address, chainId } = useWalletContext();
   
   return {
-    wallet,
+    isConnected,
     isConnecting,
     isDisconnected,
-    isConnected: wallet.isConnected,
-    hasAddress: !!wallet.address,
-    address: wallet.address,
-    chainId: wallet.chainId,
-    walletType: wallet.type,
-    error: wallet.error,
+    address,
+    chainId,
+    wallet: {
+      type: 'UNKNOWN' as const,
+      isInstalled: true,
+      isConnected,
+      address,
+      chainId,
+    },
   };
 }
