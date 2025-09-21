@@ -20,6 +20,7 @@ import {
   parseTokenAmount,
   addReceiver,
 } from "@/lib/smartContract";
+import { span } from "motion/react-client";
 
 const Modal = ({
   isOpen,
@@ -74,25 +75,29 @@ interface FormData {
 // Available tokens for escrow
 const AVAILABLE_TOKENS = [
   {
-    symbol: "USDC",
-    name: "USD Coin (Base)",
-    icon: "/USDC-Base.png",
-    description: "USDC on Base",
-    escrowType: "Escrow",
-  },
-  {
     symbol: "USDT",
     name: "Tether USD (Kaia)",
     icon: "/Tether-Kaia.png",
     description: "USDT on Kaia",
     escrowType: "Escrow",
+    available: true,
   },
+  {
+    symbol: "USDC",
+    name: "USD Coin (Base)",
+    icon: "/USDC-Base.png",
+    description: "USDC on Base",
+    escrowType: "Escrow",
+    available: false,
+  },
+  
   {
     symbol: "IDRX_BASE",
     name: "IDRX Token (Base)",
     icon: "/IDRX-Base.png",
     description: "IDRX on Base",
     escrowType: "EscrowIDRX",
+    available: false,
   },
   {
     symbol: "IDRX_KAIA",
@@ -100,6 +105,7 @@ const AVAILABLE_TOKENS = [
     icon: "/IDRX-Kaia.png",
     description: "IDRX on Kaia",
     escrowType: "EscrowIDRX",
+    available: false,
   },
 ];
 
@@ -622,13 +628,15 @@ export default function CreateStreamModal({
                         <div
                           key={token.symbol}
                           onClick={() => {
-                            handleTokenSelect(
-                              token.symbol as
-                                | "USDC"
-                                | "USDT"
-                                | "IDRX_BASE"
-                                | "IDRX_KAIA",
-                            );
+                            if (token.available) {
+                              handleTokenSelect(
+                                token.symbol as
+                                  | "USDC"
+                                  | "USDT"
+                                  | "IDRX_BASE"
+                                  | "IDRX_KAIA",
+                              );
+                            }
                             setIsDropdownOpen(false);
                           }}
                           className={`flex items-center space-x-3 p-4 cursor-pointer transition-colors hover:bg-white/10 ${
@@ -643,7 +651,9 @@ export default function CreateStreamModal({
                               alt={token.symbol}
                               width={32}
                               height={32}
-                              className="rounded-full"
+                              className={`rounded-full ${
+                                !token.available ? "grayscale" : ""
+                              }`}
                             />
                           </div>
                           <div className="flex-1">
@@ -653,7 +663,18 @@ export default function CreateStreamModal({
                                 ? "IDRX"
                                 : token.symbol}
                             </p>
-                            <p className="text-white/60 text-sm">
+                            {!token.available && (
+                              <span className="text-xs px-2 py-1 rounded-full font-medium">
+                                Coming Soon
+                              </span>
+                            )
+
+                            }
+                            <p
+                              className={`text-sm ${
+                                token.available ? "text-white/60" : "text-gray-500"
+                              }`}
+                            >
                               {token.description}
                             </p>
                           </div>
@@ -672,6 +693,11 @@ export default function CreateStreamModal({
                           )}
                         </div>
                       ))}
+                      <div className="px-4 py-3 bg-gradient-to-r from-orange-500/10 to-yellow-500/10 border-t border-orange-500/20">
+                        <p className="text-orange-400 text-xs text-center">
+                          💡 More tokens will be available soon! Currently supporting USDT on Kaia network.
+                        </p>
+                      </div>
                     </div>
                   )}
                 </div>
