@@ -92,7 +92,7 @@ interface EscrowListProps {
   escrows: EscrowData[];
   onEscrowSelect: (escrowId: string) => void;
   isLoading: boolean;
-  onEscrowDeleted: () => void;
+  onEscrowDeleted: (deletedEscrowId?: string) => void;
   onTopupFund: (escrowId: string) => void;
 }
 
@@ -790,10 +790,17 @@ export default function EscrowList({
       const result = await closeEscrow(walletClient, tokenType, escrowId);
       if (result.success) {
         console.log("escrow closure successful:", result.transactionHash);
-
         closeCloseConfirmModal();
-        onEscrowDeleted();
-        alert("Escrow close successfully");
+        // if (onEscrowDeleted) {
+        //   onEscrowDeleted();
+        // }
+        // setTimeout(async () => {
+        //   console.log("🔄 Performing delayed refresh to ensure consistency...");
+        //   if (onEscrowDeleted) {
+        //     onEscrowDeleted();
+        //   }
+        // }, 2000);
+        onEscrowDeleted(escrowId);
       } else {
         throw new Error(result.error);
       }
@@ -993,12 +1000,20 @@ export default function EscrowList({
                           )}
                         </div>
                         <div>
-                          <p className={`text-sm font-medium ${
-                            closingEscrowId === escrow.escrowId ? "text-red-600" : "text-red-400"
-                          }`}>
-                            {closingEscrowId === escrow.escrowId ? "Closing..." : "Close Escrow"}
+                          <p
+                            className={`text-sm font-medium ${
+                              closingEscrowId === escrow.escrowId
+                                ? "text-red-600"
+                                : "text-red-400"
+                            }`}
+                          >
+                            {closingEscrowId === escrow.escrowId
+                              ? "Closing..."
+                              : "Close Escrow"}
                           </p>
-                          <p className="text-xs text-red-400/60">Permanently close this escrow</p>
+                          <p className="text-xs text-red-400/60">
+                            Permanently close this escrow
+                          </p>
                         </div>
                       </button>
                     </div>
@@ -1506,6 +1521,20 @@ export default function EscrowList({
         );
       })}
 
+      {escrows.length === 0 && !isLoading && (
+        <div className="text-center py-12">
+          <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-4">
+            <Wallet className="w-8 h-8 text-white/40" />
+          </div>
+          <h3 className="text-xl font-semibold text-white mb-2">
+            No Active Escrows
+          </h3>
+          <p className="text-white/60 mb-6">
+            You haven't created any active escrows yet. Create your first escrow to get started.
+          </p>
+        </div>
+      )}
+
       {/* Topup Modal */}
       {topUpModal && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -1654,18 +1683,19 @@ export default function EscrowList({
             <div className="p-6 space-y-6">
               {/* Warning Info */}
               <div className="bg-gradient-to-r from-orange-500/10 to-red-500/10 border border-orange-500/20 rounded-xl p-4">
-                <h4 className="text-orange-300 font-medium mb-2">
-                  ⚠️ Warning
-                </h4>
+                <h4 className="text-orange-300 font-medium mb-2">⚠️ Warning</h4>
                 <div className="space-y-1 text-sm text-white/80">
-                  <p>This will permanently close the escrow on the blockchain:</p>
+                  <p>
+                    This will permanently close the escrow on the blockchain:
+                  </p>
                   <ul className="list-disc list-inside ml-2 space-y-1">
                     <li>Escrow will be marked as closed</li>
                     <li>No further operations allowed</li>
                     <li>Transaction history preserved</li>
                   </ul>
                   <p className="text-orange-400 font-medium mt-2">
-                    Make sure all funds are withdrawn and all receivers have claimed their allocations.
+                    Make sure all funds are withdrawn and all receivers have
+                    claimed their allocations.
                   </p>
                 </div>
               </div>
@@ -1734,8 +1764,8 @@ export default function EscrowList({
       )}
 
       {selectedEscrow && (
-        <div 
-          className="fixed inset-0 z-5" 
+        <div
+          className="fixed inset-0 z-5"
           onClick={() => setSelectedEscrow(null)}
         />
       )}

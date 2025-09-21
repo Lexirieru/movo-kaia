@@ -1279,12 +1279,7 @@ export const fetchEscrowsFromIndexer = async (userAddress: string) => {
 
     console.log("📊 Raw combined escrows from indexer:", escrows);
     console.log("📊 Number of combined escrows found:", escrows.length);
-    console.log("📊 Sources breakdown:", {
-      sources: escrows.reduce((acc: any, escrow: any) => {
-        acc[escrow.source] = (acc[escrow.source] || 0) + 1;
-        return acc;
-      }, {}),
-    });
+
 
     if (escrows.length === 0) {
       console.log("⚠️ No escrows found for sender address:", userAddress);
@@ -1384,19 +1379,32 @@ export const fetchEscrowsFromIndexer = async (userAddress: string) => {
       }, {}),
     });
 
-    console.log("✅ Performance summary for sender:", {
-      totalEscrowsFetched: allEscrows.length,
-      idrxEscrowsFetched: idrxEscrows.length,
-      usdcEscrowsFetched: usdcEscrows.length,
-      filteredEscrows: escrows.length,
-      finalTransformedEscrows: transformedEscrows.length,
-      senderAddress: userAddress,
+    const {checkMultipleEscrowsStatus} = await import("../../lib/smartContract")
+
+    const escrowsToCheck = transformedEscrows.map((escrow) => ({
+      escrowId: escrow.escrowId,
+      tokenAddress: escrow.tokenAddress,
+    }))
+    const statusResults = await checkMultipleEscrowsStatus(escrowsToCheck)
+    const activeEscrows = transformedEscrows.filter((escrow) => {
+      const isClosed = statusResults[escrow.escrowId]
+      if(isClosed){
+        return false
+      }
+      return true
+    })
+    console.log("✅ Final active escrows after blockchain filtering:", {
+      originalCount: transformedEscrows.length,
+      activeCount: activeEscrows.length,
+      filteredOutCount: transformedEscrows.length - activeEscrows.length,
     });
 
     // Cache the result
-    setCachedData(cacheKey, transformedEscrows);
+    setCachedData(cacheKey, activeEscrows);
+    // setCachedData(cacheKey, transformedEscrows);
 
-    return transformedEscrows;
+    return activeEscrows;
+    // return transformedEscrows;
   } catch (error) {
     console.error("❌ Error fetching combined escrows from indexer:", error);
     console.error("❌ Error details:", {

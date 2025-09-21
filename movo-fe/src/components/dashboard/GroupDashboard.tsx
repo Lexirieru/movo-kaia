@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useAuth } from "@/lib/userContext";
 import { useWallet } from "@/lib/walletContext";
 import { GroupOfUser, ReceiverInGroup } from "@/types/receiverInGroupTemplate";
@@ -17,6 +17,8 @@ import {
   updateWalletAddressRole,
   fetchEscrowsFromIndexer,
 } from "@/app/api/api";
+import { checkMultipleEscrowsStatus } from "@/lib/smartContract";
+import { ref } from "process";
 
 interface GroupDashboardProps {
   onRoleChange?: () => void;
@@ -52,7 +54,8 @@ export default function GroupDashboard({
   const [isTopupModalOpen, setIsTopupModalOpen] = useState(false);
   const [selectedEscrowId, setSelectedEscrowId] = useState<string | null>(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-
+  const [isCheckingStatus, setIsCheckingStatus] = useState(false);
+  const [closedEscrows, setClosedEscrows] = useState<Set<string>>(new Set());
   // Debug: Log claimable escrows received
   useEffect(() => {
     if (viewMode === "claimable-sender") {
@@ -76,11 +79,15 @@ export default function GroupDashboard({
 
     try {
       console.log("🔄 Refreshing escrows data...");
+      setIsCheckingStatus(true);
       const escrowsData: EscrowData[] = await fetchEscrowsFromIndexer(address);
       console.log("📊 Refreshed escrows data:", escrowsData);
       setEscrows(escrowsData);
+      setClosedEscrows(new Set());
     } catch (err) {
       console.error("❌ Failed to refresh escrows from indexer", err);
+    } finally {
+      setIsCheckingStatus(false);
     }
   };
 
@@ -95,28 +102,30 @@ export default function GroupDashboard({
 
     const fetchEscrows = async () => {
       try {
-        console.log("🔍 Fetching escrows from indexer for address:", address);
-        const escrowsData: EscrowData[] =
-          await fetchEscrowsFromIndexer(address);
-        console.log("📊 Received escrows data:", escrowsData);
-        setEscrows(escrowsData);
+        // console.log("🔍 Fetching escrows from indexer for address:", address);
+        // const escrowsData: EscrowData[] =
+        //   await fetchEscrowsFromIndexer(address);
+        // console.log("📊 Received escrows data:", escrowsData);
+        // setEscrows(escrowsData);
+        // setHasFetched(true);
+        await refreshEscrows();
         setHasFetched(true);
       } catch (err) {
         console.error("❌ Failed to fetch escrows from indexer", err);
-        setHasFetched(true); // Set to true even on error to prevent infinite retry
+        setHasFetched(true);
       }
     };
     fetchEscrows();
-  }, [loading, isConnected, address]); // Removed hasFetched from dependencies
+  }, [loading, isConnected, address]);
 
   // --- LOGIKA FILTER & KALKULASI ---
   // Use claimableEscrows if in claimable-sender mode, otherwise use regular escrows
-  const displayEscrows =
-    viewMode === "claimable-sender" ? claimableEscrows : escrows;
-
-  const filteredEscrows = displayEscrows.filter((escrow) =>
-    escrow.escrowId.toLowerCase().includes(searchTerm.toLowerCase()),
-  );
+  const displayEscrows = useMemo(() => {
+    const baseEscrows =
+      viewMode === "claimable-sender" ? claimableEscrows : escrows;
+    const filteredEscrows = baseEscrows.filter((escrow) => !closedEscrows.has(escrow.escrowId)   );
+    return filteredEscrows
+  }, [viewMode, claimableEscrows, escrows, closedEscrows]);
 
   // Reset hasFetched ketika address berubah
   useEffect(() => {
@@ -162,10 +171,20 @@ export default function GroupDashboard({
     }
   }, [address]);
 
-  const handleEscrowDeleted = () => {
-    // Reset fetch flag supaya useEffect dijalankan lagi
-    setHasFetched(false);
-    refreshEscrows()
+  const handleEscrowDeleted = (deletedEscrowId?: string) => {
+    if (deletedEscrowId) {
+      setEscrows((prev) =>
+        prev.filter((escrow) => escrow.escrowId !== deletedEscrowId),
+      );
+      setClosedEscrows((prev) => new Set(prev).add(deletedEscrowId));
+      console.log("🚀 Immediately marked escrow as closed:", deletedEscrowId);
+    }
+
+    // Reset fetch flag and schedule a delayed refresh to sync with blockchain
+    setTimeout(() => {
+      console.log("🔄 Performing delayed refresh for blockchain sync");
+      refreshEscrows();
+    }, 3000);
   };
 
   const handleTopupFund = (escrowId: string) => {
@@ -255,7 +274,9 @@ export default function GroupDashboard({
       <div className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-black flex items-center justify-center">
         <div className="text-center">
           <div className="w-8 h-8 border-2 border-cyan-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-white/60">Loading...</p>
+          <p className="text-white/60">
+            {loading ? "Loading..." : "Checking escrow status..."}
+          </p>
         </div>
       </div>
     );
@@ -422,7 +443,7 @@ export default function GroupDashboard({
 
         {/* 3. Daftar Escrow (Responsif) */}
         <EscrowList
-          escrows={filteredEscrows}
+          escrows={displayEscrows}
           onEscrowSelect={handleEscrowSelect}
           isLoading={!hasFetched && loading}
           onEscrowDeleted={handleEscrowDeleted}

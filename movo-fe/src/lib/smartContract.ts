@@ -1339,6 +1339,229 @@ export const closeEscrow = async (
   }
 };
 
+// Update the isEscrowClosed function untuk deteksi yang lebih akurat
+
+export const isEscrowClosed = async (
+  escrowId: string,
+  tokenType: TokenType,
+): Promise<boolean> => {
+  try {
+    // Get the correct contract based on token type
+    let contract;
+    let abi;
+    if (tokenType === "IDRX_BASE" || tokenType === "IDRX_KAIA") {
+      contract = escrowIdrxContract;
+      abi = escrowIdrxAbis;
+    } else {
+      contract = escrowContract; // For USDC and USDT
+      abi = escrowAbis;
+    }
+
+    // Format escrow ID properly as bytes32
+    let formattedEscrowId = escrowId;
+    if (!escrowId.startsWith("0x")) {
+      formattedEscrowId = "0x" + escrowId;
+    }
+    
+    // Pad to 32 bytes (64 hex characters + 0x prefix = 66 characters)
+    if (formattedEscrowId.length < 66) {
+      formattedEscrowId = formattedEscrowId.padEnd(66, "0");
+    }
+
+    console.log("🔍 Checking escrow status:", {
+      originalEscrowId: escrowId,
+      formattedEscrowId,
+      tokenType,
+      contractAddress: contract.address,
+    });
+
+    try {
+      // Try to get escrow details - if it fails or returns zero address, it's closed/doesn't exist
+      const escrowDetails = await publicClient.readContract({
+        address: contract.address,
+        abi: abi,
+        functionName: "getEscrowDetails",
+        args: [formattedEscrowId as `0x${string}`],
+      });
+
+      console.log("📋 Escrow details for status check:", escrowDetails);
+
+      // Check if escrow exists and is active
+      // escrowDetails[0] is the sender address
+      
+      // If sender is zero address, escrow doesn't exist or is closed
+      if (escrowDetails[0] === "0x0000000000000000000000000000000000000000") {
+        console.log("❌ Escrow is closed/doesn't exist - sender is zero address");
+        return true; // Escrow is closed
+      }
+
+      // NEW: Check if escrow has a specific "isClosed" or "isActive" flag
+      // Many contracts have this as a boolean flag at a specific index
+      // Let's check multiple potential indices for status flags
+      try {
+        // Try to call a specific function if it exists (some contracts have isEscrowActive)
+        const isActive = await publicClient.readContract({
+          address: contract.address,
+          abi: abi,
+          functionName: "isEscrowActive",
+          args: [formattedEscrowId as `0x${string}`],
+        });
+
+        console.log("✅ Escrow active status from contract:", isActive);
+        return !isActive; // Return true if closed (not active)
+      } catch (activeCheckError) {
+        console.log("ℹ️ isEscrowActive function not available, using fallback checks");
+        
+        // Fallback: Check if escrow has meaningful data
+        const availableBalance = escrowDetails[5]; // availableBalance is at index 5
+        const totalAllocated = escrowDetails[2]; // totalAllocatedAmount at index 2
+        const receiverCount = escrowDetails[8]; // receiverCount at index 8
+        
+        console.log("💰 Escrow status indicators:", {
+          availableBalance: availableBalance.toString(),
+          totalAllocated: totalAllocated.toString(),
+          receiverCount: receiverCount.toString(),
+        });
+
+        // If total allocated is 0 and receiver count is 0, likely closed
+        if (totalAllocated === BigInt(0) && receiverCount === BigInt(0)) {
+          console.log("❌ Escrow appears closed - no allocation and no receivers");
+          return true;
+        }
+
+        // Additional check: Try to get receivers list
+        try {
+          const escrowReceivers = await publicClient.readContract({
+            address: contract.address,
+            abi: abi,
+            functionName: "getEscrowReceivers",
+            args: [formattedEscrowId as `0x${string}`],
+          });
+
+          console.log("👥 Escrow receivers:", escrowReceivers);
+
+          // If no receivers, might be closed
+          if (!escrowReceivers || (escrowReceivers as string[]).length === 0) {
+            console.log("❌ Escrow has no receivers - might be closed");
+            return true;
+          }
+
+          // Check if any receivers are still active
+          let hasActiveReceivers = false;
+          for (const receiverAddress of escrowReceivers as string[]) {
+            try {
+              const receiverDetails = await publicClient.readContract({
+                address: contract.address,
+                abi: abi,
+                functionName: "getReceiverDetails",
+                args: [formattedEscrowId as `0x${string}`, receiverAddress as `0x${string}`],
+              });
+
+              const isReceiverActive = receiverDetails[2];
+              const currentAllocation = receiverDetails[0];
+              
+              if (isReceiverActive && currentAllocation > BigInt(0)) {
+                hasActiveReceivers = true;
+                break;
+              }
+            } catch (receiverError) {
+              console.warn("Failed to get receiver details:", receiverError);
+            }
+          }
+
+          // If no active receivers with allocations, consider closed
+          if (!hasActiveReceivers && availableBalance === BigInt(0)) {
+            console.log("❌ Escrow has no active receivers with allocations - closed");
+            return true;
+          }
+
+        } catch (receiversError) {
+          console.warn("Failed to get receivers:", receiversError);
+          // If we can't get receivers but have allocation, assume active
+          if (totalAllocated > BigInt(0)) {
+            console.log("✅ Can't check receivers but has allocation - assume active");
+            return false;
+          }
+          return true; // If we can't verify, assume closed
+        }
+      }
+
+      console.log("✅ Escrow is active");
+      return false; // Escrow is active
+
+    } catch (detailsError) {
+      console.error("❌ Failed to get escrow details:", detailsError);
+      // If we can't read details, assume it's closed
+      return true;
+    }
+
+  } catch (error) {
+    console.error("❌ Error checking escrow status:", error);
+    // If there's an error, assume it's closed to be safe
+    return true;
+  }
+};
+
+// Batch check multiple escrows status
+export const checkMultipleEscrowsStatus = async (
+  escrows: Array<{ escrowId: string; tokenAddress: string }>
+): Promise<Record<string, boolean>> => {
+  const results: Record<string, boolean> = {};
+  
+  console.log("🔍 Batch checking escrow status for", escrows.length, "escrows");
+  
+  // Process in batches to avoid rate limiting
+  const batchSize = 5;
+  for (let i = 0; i < escrows.length; i += batchSize) {
+    const batch = escrows.slice(i, i + batchSize);
+    
+    const batchPromises = batch.map(async (escrow) => {
+      const tokenType = getTokenType(escrow.tokenAddress);
+      const isClosed = await isEscrowClosed(escrow.escrowId, tokenType);
+      return { escrowId: escrow.escrowId, isClosed };
+    });
+    
+    try {
+      const batchResults = await Promise.all(batchPromises);
+      batchResults.forEach(({ escrowId, isClosed }) => {
+        results[escrowId] = isClosed;
+      });
+      
+      // Small delay between batches
+      if (i + batchSize < escrows.length) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+    } catch (error) {
+      console.error("❌ Error in batch:", error);
+      // Mark all in this batch as closed on error
+      batch.forEach(escrow => {
+        results[escrow.escrowId] = true;
+      });
+    }
+  }
+  
+  console.log("📊 Batch status check results:", results);
+  return results;
+};
+const getTokenType = (tokenAddress: string): TokenType => {
+  const usdcAddress = getTokenAddress("USDC");
+  const usdtAddress = getTokenAddress("USDT");
+  const idrxBaseAddress = getTokenAddress("IDRX_BASE");
+  const idrxKaiaAddress = getTokenAddress("IDRX_KAIA");
+  const addr = tokenAddress.toLowerCase();
+
+  if (addr === usdcAddress?.toLowerCase()) {
+    return "USDC";
+  } else if (addr === usdtAddress?.toLowerCase()) {
+    return "USDT";
+  } else if (addr === idrxBaseAddress?.toLowerCase()) {
+    return "IDRX_BASE";
+  } else if (addr === idrxKaiaAddress?.toLowerCase()) {
+    return "IDRX_KAIA";
+  }
+  return "USDC"; // Default
+};
+
 export const addReceiver = async (
   walletClient: any,
   tokenType: string,
