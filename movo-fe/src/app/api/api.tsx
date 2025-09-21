@@ -4,6 +4,9 @@ import { getTokenType } from "@/lib/tokenMapping";
 import { createPublicClient, http, parseAbi } from "viem";
 import { baseSepolia } from "viem/chains";
 import { getDefaultChain } from "@/lib/addresses/chainAddress";
+import { escrowAbis } from "@/lib/abis/escrowAbis";
+import { escrowIdrxAbis } from "@/lib/abis/escrowIdrxAbis";
+import { getEscrowAddress } from "@/lib/contractConfig";
 interface ErrorResponse {
   message?: string;
 }
@@ -29,6 +32,21 @@ const getCachedData = (key: string) => {
 const setCachedData = (key: string, data: any) => {
   cache.set(key, { data, timestamp: Date.now() });
   console.log("💾 Cached data for:", key);
+};
+
+// Token configuration untuk decimals (terpusat untuk maintenance)
+export const TOKEN_DECIMALS_CONFIG = {
+  USDC: 6,
+  USDT: 6,
+  IDRX_BASE: 2,
+  IDRX_KAIA: 2,
+} as const;
+
+export type TokenType = keyof typeof TOKEN_DECIMALS_CONFIG;
+
+// Helper function untuk mendapatkan decimals berdasarkan token type
+export const getTokenDecimals = (tokenType: TokenType): number => {
+  return TOKEN_DECIMALS_CONFIG[tokenType];
 };
 
 // Clear cache for specific address or all cache
@@ -3463,5 +3481,503 @@ export const fetchReceiverEvents = async (
   } catch (error) {
     console.error("❌ Error fetching receiver events:", error);
     return [];
+  }
+};
+
+// ===================================================================
+// VESTING FUNCTIONS
+// ===================================================================
+
+// Interface untuk vesting info
+export interface VestingInfo {
+  isVestingEnabled: boolean;
+  vestingStartTime: bigint;
+  vestingDuration: bigint;
+  vestingEndTime: bigint;
+  currentTime: bigint;
+}
+
+// Interface untuk receiver vesting info
+export interface ReceiverVestingInfo {
+  vestedAmount: bigint;
+  totalVestedAmount: bigint;
+  availableToClaim: bigint;
+  vestingProgress: bigint; // Progress dalam basis point (0-10000, 10000 = 100%)
+}
+
+// Interface untuk vesting progress summary
+export interface VestingProgressSummary {
+  escrowId: string;
+  tokenType: TokenType;
+  vestingInfo: VestingInfo;
+  totalAllocated: bigint;
+  totalVested: bigint;
+  totalClaimed: bigint;
+  remainingToVest: bigint;
+  progressPercentage: number;
+  receivers: Array<{
+    address: string;
+    allocation: bigint;
+    vestedAmount: bigint;
+    claimedAmount: bigint;
+    availableToClaim: bigint;
+    vestingProgress: number;
+  }>;
+}
+
+/**
+ * Get vesting information for an escrow (untuk Sender)
+ * @param escrowId - ID escrow
+ * @param tokenType - Jenis token (USDC, USDT, IDRX_BASE, IDRX_KAIA)
+ */
+export const getEscrowVestingInfo = async (
+  escrowId: string,
+  tokenType: TokenType,
+): Promise<VestingInfo | null> => {
+  try {
+    console.log("🔍 Getting vesting info for escrow:", { escrowId, tokenType });
+
+    // Pilih contract berdasarkan token type
+    const contractAddress =
+      tokenType === "IDRX_BASE" || tokenType === "IDRX_KAIA"
+        ? getEscrowAddress("IDRX_BASE")
+        : getEscrowAddress("USDC");
+
+    const abi =
+      tokenType === "IDRX_BASE" || tokenType === "IDRX_KAIA"
+        ? escrowIdrxAbis
+        : escrowAbis;
+
+    // Format escrow ID sebagai bytes32
+    let formattedEscrowId = escrowId;
+    if (!escrowId.startsWith("0x")) {
+      formattedEscrowId = "0x" + escrowId;
+    }
+    if (formattedEscrowId.length < 66) {
+      formattedEscrowId = formattedEscrowId.padEnd(66, "0");
+    }
+
+    // Call smart contract untuk mendapatkan vesting info
+    const vestingInfo = await publicClient.readContract({
+      address: contractAddress as `0x${string}`,
+      abi: abi,
+      functionName: "getVestingInfo",
+      args: [formattedEscrowId as `0x${string}`],
+    });
+
+    console.log("✅ Vesting info fetched:", vestingInfo);
+
+    return {
+      isVestingEnabled: vestingInfo[0] as boolean,
+      vestingStartTime: vestingInfo[1] as bigint,
+      vestingDuration: vestingInfo[2] as bigint,
+      vestingEndTime: vestingInfo[3] as bigint,
+      currentTime: vestingInfo[4] as bigint,
+    };
+  } catch (error) {
+    console.error("❌ Error getting vesting info:", error);
+    return null;
+  }
+};
+
+/**
+ * Get vesting information for a specific receiver (untuk Receiver)
+ * @param escrowId - ID escrow
+ * @param receiverAddress - Alamat receiver
+ * @param tokenType - Jenis token
+ */
+export const getReceiverVestingInfo = async (
+  escrowId: string,
+  receiverAddress: string,
+  tokenType: TokenType,
+): Promise<ReceiverVestingInfo | null> => {
+  try {
+    console.log("🔍 Getting receiver vesting info:", {
+      escrowId,
+      receiverAddress,
+      tokenType,
+    });
+
+    // Pilih contract berdasarkan token type
+    const contractAddress =
+      tokenType === "IDRX_BASE" || tokenType === "IDRX_KAIA"
+        ? getEscrowAddress("IDRX_BASE")
+        : getEscrowAddress("USDC");
+
+    const abi =
+      tokenType === "IDRX_BASE" || tokenType === "IDRX_KAIA"
+        ? escrowIdrxAbis
+        : escrowAbis;
+
+    // Format escrow ID sebagai bytes32
+    let formattedEscrowId = escrowId;
+    if (!escrowId.startsWith("0x")) {
+      formattedEscrowId = "0x" + escrowId;
+    }
+    if (formattedEscrowId.length < 66) {
+      formattedEscrowId = formattedEscrowId.padEnd(66, "0");
+    }
+
+    // Validasi dan format receiver address
+    const formattedReceiverAddress = receiverAddress
+      .toLowerCase()
+      .startsWith("0x")
+      ? receiverAddress.toLowerCase()
+      : `0x${receiverAddress.toLowerCase()}`;
+
+    // Call smart contract untuk mendapatkan receiver vesting info
+    const receiverVestingInfo = await publicClient.readContract({
+      address: contractAddress as `0x${string}`,
+      abi: abi,
+      functionName: "getReceiverVestingInfo",
+      args: [
+        formattedEscrowId as `0x${string}`,
+        formattedReceiverAddress as `0x${string}`,
+      ],
+    });
+
+    console.log("✅ Receiver vesting info fetched:", receiverVestingInfo);
+
+    return {
+      vestedAmount: receiverVestingInfo[0] as bigint,
+      totalVestedAmount: receiverVestingInfo[1] as bigint,
+      availableToClaim: receiverVestingInfo[2] as bigint,
+      vestingProgress: receiverVestingInfo[3] as bigint,
+    };
+  } catch (error) {
+    console.error("❌ Error getting receiver vesting info:", error);
+    return null;
+  }
+};
+
+/**
+ * Calculate vested amount for a receiver at current time
+ * @param escrowId - ID escrow
+ * @param receiverAddress - Alamat receiver
+ * @param tokenType - Jenis token
+ */
+export const calculateVestedAmount = async (
+  escrowId: string,
+  receiverAddress: string,
+  tokenType: TokenType,
+): Promise<{ vestedAmount: bigint; totalVestedAmount: bigint } | null> => {
+  try {
+    console.log("🔍 Calculating vested amount:", {
+      escrowId,
+      receiverAddress,
+      tokenType,
+    });
+
+    // Pilih contract berdasarkan token type
+    const contractAddress =
+      tokenType === "IDRX_BASE" || tokenType === "IDRX_KAIA"
+        ? getEscrowAddress("IDRX_BASE")
+        : getEscrowAddress("USDC");
+
+    const abi =
+      tokenType === "IDRX_BASE" || tokenType === "IDRX_KAIA"
+        ? escrowIdrxAbis
+        : escrowAbis;
+
+    // Format escrow ID sebagai bytes32
+    let formattedEscrowId = escrowId;
+    if (!escrowId.startsWith("0x")) {
+      formattedEscrowId = "0x" + escrowId;
+    }
+    if (formattedEscrowId.length < 66) {
+      formattedEscrowId = formattedEscrowId.padEnd(66, "0");
+    }
+
+    // Validasi dan format receiver address
+    const formattedReceiverAddress = receiverAddress
+      .toLowerCase()
+      .startsWith("0x")
+      ? receiverAddress.toLowerCase()
+      : `0x${receiverAddress.toLowerCase()}`;
+
+    // Call smart contract untuk calculate vested amount
+    const vestedAmountInfo = await publicClient.readContract({
+      address: contractAddress as `0x${string}`,
+      abi: abi,
+      functionName: "calculateVestedAmount",
+      args: [
+        formattedEscrowId as `0x${string}`,
+        formattedReceiverAddress as `0x${string}`,
+      ],
+    });
+
+    console.log("✅ Vested amount calculated:", vestedAmountInfo);
+
+    return {
+      vestedAmount: vestedAmountInfo[0] as bigint,
+      totalVestedAmount: vestedAmountInfo[1] as bigint,
+    };
+  } catch (error) {
+    console.error("❌ Error calculating vested amount:", error);
+    return null;
+  }
+};
+
+/**
+ * Get comprehensive vesting progress for an escrow (untuk Sender Dashboard)
+ * @param escrowId - ID escrow
+ * @param tokenType - Jenis token
+ */
+export const getEscrowVestingProgress = async (
+  escrowId: string,
+  tokenType: TokenType,
+): Promise<VestingProgressSummary | null> => {
+  try {
+    console.log("🔍 Getting escrow vesting progress:", { escrowId, tokenType });
+
+    // Get basic vesting info
+    const vestingInfo = await getEscrowVestingInfo(escrowId, tokenType);
+    if (!vestingInfo) {
+      console.log("⚠️ No vesting info found for escrow");
+      return null;
+    }
+
+    // Get escrow details untuk mendapatkan receivers
+    const escrowDetails = await getEscrowDetailsWithTokenDetection(escrowId);
+    if (!escrowDetails) {
+      console.log("⚠️ No escrow details found");
+      return null;
+    }
+
+    const receivers = escrowDetails.receiverAddresses || [];
+
+    // Get vesting info untuk setiap receiver
+    const receiversVestingInfo = await Promise.all(
+      receivers.map(async (receiverAddress: string) => {
+        const receiverVesting = await getReceiverVestingInfo(
+          escrowId,
+          receiverAddress,
+          tokenType,
+        );
+
+        // Get receiver details untuk allocation
+        const contractAddress =
+          tokenType === "IDRX_BASE" || tokenType === "IDRX_KAIA"
+            ? getEscrowAddress("IDRX_BASE")
+            : getEscrowAddress("USDC");
+
+        const abi =
+          tokenType === "IDRX_BASE" || tokenType === "IDRX_KAIA"
+            ? escrowIdrxAbis
+            : escrowAbis;
+
+        let formattedEscrowId = escrowId;
+        if (!escrowId.startsWith("0x")) {
+          formattedEscrowId = "0x" + escrowId;
+        }
+        if (formattedEscrowId.length < 66) {
+          formattedEscrowId = formattedEscrowId.padEnd(66, "0");
+        }
+
+        try {
+          const receiverDetails = await publicClient.readContract({
+            address: contractAddress as `0x${string}`,
+            abi: abi,
+            functionName: "getReceiverDetails",
+            args: [
+              formattedEscrowId as `0x${string}`,
+              receiverAddress as `0x${string}`,
+            ],
+          });
+
+          const allocation = receiverDetails[0] as bigint; // currentAllocation
+          const withdrawnAmount = receiverDetails[1] as bigint; // withdrawnAmount
+
+          return {
+            address: receiverAddress,
+            allocation: allocation,
+            vestedAmount: receiverVesting?.vestedAmount || BigInt(0),
+            claimedAmount: withdrawnAmount,
+            availableToClaim: receiverVesting?.availableToClaim || BigInt(0),
+            vestingProgress:
+              Number(receiverVesting?.vestingProgress || BigInt(0)) / 100, // Convert from basis points to percentage
+          };
+        } catch (error) {
+          console.error(
+            `❌ Error getting details for receiver ${receiverAddress}:`,
+            error,
+          );
+          return {
+            address: receiverAddress,
+            allocation: BigInt(0),
+            vestedAmount: receiverVesting?.vestedAmount || BigInt(0),
+            claimedAmount: BigInt(0),
+            availableToClaim: receiverVesting?.availableToClaim || BigInt(0),
+            vestingProgress:
+              Number(receiverVesting?.vestingProgress || BigInt(0)) / 100,
+          };
+        }
+      }),
+    );
+
+    // Calculate totals
+    const totalAllocated = receiversVestingInfo.reduce(
+      (sum, receiver) => sum + receiver.allocation,
+      BigInt(0),
+    );
+    const totalVested = receiversVestingInfo.reduce(
+      (sum, receiver) => sum + receiver.vestedAmount,
+      BigInt(0),
+    );
+    const totalClaimed = receiversVestingInfo.reduce(
+      (sum, receiver) => sum + receiver.claimedAmount,
+      BigInt(0),
+    );
+    const remainingToVest = (
+      totalAllocated >= totalVested ? totalAllocated - totalVested : BigInt(0)
+    ) as bigint;
+
+    // Calculate overall progress percentage
+    const progressPercentage =
+      totalAllocated > 0
+        ? Number((totalVested * BigInt(100)) / totalAllocated)
+        : 0;
+
+    const summary: VestingProgressSummary = {
+      escrowId,
+      tokenType,
+      vestingInfo,
+      totalAllocated,
+      totalVested,
+      totalClaimed,
+      remainingToVest,
+      progressPercentage,
+      receivers: receiversVestingInfo,
+    };
+
+    console.log("✅ Vesting progress summary:", summary);
+    return summary;
+  } catch (error) {
+    console.error("❌ Error getting escrow vesting progress:", error);
+    return null;
+  }
+};
+
+/**
+ * Check if an escrow has vesting enabled
+ * @param escrowId - ID escrow
+ * @param tokenType - Jenis token
+ */
+export const isVestingEnabled = async (
+  escrowId: string,
+  tokenType: TokenType,
+): Promise<boolean> => {
+  try {
+    const vestingInfo = await getEscrowVestingInfo(escrowId, tokenType);
+    return vestingInfo?.isVestingEnabled || false;
+  } catch (error) {
+    console.error("❌ Error checking if vesting is enabled:", error);
+    return false;
+  }
+};
+
+/**
+ * Get vesting timeline information (untuk UI display)
+ * @param escrowId - ID escrow
+ * @param tokenType - Jenis token
+ */
+export const getVestingTimeline = async (
+  escrowId: string,
+  tokenType: TokenType,
+): Promise<{
+  startDate: Date;
+  endDate: Date;
+  currentDate: Date;
+  durationDays: number;
+  elapsedDays: number;
+  remainingDays: number;
+  progressPercentage: number;
+  status: "NOT_STARTED" | "IN_PROGRESS" | "COMPLETED";
+} | null> => {
+  try {
+    const vestingInfo = await getEscrowVestingInfo(escrowId, tokenType);
+    if (!vestingInfo || !vestingInfo.isVestingEnabled) {
+      return null;
+    }
+
+    const startTime = Number(vestingInfo.vestingStartTime);
+    const duration = Number(vestingInfo.vestingDuration);
+    const currentTime = Number(vestingInfo.currentTime);
+
+    const startDate = new Date(startTime * 1000);
+    const endDate = new Date((startTime + duration) * 1000);
+    const currentDate = new Date(currentTime * 1000);
+
+    const durationDays = Math.ceil(duration / (24 * 60 * 60));
+    const elapsedSeconds = Math.max(0, currentTime - startTime);
+    const elapsedDays = Math.floor(elapsedSeconds / (24 * 60 * 60));
+    const remainingDays = Math.max(0, durationDays - elapsedDays);
+
+    let progressPercentage = 0;
+    let status: "NOT_STARTED" | "IN_PROGRESS" | "COMPLETED" = "NOT_STARTED";
+
+    if (currentTime >= startTime + duration) {
+      progressPercentage = 100;
+      status = "COMPLETED";
+    } else if (currentTime >= startTime) {
+      progressPercentage = (elapsedSeconds / duration) * 100;
+      status = "IN_PROGRESS";
+    } else {
+      progressPercentage = 0;
+      status = "NOT_STARTED";
+    }
+
+    return {
+      startDate,
+      endDate,
+      currentDate,
+      durationDays,
+      elapsedDays,
+      remainingDays,
+      progressPercentage: Math.min(100, Math.max(0, progressPercentage)),
+      status,
+    };
+  } catch (error) {
+    console.error("❌ Error getting vesting timeline:", error);
+    return null;
+  }
+};
+
+/**
+ * Format vesting amount for display (dengan decimals yang tepat)
+ * @param amount - Amount dalam BigInt
+ * @param tokenType - Jenis token untuk menentukan decimals
+ */
+export const formatVestingAmount = (
+  amount: bigint,
+  tokenType: TokenType,
+): string => {
+  try {
+    // Gunakan konfigurasi token yang terpusat (fully dynamic)
+    const decimals = getTokenDecimals(tokenType);
+
+    // Convert BigInt to string untuk avoid precision loss
+    const amountStr = amount.toString();
+
+    if (amountStr === "0") {
+      return "0.0";
+    }
+
+    if (amountStr.length <= decimals) {
+      // Amount kurang dari 1 unit
+      const paddedAmount =
+        "0".repeat(decimals + 1 - amountStr.length) + amountStr;
+      const integerPart = paddedAmount.slice(0, -decimals) || "0";
+      const decimalPart = paddedAmount.slice(-decimals);
+      return `${integerPart}.${decimalPart}`;
+    } else {
+      // Amount 1 unit atau lebih
+      const integerPart = amountStr.slice(0, -decimals);
+      const decimalPart = amountStr.slice(-decimals);
+      return `${integerPart}.${decimalPart}`;
+    }
+  } catch (error) {
+    console.error("Error formatting vesting amount:", error);
+    return "0.0";
   }
 };

@@ -15,6 +15,9 @@ import {
   RefreshCw,
   ArrowUp,
   X,
+  Calendar,
+  TrendingUp,
+  Award,
 } from "lucide-react";
 import {
   escrowContract,
@@ -28,12 +31,21 @@ import {
   checkTokenBalance,
   checkTokenAllowance,
   approveTokens,
-  TokenType,
 } from "@/lib/smartContract";
 import { getTokenAddress } from "@/lib/contractConfig";
 import { useWallet } from "@/lib/walletContext";
 import { useWalletClientHook } from "@/lib/useWalletClient";
 import { Token } from "@/types";
+import {
+  getEscrowVestingInfo,
+  getEscrowVestingProgress,
+  getVestingTimeline,
+  isVestingEnabled,
+  formatVestingAmount,
+  VestingInfo,
+  VestingProgressSummary,
+  TokenType,
+} from "@/app/api/api";
 
 interface EscrowData {
   id: string;
@@ -161,6 +173,15 @@ export default function EscrowList({
   >(new Map());
   const [loadingDetails, setLoadingDetails] = useState<Set<string>>(new Set());
 
+  // Vesting state
+  const [vestingInfo, setVestingInfo] = useState<
+    Map<string, VestingProgressSummary | null>
+  >(new Map());
+  const [vestingTimeline, setVestingTimeline] = useState<Map<string, any>>(
+    new Map(),
+  );
+  const [loadingVesting, setLoadingVesting] = useState<Set<string>>(new Set());
+
   // Topup modal state
   const [topUpModal, setTopUpModal] = useState<{
     isOpen: boolean;
@@ -174,6 +195,27 @@ export default function EscrowList({
   const [topUpAmount, setTopUpAmount] = useState<string>("");
   const [isTopUpLoading, setIsTopUpLoading] = useState(false);
   const [userTokenBalance, setUserTokenBalance] = useState<string>("0");
+
+  // Auto-refresh vesting info for expanded escrows every 60 seconds
+  useEffect(() => {
+    if (expandedEscrows.size === 0) return;
+
+    const interval = setInterval(() => {
+      expandedEscrows.forEach((escrowId) => {
+        const escrow = escrows.find((e) => e.escrowId === escrowId);
+        if (
+          escrow &&
+          vestingInfo.has(escrowId) &&
+          vestingInfo.get(escrowId) !== null
+        ) {
+          console.log("🔄 Auto-refreshing vesting info for:", escrowId);
+          loadVestingInfo(escrowId, escrow.tokenAddress);
+        }
+      });
+    }, 60000); // Refresh every minute
+
+    return () => clearInterval(interval);
+  }, [expandedEscrows, escrows, vestingInfo]);
 
   // Helper function to get token type based on token address
   const getTokenType = (tokenAddress: string): TokenType => {
@@ -203,19 +245,70 @@ export default function EscrowList({
     }
     return "USDC"; // Default
   };
-    // if (tokenAddress.toLowerCase() === usdcAddress.toLowerCase()) {
-    //   return "USDC";
-    // } else if (tokenAddress.toLowerCase() === usdtAddress.toLowerCase()) {
-    //   return "USDT";
-    // } else if (tokenAddress.toLowerCase() === idrxAddress.toLowerCase()) {
-    //   return "IDRX";
-    // }
+  // if (tokenAddress.toLowerCase() === usdcAddress.toLowerCase()) {
+  //   return "USDC";
+  // } else if (tokenAddress.toLowerCase() === usdtAddress.toLowerCase()) {
+  //   return "USDT";
+  // } else if (tokenAddress.toLowerCase() === idrxAddress.toLowerCase()) {
+  //   return "IDRX";
+  // }
 
   // Helper function to get token symbol
   const getTokenSymbol = (tokenAddress: string): string => {
     const tokenType = getTokenType(tokenAddress);
 
     return tokenType; // Default
+  };
+
+  // Function to load vesting information
+  const loadVestingInfo = async (escrowId: string, tokenAddress: string) => {
+    if (vestingInfo.has(escrowId) || loadingVesting.has(escrowId)) {
+      return;
+    }
+
+    setLoadingVesting((prev) => new Set(prev).add(escrowId));
+
+    try {
+      const tokenType = getTokenType(tokenAddress);
+
+      // Check if vesting is enabled first
+      const hasVesting = await isVestingEnabled(escrowId, tokenType);
+
+      if (!hasVesting) {
+        console.log("🔍 Vesting not enabled for escrow:", escrowId);
+        setVestingInfo((prev) => new Map(prev).set(escrowId, null));
+        setLoadingVesting((prev) => {
+          const newSet = new Set(prev);
+          newSet.delete(escrowId);
+          return newSet;
+        });
+        return;
+      }
+
+      // Load vesting progress and timeline
+      const [vestingProgress, timeline] = await Promise.all([
+        getEscrowVestingProgress(escrowId, tokenType),
+        getVestingTimeline(escrowId, tokenType),
+      ]);
+
+      console.log("✅ Vesting info loaded:", {
+        escrowId,
+        vestingProgress,
+        timeline,
+      });
+
+      setVestingInfo((prev) => new Map(prev).set(escrowId, vestingProgress));
+      setVestingTimeline((prev) => new Map(prev).set(escrowId, timeline));
+    } catch (error) {
+      console.error("❌ Error loading vesting info:", error);
+      setVestingInfo((prev) => new Map(prev).set(escrowId, null));
+    } finally {
+      setLoadingVesting((prev) => {
+        const newSet = new Set(prev);
+        newSet.delete(escrowId);
+        return newSet;
+      });
+    }
   };
 
   // Function to load contract details
@@ -355,8 +448,9 @@ export default function EscrowList({
       newExpanded.delete(escrowId);
     } else {
       newExpanded.add(escrowId);
-      // Load contract details when expanding
+      // Load contract details and vesting info when expanding
       loadContractDetails(escrowId, tokenAddress);
+      loadVestingInfo(escrowId, tokenAddress);
     }
     setExpandedEscrows(newExpanded);
   };
@@ -371,7 +465,7 @@ export default function EscrowList({
     let displayDecimals = 2; // How many decimal places to show
     if (tokenType === "IDRX_BASE" || tokenType === "IDRX_KAIA") {
       decimals = 2;
-      displayDecimals = 2; 
+      displayDecimals = 2;
     }
 
     // Handle large numbers by using string manipulation instead of parseFloat
@@ -453,18 +547,13 @@ export default function EscrowList({
 
     // Get user's token balance
     const balance = await getUserTokenBalance(tokenType);
-    const decimals = (tokenType === "IDRX_BASE" || tokenType === "IDRX_KAIA") ? 2 : 6;
-    const balanceFormatted = formatTokenAmount(
-      balance,
-      decimals
-    );
+    const decimals =
+      tokenType === "IDRX_BASE" || tokenType === "IDRX_KAIA" ? 2 : 6;
+    const balanceFormatted = formatTokenAmount(balance, decimals);
     setUserTokenBalance(balanceFormatted);
 
     // Format max amount with proper decimals
-    const maxAmountFormatted = formatTokenAmount(
-      BigInt(maxAmount),
-      decimals
-    );
+    const maxAmountFormatted = formatTokenAmount(BigInt(maxAmount), decimals);
     const tokenSymbol = getTokenSymbol(tokenAddress);
 
     console.log("🚀 Opening top up modal with max amount:", {
@@ -506,7 +595,7 @@ export default function EscrowList({
   };
 
   // Function to get token contract based on token type
-  const getTokenContract = (tokenType:TokenType) => {
+  const getTokenContract = (tokenType: TokenType) => {
     switch (tokenType) {
       case "USDC":
         return usdcContract;
@@ -521,7 +610,7 @@ export default function EscrowList({
   };
 
   // Function to get escrow contract based on token type
-  const getEscrowContract = (tokenType:TokenType) => {
+  const getEscrowContract = (tokenType: TokenType) => {
     if (tokenType === "USDC" || tokenType === "USDT") {
       return escrowContract;
     } else if (tokenType === "IDRX_BASE" || tokenType === "IDRX_KAIA") {
@@ -585,7 +674,8 @@ export default function EscrowList({
       });
 
       // Convert amount to proper decimals using viem's parseUnits
-      const decimals = (tokenType === "IDRX_BASE" || tokenType === "IDRX_KAIA") ? 2 : 6;
+      const decimals =
+        tokenType === "IDRX_BASE" || tokenType === "IDRX_KAIA" ? 2 : 6;
       // const decimals = tokenType === "IDRX" ? 2 : 6;
       const amountInWei = parseTokenAmount(amount.toString(), decimals);
 
@@ -636,6 +726,27 @@ export default function EscrowList({
 
         // Close modal and refresh data
         closeTopUpModal();
+
+        // Refresh vesting info after topup
+        const escrowData = escrows.find((e) => e.escrowId === escrowId);
+        if (escrowData) {
+          // Clear existing vesting cache and reload
+          setVestingInfo((prev) => {
+            const newMap = new Map(prev);
+            newMap.delete(escrowId);
+            return newMap;
+          });
+          setVestingTimeline((prev) => {
+            const newMap = new Map(prev);
+            newMap.delete(escrowId);
+            return newMap;
+          });
+
+          // Reload vesting info
+          setTimeout(() => {
+            loadVestingInfo(escrowId, escrowData.tokenAddress);
+          }, 1000);
+        }
 
         // Call the parent's onTopupFund callback
         onTopupFund(escrowId);
@@ -697,6 +808,9 @@ export default function EscrowList({
         const isExpanded = expandedEscrows.has(escrow.escrowId);
         const details = contractDetails.get(escrow.escrowId);
         const isLoadingDetails = loadingDetails.has(escrow.escrowId);
+        const escrowVestingInfo = vestingInfo.get(escrow.escrowId);
+        const escrowVestingTimeline = vestingTimeline.get(escrow.escrowId);
+        const isLoadingVesting = loadingVesting.has(escrow.escrowId);
 
         return (
           <div
@@ -737,6 +851,14 @@ export default function EscrowList({
                   <div className="flex items-center space-x-2">
                     <Clock className="w-4 h-4 text-white/60" />
                     <span className="text-white/80 text-sm">Active</span>
+                    {escrowVestingInfo && (
+                      <div className="flex items-center space-x-1 ml-2">
+                        <Calendar className="w-3 h-3 text-orange-400" />
+                        <span className="text-orange-400 text-xs font-medium">
+                          Vesting
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -870,7 +992,10 @@ export default function EscrowList({
                             <p className="text-white font-semibold">
                               {formatTokenAmount(
                                 details.escrowRoom.totalAllocatedAmount,
-                                (details.tokenType === "IDRX_BASE" || details.tokenType === "IDRX_KAIA") ? 2 : 6,
+                                details.tokenType === "IDRX_BASE" ||
+                                  details.tokenType === "IDRX_KAIA"
+                                  ? 2
+                                  : 6,
                                 // escrow.tokenType === "IDRX" ? 2 : 6,
                               )}{" "}
                               tokens
@@ -883,7 +1008,10 @@ export default function EscrowList({
                             <p className="text-white font-semibold">
                               {formatTokenAmount(
                                 details.escrowRoom.totalDepositedAmount,
-                                (details.tokenType === "IDRX_BASE" || details.tokenType === "IDRX_KAIA") ? 2 : 6,
+                                details.tokenType === "IDRX_BASE" ||
+                                  details.tokenType === "IDRX_KAIA"
+                                  ? 2
+                                  : 6,
                                 // escrow.tokenType === "IDRX" ? 2 : 6,
                               )}{" "}
                               tokens
@@ -896,7 +1024,10 @@ export default function EscrowList({
                             <p className="text-white font-semibold">
                               {formatTokenAmount(
                                 details.escrowRoom.totalWithdrawnAmount,
-                                (details.tokenType === "IDRX_BASE" || details.tokenType === "IDRX_KAIA") ? 2 : 6,
+                                details.tokenType === "IDRX_BASE" ||
+                                  details.tokenType === "IDRX_KAIA"
+                                  ? 2
+                                  : 6,
                                 // escrow.tokenType === "IDRX" ? 2 : 6,
                               )}{" "}
                               {details.tokenType}
@@ -909,7 +1040,10 @@ export default function EscrowList({
                             <p className="text-green-400 font-semibold">
                               {formatTokenAmount(
                                 details.escrowRoom.availableBalance,
-                                (details.tokenType === "IDRX_BASE" || details.tokenType === "IDRX_KAIA") ? 2 : 6,
+                                details.tokenType === "IDRX_BASE" ||
+                                  details.tokenType === "IDRX_KAIA"
+                                  ? 2
+                                  : 6,
                                 // escrow.tokenType === "IDRX" ? 2 : 6,
                               )}{" "}
                               {details.tokenType}
@@ -968,7 +1102,10 @@ export default function EscrowList({
                                     Allocated:{" "}
                                     {formatTokenAmount(
                                       receiver.currentAllocation,
-                                      (details.tokenType === "IDRX_BASE" || details.tokenType === "IDRX_KAIA") ? 2 : 6,
+                                      details.tokenType === "IDRX_BASE" ||
+                                        details.tokenType === "IDRX_KAIA"
+                                        ? 2
+                                        : 6,
                                       // escrow.tokenType === "IDRX" ? 2 : 6,
                                     )}
                                   </div>
@@ -976,7 +1113,10 @@ export default function EscrowList({
                                     Withdrawn:{" "}
                                     {formatTokenAmount(
                                       receiver.withdrawnAmount,
-                                      (details.tokenType === "IDRX_BASE" || details.tokenType === "IDRX_KAIA") ? 2 : 6,
+                                      details.tokenType === "IDRX_BASE" ||
+                                        details.tokenType === "IDRX_KAIA"
+                                        ? 2
+                                        : 6,
                                       // escrow.tokenType === "IDRX" ? 2 : 6,
                                     )}
                                   </div>
@@ -992,6 +1132,274 @@ export default function EscrowList({
                         </div>
                       )}
                     </div>
+
+                    {/* Vesting Information */}
+                    {(escrowVestingInfo !== undefined || isLoadingVesting) && (
+                      <div className="bg-gradient-to-r from-orange-500/10 to-amber-500/10 border border-orange-500/20 rounded-xl p-4">
+                        <h4 className="text-lg font-semibold text-white mb-4 flex items-center space-x-2">
+                          <Calendar className="w-5 h-5 text-orange-400" />
+                          <span>Vesting Information</span>
+                        </h4>
+
+                        {isLoadingVesting ? (
+                          <div className="flex items-center justify-center space-x-3 py-4">
+                            <RefreshCw className="w-5 h-5 animate-spin text-orange-400" />
+                            <span className="text-white/60">
+                              Loading vesting info...
+                            </span>
+                          </div>
+                        ) : escrowVestingInfo ? (
+                          <div className="space-y-4">
+                            {/* Vesting Timeline */}
+                            {escrowVestingTimeline && (
+                              <div className="bg-white/5 rounded-lg p-3">
+                                <div className="flex items-center justify-between mb-2">
+                                  <span className="text-white/60 text-sm">
+                                    Vesting Status
+                                  </span>
+                                  <span
+                                    className={`text-sm font-medium px-2 py-1 rounded-full ${
+                                      escrowVestingTimeline.status ===
+                                      "COMPLETED"
+                                        ? "bg-green-500/20 text-green-400"
+                                        : escrowVestingTimeline.status ===
+                                            "IN_PROGRESS"
+                                          ? "bg-orange-500/20 text-orange-400"
+                                          : "bg-gray-500/20 text-gray-400"
+                                    }`}
+                                  >
+                                    {escrowVestingTimeline.status.replace(
+                                      "_",
+                                      " ",
+                                    )}
+                                  </span>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-4 text-sm">
+                                  <div>
+                                    <p className="text-white/60">Start Date</p>
+                                    <p className="text-white">
+                                      {escrowVestingTimeline.startDate?.toLocaleDateString()}
+                                    </p>
+                                  </div>
+                                  <div>
+                                    <p className="text-white/60">End Date</p>
+                                    <p className="text-white">
+                                      {escrowVestingTimeline.endDate?.toLocaleDateString()}
+                                    </p>
+                                  </div>
+                                  <div>
+                                    <p className="text-white/60">Duration</p>
+                                    <p className="text-white">
+                                      {escrowVestingTimeline.durationDays} days
+                                    </p>
+                                  </div>
+                                  <div>
+                                    <p className="text-white/60">Remaining</p>
+                                    <p className="text-white">
+                                      {escrowVestingTimeline.remainingDays} days
+                                    </p>
+                                  </div>
+                                </div>
+
+                                {/* Progress Bar */}
+                                <div className="mt-3">
+                                  <div className="flex justify-between items-center mb-1">
+                                    <span className="text-white/60 text-xs">
+                                      Time Progress
+                                    </span>
+                                    <span className="text-white text-xs">
+                                      {escrowVestingTimeline.progressPercentage.toFixed(
+                                        1,
+                                      )}
+                                      %
+                                    </span>
+                                  </div>
+                                  <div className="w-full bg-white/10 rounded-full h-2">
+                                    <div
+                                      className="bg-gradient-to-r from-orange-500 to-amber-500 h-2 rounded-full transition-all duration-300"
+                                      style={{
+                                        width: `${Math.min(100, Math.max(0, escrowVestingTimeline.progressPercentage))}%`,
+                                      }}
+                                    ></div>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Vesting Financial Summary */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <div className="space-y-3">
+                                <div className="bg-white/5 rounded-lg p-3">
+                                  <p className="text-white/60 text-sm">
+                                    Total Allocated
+                                  </p>
+                                  <p className="text-white font-semibold">
+                                    {formatVestingAmount(
+                                      escrowVestingInfo.totalAllocated,
+                                      escrowVestingInfo.tokenType,
+                                    )}{" "}
+                                    {escrowVestingInfo.tokenType}
+                                  </p>
+                                </div>
+                                <div className="bg-white/5 rounded-lg p-3">
+                                  <p className="text-white/60 text-sm">
+                                    Total Vested
+                                  </p>
+                                  <p className="text-orange-400 font-semibold">
+                                    {formatVestingAmount(
+                                      escrowVestingInfo.totalVested,
+                                      escrowVestingInfo.tokenType,
+                                    )}{" "}
+                                    {escrowVestingInfo.tokenType}
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="space-y-3">
+                                <div className="bg-white/5 rounded-lg p-3">
+                                  <p className="text-white/60 text-sm">
+                                    Total Claimed
+                                  </p>
+                                  <p className="text-green-400 font-semibold">
+                                    {formatVestingAmount(
+                                      escrowVestingInfo.totalClaimed,
+                                      escrowVestingInfo.tokenType,
+                                    )}{" "}
+                                    {escrowVestingInfo.tokenType}
+                                  </p>
+                                </div>
+                                <div className="bg-white/5 rounded-lg p-3">
+                                  <p className="text-white/60 text-sm">
+                                    Remaining to Vest
+                                  </p>
+                                  <p className="text-blue-400 font-semibold">
+                                    {formatVestingAmount(
+                                      escrowVestingInfo.remainingToVest,
+                                      escrowVestingInfo.tokenType,
+                                    )}{" "}
+                                    {escrowVestingInfo.tokenType}
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Overall Vesting Progress */}
+                            <div className="bg-white/5 rounded-lg p-3">
+                              <div className="flex justify-between items-center mb-2">
+                                <span className="text-white/60 text-sm flex items-center space-x-2">
+                                  <TrendingUp className="w-4 h-4" />
+                                  <span>Overall Vesting Progress</span>
+                                </span>
+                                <span className="text-white font-semibold">
+                                  {escrowVestingInfo.progressPercentage.toFixed(
+                                    1,
+                                  )}
+                                  %
+                                </span>
+                              </div>
+                              <div className="w-full bg-white/10 rounded-full h-3">
+                                <div
+                                  className="bg-gradient-to-r from-blue-500 to-purple-500 h-3 rounded-full transition-all duration-300"
+                                  style={{
+                                    width: `${Math.min(100, Math.max(0, escrowVestingInfo.progressPercentage))}%`,
+                                  }}
+                                ></div>
+                              </div>
+                            </div>
+
+                            {/* Receiver Vesting Details */}
+                            {escrowVestingInfo.receivers &&
+                              escrowVestingInfo.receivers.length > 0 && (
+                                <div>
+                                  <h5 className="text-white font-medium mb-2 flex items-center space-x-2">
+                                    <Award className="w-4 h-4 text-purple-400" />
+                                    <span>Receiver Vesting Progress</span>
+                                  </h5>
+                                  <div className="space-y-2 max-h-40 overflow-y-auto">
+                                    {escrowVestingInfo.receivers.map(
+                                      (receiver, index) => (
+                                        <div
+                                          key={index}
+                                          className="bg-white/5 rounded-lg p-3"
+                                        >
+                                          <div className="flex items-center justify-between mb-2">
+                                            <span className="text-white font-mono text-sm">
+                                              {formatAddress(receiver.address)}
+                                            </span>
+                                            <span className="text-purple-400 text-sm font-medium">
+                                              {receiver.vestingProgress.toFixed(
+                                                1,
+                                              )}
+                                              %
+                                            </span>
+                                          </div>
+
+                                          <div className="grid grid-cols-3 gap-2 text-xs">
+                                            <div>
+                                              <p className="text-white/60">
+                                                Allocated
+                                              </p>
+                                              <p className="text-white">
+                                                {formatVestingAmount(
+                                                  receiver.allocation,
+                                                  escrowVestingInfo.tokenType,
+                                                )}
+                                              </p>
+                                            </div>
+                                            <div>
+                                              <p className="text-white/60">
+                                                Vested
+                                              </p>
+                                              <p className="text-orange-400">
+                                                {formatVestingAmount(
+                                                  receiver.vestedAmount,
+                                                  escrowVestingInfo.tokenType,
+                                                )}
+                                              </p>
+                                            </div>
+                                            <div>
+                                              <p className="text-white/60">
+                                                Available
+                                              </p>
+                                              <p className="text-green-400">
+                                                {formatVestingAmount(
+                                                  receiver.availableToClaim,
+                                                  escrowVestingInfo.tokenType,
+                                                )}
+                                              </p>
+                                            </div>
+                                          </div>
+
+                                          {/* Individual Progress Bar */}
+                                          <div className="mt-2">
+                                            <div className="w-full bg-white/10 rounded-full h-1.5">
+                                              <div
+                                                className="bg-gradient-to-r from-purple-500 to-pink-500 h-1.5 rounded-full transition-all duration-300"
+                                                style={{
+                                                  width: `${Math.min(100, Math.max(0, receiver.vestingProgress))}%`,
+                                                }}
+                                              ></div>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      ),
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+                          </div>
+                        ) : (
+                          <div className="text-center py-4">
+                            <div className="w-12 h-12 bg-gray-500/10 rounded-full flex items-center justify-center mx-auto mb-2">
+                              <Calendar className="w-6 h-6 text-gray-400" />
+                            </div>
+                            <p className="text-gray-400 text-sm">
+                              No vesting configured for this escrow
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    )}
 
                     {/* Action Buttons */}
                     <div className="flex items-center space-x-3">
