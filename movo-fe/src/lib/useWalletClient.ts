@@ -1,13 +1,13 @@
 import { useWallet } from "./walletContext";
 import lineWalletProvider from "./lineWalletProvider";
 import { createWalletClient, custom, http, createPublicClient } from "viem";
-import { baseSepolia, kaiaTestnet } from "./smartContract";
+import { kaiaMainnet } from "./smartContract";
 
 export const useWalletClientHook = () => {
   const { isConnected, address } = useWallet();
 
   const publicClient = createPublicClient({
-    chain: baseSepolia,
+    chain: kaiaMainnet,
     transport: http(),
   })
   // Detect which wallet is actually being used
@@ -57,7 +57,7 @@ export const useWalletClientHook = () => {
       const ethereum = (window as any).ethereum;
       const walletClient = createWalletClient({
         account: address as `0x${string}`,
-        chain: baseSepolia,
+        chain: kaiaMainnet,
         transport: custom(ethereum),
       });
       
@@ -180,10 +180,10 @@ export const useWalletClientHook = () => {
                 
                 // Try to create a public client for gas estimation, but don't fail if it doesn't work
                 try {
-                  const { baseSepolia } = await import('./smartContract');
+                  const { kaiaMainnet } = await import('./smartContract');
                   const publicClient = createPublicClient({
-                    chain: baseSepolia,
-                    transport: http('https://sepolia.base.org'), // Use official Base Sepolia RPC
+                    chain: kaiaMainnet,
+                    transport: http('https://klaytn.drpc.org'), // Use Kaia mainnet RPC
                   });
                   
                   const gasEstimateResult = await publicClient.estimateContractGas({
@@ -270,11 +270,11 @@ export const useWalletClientHook = () => {
           // For LINE wallet, we need to create a proper simulation
           // Import viem's simulateContract function
           const { createPublicClient, http } = await import('viem');
-          const { baseSepolia } = await import('./smartContract');
+          const { kaiaMainnet } = await import('./smartContract');
           
-          // Create a public client for simulation using Base Sepolia
+          // Create a public client for simulation using Kaia mainnet
           const publicClient = createPublicClient({
-            chain: baseSepolia, // Use Base Sepolia for LINE wallet
+            chain: kaiaMainnet, // Use Kaia mainnet for LINE wallet
             transport: http(),
           });
           

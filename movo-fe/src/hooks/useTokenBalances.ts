@@ -12,7 +12,6 @@ interface TokenBalance {
   balance: string;
   formattedBalance: string;
   decimals: number;
-  logo: string;
 }
 
 export function useTokenBalances() {
@@ -26,25 +25,37 @@ export function useTokenBalances() {
       symbol: "USDC",
       name: "Mock USD Coin",
       decimals: 6,
-      logo: "/USDC-Base.png",
     },
     {
       symbol: "USDT", 
       name: "Mock Tether USD",
       decimals: 6,
-      logo: "",
     },
     {
       symbol: "IDRX",
       name: "Mock IDRX Token", 
+      decimals: 6,
+    },
+    {
+      symbol: "MYRC",
+      name: "Mock MYRC Token",
       decimals: 18,
-      logo: "/IDRX-Base.png",
+    },
+    {
+      symbol: "PHPC",
+      name: "Mock PHPC Token",
+      decimals: 6,
+    },
+    {
+      symbol: "TNSGD",
+      name: "Mock TNSGD Token",
+      decimals: 6,
     },
   ];
 
   const fetchTokenBalance = async (token: typeof tokens[0]): Promise<TokenBalance> => {
     try {
-      const tokenAddress = getTokenAddress(token.symbol, 84532); // Base Sepolia
+      const tokenAddress = getTokenAddress(token.symbol, 8217); // Kaia Mainnet
       if (!tokenAddress) {
         throw new Error(`Token address not found for ${token.symbol}`);
       }
@@ -64,44 +75,40 @@ export function useTokenBalances() {
         args: [address as `0x${string}`],
       });
 
-      // For IDRX, try to read decimals from smart contract
+      // Try to read decimals from smart contract for all tokens
       let actualDecimals = token.decimals;
-      if (token.symbol === "IDRX") {
-        try {
-          const contractDecimals = await publicClient.readContract({
-            address: tokenAddress as `0x${string}`,
-            abi: [
-              {
-                inputs: [],
-                name: "decimals",
-                outputs: [{ internalType: "uint8", name: "", type: "uint8" }],
-                stateMutability: "view",
-                type: "function",
-              },
-            ],
-            functionName: "decimals",
-          });
-          actualDecimals = Number(contractDecimals);
-          console.log(`IDRX Contract Decimals:`, actualDecimals);
-        } catch (error) {
-          console.log(`Failed to read IDRX decimals from contract, using default:`, token.decimals);
-        }
+      try {
+        const contractDecimals = await publicClient.readContract({
+          address: tokenAddress as `0x${string}`,
+          abi: [
+            {
+              inputs: [],
+              name: "decimals",
+              outputs: [{ internalType: "uint8", name: "", type: "uint8" }],
+              stateMutability: "view",
+              type: "function",
+            },
+          ],
+          functionName: "decimals",
+        });
+        actualDecimals = Number(contractDecimals);
+        console.log(`${token.symbol} Contract Decimals:`, actualDecimals);
+      } catch (error) {
+        console.log(`Failed to read ${token.symbol} decimals from contract, using default:`, token.decimals);
       }
 
       const formattedBalance = formatUnits(balance as bigint, actualDecimals);
       
-      // Debug logging for IDRX
-      if (token.symbol === "IDRX") {
-        console.log(`IDRX Debug:`, {
-          rawBalance: balance.toString(),
-          configuredDecimals: token.decimals,
-          actualDecimals,
-          formattedBalance,
-          balanceBigInt: balance,
-          tokenAddress,
-          calculation: `${balance.toString()} / 10^${actualDecimals} = ${formattedBalance}`
-        });
-      }
+      // Debug logging for all tokens
+      console.log(`${token.symbol} Debug:`, {
+        rawBalance: balance.toString(),
+        configuredDecimals: token.decimals,
+        actualDecimals,
+        formattedBalance,
+        balanceBigInt: balance,
+        tokenAddress,
+        calculation: `${balance.toString()} / 10^${actualDecimals} = ${formattedBalance}`
+      });
       
       return {
         symbol: token.symbol,
@@ -109,7 +116,6 @@ export function useTokenBalances() {
         balance: balance.toString(),
         formattedBalance,
         decimals: token.decimals,
-        logo: token.logo,
       };
     } catch (error) {
       console.error(`Error fetching ${token.symbol} balance:`, error);
@@ -119,7 +125,6 @@ export function useTokenBalances() {
         balance: "0",
         formattedBalance: "0",
         decimals: token.decimals,
-        logo: token.logo,
       };
     }
   };

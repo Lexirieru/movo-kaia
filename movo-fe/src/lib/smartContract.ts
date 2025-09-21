@@ -43,76 +43,41 @@ const saveEscrowEventWithContext = async (
 
 export type TokenType = TokenTypeExtended;
 
-// Define Base Sepolia chain with correct Chain ID
-export const baseSepolia = defineChain({
-  id: 84532,
-  name: "Base Sepolia",
+// Define Kaia Mainnet chain
+export const kaiaMainnet = defineChain({
+  id: 8217,
+  name: "Kaia Mainnet",
   nativeCurrency: {
     decimals: 18,
-    name: "Ether",
-    symbol: "ETH",
+    name: "KAIA",
+    symbol: "KAIA",
   },
   rpcUrls: {
     default: {
-      http: [
-        "https://sepolia.base.org",
-        "https://base-sepolia.g.alchemy.com/v2/demo",
-        "https://base-sepolia.api.onfinality.io/public",
-      ],
-      webSocket: ["wss://sepolia.base.org"],
+      http: ["https://klaytn.drpc.org"],
     },
     public: {
-      http: [
-        "https://sepolia.base.org",
-        "https://base-sepolia.g.alchemy.com/v2/demo",
-        "https://base-sepolia.api.onfinality.io/public",
-      ],
-      webSocket: ["wss://sepolia.base.org"],
+      http: ["https://klaytn.drpc.org"],
     },
   },
   blockExplorers: {
     default: {
-      name: "Base Sepolia Explorer",
-      url: "https://sepolia.basescan.org",
-    },
-  },
-});
-
-// Define Kaia Testnet chain
-export const kaiaTestnet = defineChain({
-  id: 1001,
-  name: "Kaia Testnet",
-  nativeCurrency: {
-    decimals: 18,
-    name: "Kaia",
-    symbol: "KAI",
-  },
-  rpcUrls: {
-    default: {
-      http: ["https://testnet.kaia.network"],
-    },
-    public: {
-      http: ["https://testnet.kaia.network"],
-    },
-  },
-  blockExplorers: {
-    default: {
-      name: "Kaia Testnet Explorer",
-      url: "https://testnet.kaia.network",
+      name: "KlaytnScope",
+      url: "https://scope.klaytn.com",
     },
   },
 });
 
 // Public client for reading blockchain data
 export const publicClient = createPublicClient({
-  chain: baseSepolia,
+  chain: kaiaMainnet,
   transport: http(),
 });
 
 // Debug: Log the chain configuration
 console.log("Public client configured with chain:", {
-  id: baseSepolia.id,
-  name: baseSepolia.name,
+  id: kaiaMainnet.id,
+  name: kaiaMainnet.name,
 });
 
 // Wallet type detection and chain selection
@@ -198,12 +163,12 @@ export const detectWalletType = (
 export const getChainForWallet = (walletType: "OKX" | "LINE" | "UNKNOWN") => {
   switch (walletType) {
     case "OKX":
-      return baseSepolia;
+      return kaiaMainnet;
     case "LINE":
-      return baseSepolia; // LINE wallet now uses Base Sepolia
+      return kaiaMainnet; // LINE wallet now uses Kaia Mainnet
     default:
-      console.warn("Unknown wallet type, defaulting to Base Sepolia");
-      return baseSepolia;
+      console.warn("Unknown wallet type, defaulting to Kaia Mainnet");
+      return kaiaMainnet;
   }
 };
 
@@ -215,7 +180,7 @@ export const escrowContract = getContract({
 });
 
 export const escrowIdrxContract = getContract({
-  address: getEscrowAddress("IDRX_BASE") as `0x${string}`,
+  address: getEscrowAddress("IDRX") as `0x${string}`,
   abi: escrowIdrxAbis,
   client: publicClient,
 });
@@ -238,7 +203,7 @@ export const usdtContract = getContract({
 });
 
 export const idrxContract = getContract({
-  address: getTokenAddress("IDRX_BASE") as `0x${string}`,
+  address: getTokenAddress("IDRX") as `0x${string}`,
   abi: idrxAbis,
   client: publicClient,
 });
@@ -455,10 +420,8 @@ export const checkTokenAllowance = async (
 
     // Get the correct escrow contract address based on token type
     let escrowContractAddress;
-    if (tokenType === "IDRX_BASE") {
-      escrowContractAddress = getEscrowAddress("IDRX_BASE");
-    } else if (tokenType === "IDRX_KAIA") {
-      escrowContractAddress = getEscrowAddress("IDRX_KAIA");
+    if (tokenType === "IDRX") {
+      escrowContractAddress = getEscrowAddress("IDRX");
     } else {
       // For USDC and USDT, use the regular escrow contract
       escrowContractAddress = getEscrowAddress("USDC");
@@ -515,10 +478,8 @@ export const approveTokens = async (
 
     // Get the correct escrow contract address based on token type
     let escrowContractAddress;
-    if (tokenType === "IDRX_BASE") {
-      escrowContractAddress = getEscrowAddress("IDRX_BASE");
-    } else if (tokenType === "IDRX_KAIA") {
-      escrowContractAddress = getEscrowAddress("IDRX_KAIA");
+    if (tokenType === "IDRX") {
+      escrowContractAddress = getEscrowAddress("IDRX");
     } else {
       // For USDC and USDT, use the regular escrow contract
       escrowContractAddress = getEscrowAddress("USDC");
@@ -650,7 +611,7 @@ export const createEscrowOnchain = async (
     }
 
     let contract;
-    if (tokenType === "IDRX_KAIA" || tokenType === "IDRX_BASE") {
+    if (tokenType === "IDRX") {
       contract = escrowIdrxContract;
     } else {
       contract = escrowContract; // For USDC and USDT
@@ -862,7 +823,7 @@ export const createEscrowOnchain = async (
     const requestWithAbi = {
       ...request,
       abi:
-        tokenType === "IDRX_KAIA" || tokenType === "IDRX_BASE"
+        tokenType === "IDRX"
           ? escrowIdrxAbis
           : escrowAbis, // Use correct ABI
     };
@@ -912,7 +873,7 @@ export const createEscrowOnchain = async (
       walletAddress: validateAddress(receiver),
       amount: formatTokenAmount(
         escrowData.amounts[index],
-        tokenType === "IDRX_KAIA" || tokenType === "IDRX_BASE" ? 18 : 6,
+        tokenType === "IDRX" ? 18 : 6,
       ),
       // amount: formatTokenAmount(
       //   escrowData.amounts[index],
@@ -925,7 +886,7 @@ export const createEscrowOnchain = async (
     const eventData = {
       totalAmount: formatTokenAmount(
         totalAmount,
-        tokenType === "IDRX_KAIA" || tokenType === "IDRX_BASE" ? 18 : 6,
+        tokenType === "IDRX" ? 18 : 6,
         // tokenType === "IDRX" ? 18 : 6,
       ),
       recipients: recipients,
@@ -934,7 +895,7 @@ export const createEscrowOnchain = async (
       recipientsCount: recipients.length,
       averageAmount: formatTokenAmount(
         totalAmount / BigInt(recipients.length),
-        tokenType === "IDRX_KAIA" || tokenType === "IDRX_BASE" ? 18 : 6,
+        tokenType === "IDRX" ? 18 : 6,
         // tokenType === "IDRX" ? 18 : 6,
       ),
       createdAt: new Date().toISOString(),
@@ -1148,7 +1109,7 @@ export const closeEscrow = async (
     // Get the correct contract based on token type
     let contract;
     let abi;
-    if (tokenType === "IDRX_BASE" || tokenType === "IDRX_KAIA") {
+    if (tokenType === "IDRX") {
       contract = escrowIdrxContract;
       abi = escrowIdrxAbis;
     } else {
@@ -1207,7 +1168,7 @@ export const closeEscrow = async (
         throw new Error(
           `Cannot close escrow with remaining balance. Please withdraw ${formatTokenAmount(
             availableBalance,
-            (tokenType === "IDRX_BASE" || tokenType === "IDRX_KAIA") ? 2 : 6
+            tokenType === "IDRX" ? 6 : 6
           )} ${tokenType} first.`
         );
       }
@@ -1249,7 +1210,7 @@ export const closeEscrow = async (
             throw new Error(
               `Cannot close escrow. Receiver ${receiverAddress} still has unclaimed allocation of ${formatTokenAmount(
                 currentAllocation - withdrawnAmount,
-                (tokenType === "IDRX_BASE" || tokenType === "IDRX_KAIA") ? 2 : 6
+                tokenType === "IDRX" ? 6 : 6
               )} ${tokenType}`
             );
           }
@@ -1349,7 +1310,7 @@ export const isEscrowClosed = async (
     // Get the correct contract based on token type
     let contract;
     let abi;
-    if (tokenType === "IDRX_BASE" || tokenType === "IDRX_KAIA") {
+    if (tokenType === "IDRX") {
       contract = escrowIdrxContract;
       abi = escrowIdrxAbis;
     } else {
@@ -1546,18 +1507,15 @@ export const checkMultipleEscrowsStatus = async (
 const getTokenType = (tokenAddress: string): TokenType => {
   const usdcAddress = getTokenAddress("USDC");
   const usdtAddress = getTokenAddress("USDT");
-  const idrxBaseAddress = getTokenAddress("IDRX_BASE");
-  const idrxKaiaAddress = getTokenAddress("IDRX_KAIA");
+  const idrxAddress = getTokenAddress("IDRX");
   const addr = tokenAddress.toLowerCase();
 
   if (addr === usdcAddress?.toLowerCase()) {
     return "USDC";
   } else if (addr === usdtAddress?.toLowerCase()) {
     return "USDT";
-  } else if (addr === idrxBaseAddress?.toLowerCase()) {
-    return "IDRX_BASE";
-  } else if (addr === idrxKaiaAddress?.toLowerCase()) {
-    return "IDRX_KAIA";
+  } else if (addr === idrxAddress?.toLowerCase()) {
+    return "IDRX";
   }
   return "USDC"; // Default
 };
@@ -1630,7 +1588,7 @@ export const topUpFunds = async (
 ): Promise<{ success: boolean; transactionHash?: string; error?: string }> => {
   try {
     let contract;
-    if (tokenType === "IDRX_BASE" || tokenType === "IDRX_KAIA") {
+    if (tokenType === "IDRX") {
       contract = escrowIdrxContract;
     } else {
       contract = escrowContract; // For USDC and USDT
@@ -1747,7 +1705,7 @@ export const topUpFunds = async (
       {
         topupAmount: formatTokenAmount(
           amount,
-          tokenType === "IDRX_KAIA" || tokenType === "IDRX_BASE" ? 18 : 6,
+          tokenType === "IDRX" ? 18 : 6,
         ),
         // topupAmount: formatTokenAmount(amount, tokenType === "IDRX" ? 2 : 6),
       },
@@ -1881,7 +1839,7 @@ export const updateRecipientAmount = async (
 //     // const contractAddress =
 //     //   tokenType === "IDRX" ? escrowIdrxContract : escrowContract;
 
-//     if (tokenType === "IDRX_BASE" || tokenType === "IDRX_KAIA") {
+//     if (tokenType === "IDRX") {
 //       contract = escrowIdrxContract;
 //       abi = escrowIdrxAbis;
 //     } else {
@@ -2005,7 +1963,7 @@ export const removeRecipient = async (
     // Get the correct contract based on token type
     let contract;
     let abi;
-    if (tokenType === "IDRX_BASE" || tokenType === "IDRX_KAIA") {
+    if (tokenType === "IDRX") {
       contract = escrowIdrxContract;
       abi = escrowIdrxAbis;
     } else {
@@ -2419,7 +2377,7 @@ export const withdrawIDRXToCrypto = async (
     console.log("🔧 withdrawIDRXToCrypto called with:", {
       escrowId,
       amount: amount.toString(),
-      escrowAddress: getEscrowAddress("IDRX_BASE"),
+      escrowAddress: getEscrowAddress("IDRX"),
       walletAccount: walletClient?.account?.address,
     });
 
@@ -2427,7 +2385,7 @@ export const withdrawIDRXToCrypto = async (
     try {
       console.log("🧪 Simulating IDRX withdraw transaction...");
       const simulation = await publicClient.simulateContract({
-        address: getEscrowAddress("IDRX_BASE") as `0x${string}`,
+        address: getEscrowAddress("IDRX") as `0x${string}`,
         abi: escrowIdrxAbis,
         functionName: "withdrawIDRXToCrypto",
         args: [escrowId as `0x${string}`, amount],
@@ -2443,7 +2401,7 @@ export const withdrawIDRXToCrypto = async (
 
     // Send transaction
     const hash = await walletClient.writeContract({
-      address: getEscrowAddress("IDRX_BASE"),
+      address: getEscrowAddress("IDRX"),
       // address: getEscrowAddress("IDRX"),
       abi: escrowIdrxAbis,
       functionName: "withdrawIDRXToCrypto",
@@ -2475,7 +2433,7 @@ export const withdrawIDRXToCrypto = async (
           withdrawTo: walletClient.account.address, // Receiver's own wallet
         },
         receipt,
-        getEscrowAddress("IDRX_BASE"),
+        getEscrowAddress("IDRX"),
         // getEscrowAddress("IDRX"),
       );
 

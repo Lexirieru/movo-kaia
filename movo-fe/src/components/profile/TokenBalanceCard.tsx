@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import { RefreshCw, AlertCircle } from "lucide-react";
 
 interface TokenBalanceCardProps {
@@ -8,7 +7,6 @@ interface TokenBalanceCardProps {
   name: string;
   balance: string;
   formattedBalance: string;
-  logo: string;
   loading?: boolean;
   decimals: number;
 }
@@ -18,7 +16,6 @@ export default function TokenBalanceCard({
   name,
   balance,
   formattedBalance,
-  logo,
   loading = false,
   decimals,
 }: TokenBalanceCardProps) {
@@ -30,10 +27,11 @@ export default function TokenBalanceCard({
     const num = parseFloat(balance);
     if (num === 0) return "0";
 
-    // For IDRX with 2 decimals, handle formatting appropriately
-    if (symbol === "IDRX" && decimals === 2) {
-      if (num < 0.01) return num.toFixed(2);
-      if (num < 1) return num.toFixed(2);
+    // For IDRX with 6 decimals, handle formatting appropriately
+    if (symbol === "IDRX" && decimals === 6) {
+      if (num < 0.000001) return num.toFixed(6).replace(/\.?0+$/, "");
+      if (num < 0.01) return num.toFixed(6).replace(/\.?0+$/, "");
+      if (num < 1) return num.toFixed(4).replace(/\.?0+$/, "");
       if (num < 100) return num.toFixed(2).replace(/\.?0+$/, "");
       return num.toLocaleString(undefined, { maximumFractionDigits: 2 });
     }
@@ -51,21 +49,11 @@ export default function TokenBalanceCard({
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center space-x-3">
           <div className="relative">
-            {logo ? (
-              <Image
-                src={logo}
-                alt={`${symbol} logo`}
-                width={32}
-                height={32}
-                className="rounded-full"
-              />
-            ) : (
-              <div className="w-8 h-8 bg-gradient-to-br from-cyan-400/20 to-blue-600/20 rounded-full flex items-center justify-center border border-cyan-500/30">
-                <span className="text-cyan-400 font-bold text-sm">
-                  {symbol.charAt(0)}
-                </span>
-              </div>
-            )}
+            <div className="w-8 h-8 bg-gradient-to-br from-cyan-400/20 to-blue-600/20 rounded-full flex items-center justify-center border border-cyan-500/30">
+              <span className="text-cyan-400 font-bold text-sm">
+                {symbol.charAt(0)}
+              </span>
+            </div>
             {loading && (
               <div className="absolute -top-1 -right-1">
                 <RefreshCw className="w-4 h-4 text-cyan-400 animate-spin" />

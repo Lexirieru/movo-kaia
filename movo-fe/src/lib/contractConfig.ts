@@ -1,49 +1,36 @@
 // Smart Contract Configuration
 export const CONTRACT_CONFIG = {
-  // Base Network (Chain ID: 84532)
-  base: {
-    // Escrow Contracts
-    escrow: "0x306408Aca69417e44154E51f41CbFdE9Cb8FD142", // For USDT and USDC
-    escrowIDRX: "0x54C99B5800eC0aD6F39C7C19e001BA73eE21314a", // For IDRX
-
-    // Token Contracts
-    mockUSDC: "0xf9D5a610fe990bfCdF7dd9FD64bdfe89D6D1eb4c",
-    mockIDRX: "0x77fEa84656B5EF40BF33e3835A9921dAEAadb976",
-    mockUSDT: "0x80327544e61e391304ad16f0BAFb2C5c7A76dfB3",
-
-    // Network Info
-    chainId: 84532,
-    chainName: "Base Sepolia",
-    blockExplorer: "https://sepolia.basescan.org",
-    rpcUrl: "https://sepolia.base.org",
-  },
-  // Kaia Network (untuk masa depan jika diperlukan)
+  // Kaia Mainnet (Chain ID: 8217)
   kaia: {
     // Escrow Contracts
-    escrow: "0x306408Aca69417e44154E51f41CbFdE9Cb8FD142", // Placeholder
-    escrowIDRX: "0x54C99B5800eC0aD6F39C7C19e001BA73eE21314a", // Placeholder
+    escrow: "0x0d837aD954F4f9F06E303A86150ad0F322Ec5EB1", // For USDC and USDT
+    escrowIDRX: "0x4ce1D1E0e9C769221E03e661abBf043cceD84F1f", // For IDRX
 
     // Token Contracts
-    mockIDRX: "0x77fEa84656B5EF40BF33e3835A9921dAEAadb976", // Placeholder
+    mockUSDC: "0x4360a156F73663eee4581A4E8BFDbAB675F0A873", // 6 decimals
+    mockUSDT: "0x55D7Af35752065C381Af13a5DcDA86e5Fe3f4045", // 6 decimals
+    mockIDRX: "0x9B9D66405CDcAdbe5d1F300f67A1F89460e4C364", // 6 decimals
+    mockMYRC: "0x2c3a47fdF42a795196C80FFf1775920e562284B4", // 18 decimals
+    mockPHPC: "0xe5959e5C96348a2275A93630b34cB37571d6C2E7", // 6 decimals
+    mockTNSGD: "0xE26bAFF16B7c6119A05a3D65cf499DE321F67BAB", // 6 decimals
 
     // Network Info
-    chainId: 1001, // Kaia Testnet
-    chainName: "Kaia Testnet",
-    blockExplorer: "https://baobab.klaytnscope.com",
-    rpcUrl: "https://public-en-baobab.klaytn.net",
+    chainId: 8217,
+    chainName: "Kaia Mainnet",
+    blockExplorer: "https://scope.klaytn.com",
+    rpcUrl: "https://klaytn.drpc.org",
   },
 };
 
 // Type definitions for better type safety
-export type TokenTypeExtended = "USDC" | "USDT" | "IDRX_KAIA" | "IDRX_BASE";
-export type NetworkType = "base" | "kaia";
-export type SimpleTokenType = "USDC" | "USDT" | "IDRX";
+export type TokenTypeExtended = "USDC" | "USDT" | "IDRX" | "MYRC" | "PHPC" | "TNSGD";
+export type NetworkType = "kaia";
+export type SimpleTokenType = "USDC" | "USDT" | "IDRX" | "MYRC" | "PHPC" | "TNSGD";
 
 // Helper function to determine network from context or chain ID
 export const getCurrentNetwork = (): NetworkType => {
-  // Untuk saat ini, default ke base network
-  // Nanti bisa ditambahkan logic untuk detect chain ID dari wallet
-  return "base";
+  // Default to Kaia mainnet
+  return "kaia";
 };
 
 // Helper function to convert simple token type to extended token type
@@ -56,10 +43,11 @@ export const resolveTokenType = (
   switch (tokenType) {
     case "USDC":
     case "USDT":
-      return tokenType;
     case "IDRX":
-      // Tentukan apakah IDRX_BASE atau IDRX_KAIA berdasarkan network
-      return currentNetwork === "kaia" ? "IDRX_KAIA" : "IDRX_BASE";
+    case "MYRC":
+    case "PHPC":
+    case "TNSGD":
+      return tokenType;
     default:
       throw new Error(`Unsupported token type: ${tokenType}`);
   }
@@ -67,7 +55,7 @@ export const resolveTokenType = (
 
 // Helper function to get network-specific contract address
 export const getContractAddress = (
-  type: "escrow" | "escrowIDRX" | "mockUSDC" | "mockIDRX" | "mockUSDT",
+  type: "escrow" | "escrowIDRX" | "mockUSDC" | "mockIDRX" | "mockUSDT" | "mockMYRC" | "mockPHPC" | "mockTNSGD",
   network?: NetworkType,
 ) => {
   const currentNetwork = network || getCurrentNetwork();
@@ -91,8 +79,10 @@ export const getEscrowAddress = (
     case "USDC":
     case "USDT":
       return getContractAddress("escrow", currentNetwork);
-    case "IDRX_BASE":
-    case "IDRX_KAIA":
+    case "IDRX":
+    case "MYRC":
+    case "PHPC":
+    case "TNSGD":
       return getContractAddress("escrowIDRX", currentNetwork);
     default:
       throw new Error(`Unsupported token type: ${tokenType}`);
@@ -120,9 +110,14 @@ export const getTokenAddress = (
       return getContractAddress("mockUSDC", currentNetwork);
     case "USDT":
       return getContractAddress("mockUSDT", currentNetwork);
-    case "IDRX_KAIA":
-    case "IDRX_BASE":
+    case "IDRX":
       return getContractAddress("mockIDRX", currentNetwork);
+    case "MYRC":
+      return getContractAddress("mockMYRC", currentNetwork);
+    case "PHPC":
+      return getContractAddress("mockPHPC", currentNetwork);
+    case "TNSGD":
+      return getContractAddress("mockTNSGD", currentNetwork);
     default:
       throw new Error(`Unsupported token type: ${tokenType}`);
   }
@@ -141,18 +136,19 @@ export const getTokenAddressSimple = (
 export const getTokenDecimals = (
   tokenType: SimpleTokenType | TokenTypeExtended,
 ) => {
-  // Normalize token type untuk handling
-  const normalizedType = tokenType.startsWith("IDRX")
-    ? "IDRX"
-    : (tokenType as SimpleTokenType);
-
-  switch (normalizedType) {
+  switch (tokenType) {
     case "USDC":
       return 6;
     case "USDT":
       return 6;
     case "IDRX":
-      return 2; // IDRX has 2 decimals (both BASE and KAIA)
+      return 6;
+    case "MYRC":
+      return 18;
+    case "PHPC":
+      return 6;
+    case "TNSGD":
+      return 6;
     default:
       throw new Error(`Unsupported token type: ${tokenType}`);
   }
@@ -167,8 +163,7 @@ export const validateAndResolveIDRXType = (
     return tokenType as TokenTypeExtended;
   }
 
-  const network = preferredNetwork || getCurrentNetwork();
-  return network === "kaia" ? "IDRX_KAIA" : "IDRX_BASE";
+  return "IDRX";
 };
 
 // Function untuk mendapatkan semua informasi token dalam satu call
@@ -235,8 +230,7 @@ export const createTokenHandler = (preferredNetwork?: NetworkType) => {
       return {
         ...info,
         // Helper methods
-        isBase: info.tokenType === "IDRX_BASE",
-        isKaia: info.tokenType === "IDRX_KAIA",
+        isIDRX: info.tokenType === "IDRX",
         isStablecoin: ["USDC", "USDT"].includes(tokenType),
       };
     },

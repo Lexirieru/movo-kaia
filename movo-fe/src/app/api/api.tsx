@@ -2,7 +2,7 @@ import { GroupOfUser } from "@/types/receiverInGroupTemplate";
 import axios, { AxiosError } from "axios";
 import { getTokenType } from "@/lib/tokenMapping";
 import { createPublicClient, http, parseAbi } from "viem";
-import { baseSepolia } from "viem/chains";
+import { kaiaMainnet } from "@/lib/smartContract";
 import { getDefaultChain } from "@/lib/addresses/chainAddress";
 import { escrowAbis } from "@/lib/abis/escrowAbis";
 import { escrowIdrxAbis } from "@/lib/abis/escrowIdrxAbis";
@@ -10,10 +10,11 @@ import { getEscrowAddress } from "@/lib/contractConfig";
 interface ErrorResponse {
   message?: string;
 }
-// Goldsky API URLs for different escrow contracts
-const GOLDSKY_ESCROW_API_URL = process.env.NEXT_PUBLIC_GOLDSKY_ESCROW_API_URL;
-const GOLDSKY_ESCROW_IDRX_API_URL =
-  process.env.NEXT_PUBLIC_GOLDSKY_ESCROW_IDRX_API_URL;
+// Goldsky API URLs for Kaia mainnet escrow contracts
+const GOLDSKY_ESCROW_API_URL = process.env.NEXT_PUBLIC_GOLDSKY_ESCROW_API_URL || 
+  "https://api.goldsky.com/api/public/project_cmfnod75l9o1r01xy81lz52hq/subgraphs/MovoUSDCEscrowKaiaMainnet/1.0.0/gn";
+const GOLDSKY_ESCROW_IDRX_API_URL = process.env.NEXT_PUBLIC_GOLDSKY_ESCROW_IDRX_API_URL ||
+  "https://api.goldsky.com/api/public/project_cmfnod75l9o1r01xy81lz52hq/subgraphs/MovoIDRXEscrowKaiaMainnet/1.0.0/gn";
 
 // Simple in-memory cache for API responses
 const cache = new Map<string, { data: any; timestamp: number }>();
@@ -38,8 +39,7 @@ const setCachedData = (key: string, data: any) => {
 export const TOKEN_DECIMALS_CONFIG = {
   USDC: 6,
   USDT: 6,
-  IDRX_BASE: 2,
-  IDRX_KAIA: 2,
+  IDRX: 6,
 } as const;
 
 export type TokenType = keyof typeof TOKEN_DECIMALS_CONFIG;
@@ -89,7 +89,7 @@ if (!GOLDSKY_ESCROW_IDRX_API_URL) {
 
 // Viem client configuration
 const publicClient = createPublicClient({
-  chain: baseSepolia,
+  chain: kaiaMainnet,
   transport: http(),
 });
 
@@ -3536,7 +3536,7 @@ export interface VestingProgressSummary {
 /**
  * Get vesting information for an escrow (untuk Sender)
  * @param escrowId - ID escrow
- * @param tokenType - Jenis token (USDC, USDT, IDRX_BASE, IDRX_KAIA)
+ * @param tokenType - Jenis token (USDC, USDT, IDRX)
  */
 export const getEscrowVestingInfo = async (
   escrowId: string,
@@ -3547,12 +3547,12 @@ export const getEscrowVestingInfo = async (
 
     // Pilih contract berdasarkan token type
     const contractAddress =
-      tokenType === "IDRX_BASE" || tokenType === "IDRX_KAIA"
-        ? getEscrowAddress("IDRX_BASE")
+      tokenType === "IDRX"
+        ? getEscrowAddress("IDRX")
         : getEscrowAddress("USDC");
 
     const abi =
-      tokenType === "IDRX_BASE" || tokenType === "IDRX_KAIA"
+      tokenType === "IDRX"
         ? escrowIdrxAbis
         : escrowAbis;
 
@@ -3608,12 +3608,12 @@ export const getReceiverVestingInfo = async (
 
     // Pilih contract berdasarkan token type
     const contractAddress =
-      tokenType === "IDRX_BASE" || tokenType === "IDRX_KAIA"
-        ? getEscrowAddress("IDRX_BASE")
+      tokenType === "IDRX"
+        ? getEscrowAddress("IDRX")
         : getEscrowAddress("USDC");
 
     const abi =
-      tokenType === "IDRX_BASE" || tokenType === "IDRX_KAIA"
+      tokenType === "IDRX"
         ? escrowIdrxAbis
         : escrowAbis;
 
@@ -3678,12 +3678,12 @@ export const calculateVestedAmount = async (
 
     // Pilih contract berdasarkan token type
     const contractAddress =
-      tokenType === "IDRX_BASE" || tokenType === "IDRX_KAIA"
-        ? getEscrowAddress("IDRX_BASE")
+      tokenType === "IDRX"
+        ? getEscrowAddress("IDRX")
         : getEscrowAddress("USDC");
 
     const abi =
-      tokenType === "IDRX_BASE" || tokenType === "IDRX_KAIA"
+      tokenType === "IDRX"
         ? escrowIdrxAbis
         : escrowAbis;
 
@@ -3765,12 +3765,12 @@ export const getEscrowVestingProgress = async (
 
         // Get receiver details untuk allocation
         const contractAddress =
-          tokenType === "IDRX_BASE" || tokenType === "IDRX_KAIA"
-            ? getEscrowAddress("IDRX_BASE")
+          tokenType === "IDRX"
+            ? getEscrowAddress("IDRX")
             : getEscrowAddress("USDC");
 
         const abi =
-          tokenType === "IDRX_BASE" || tokenType === "IDRX_KAIA"
+          tokenType === "IDRX"
             ? escrowIdrxAbis
             : escrowAbis;
 

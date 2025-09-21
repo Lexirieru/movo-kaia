@@ -6,7 +6,7 @@ import { User, Sparkles, Wallet, AlertCircle } from "lucide-react";
 import { useWallet } from "@/lib/walletContext";
 import { useTokenBalances } from "@/hooks/useTokenBalances";
 import TokenBalanceCard from "@/components/profile/TokenBalanceCard";
-import NetworkSwitch from "@/components/shared/NetworkSwitch";
+import { ConnectButton } from "@rainbow-me/rainbowkit";
 
 const ProfilePage = () => {
   const { isConnected, address, disconnect, connectWallet, isConnecting } =
@@ -49,12 +49,12 @@ const ProfilePage = () => {
             </p>
           </div>
 
-          {/* Wallet Connection & Network Controls Section */}
+          {/* Wallet Connection Section */}
           <div className="bg-white/5 backdrop-blur-sm rounded-2xl p-6 border border-white/10 mb-8">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xl font-semibold text-white flex items-center gap-2">
                 <Wallet className="w-5 h-5 text-cyan-400" />
-                Wallet & Network
+                Wallet Connection
               </h2>
             </div>
 
@@ -80,14 +80,6 @@ const ProfilePage = () => {
                   </div>
                 )}
 
-                {/* Network Controls */}
-                <div className="space-y-3">
-                  <h3 className="text-sm font-medium text-gray-300 flex items-center gap-2">
-                    <div className="w-3 h-3 bg-gradient-to-r from-cyan-400 to-blue-600 rounded-full"></div>
-                    Network Settings
-                  </h3>
-                  <NetworkSwitch />
-                </div>
 
                 {/* Wallet Controls */}
                 <div className="flex flex-col sm:flex-row gap-3 pt-2">
@@ -130,36 +122,16 @@ const ProfilePage = () => {
                 </p>
 
                 {/* Connect Wallet Button */}
-                <button
-                  onClick={async () => {
-                    try {
-                      await connectWallet();
-                      console.log(
-                        "✅ Wallet connected successfully from profile",
-                      );
-                    } catch (error) {
-                      console.error("❌ Error connecting wallet:", error);
-                    }
-                  }}
-                  disabled={isConnecting}
-                  className={`px-6 py-3 rounded-xl font-medium transition-all duration-300 flex items-center justify-center space-x-2 mx-auto ${
-                    isConnecting
-                      ? "bg-gray-500/50 text-gray-300 cursor-not-allowed"
-                      : "bg-gradient-to-r from-cyan-500 to-blue-600 text-white hover:shadow-lg hover:shadow-cyan-500/25 hover:scale-105"
-                  }`}
-                >
-                  {isConnecting ? (
-                    <>
-                      <div className="w-5 h-5 border-2 border-gray-300 border-t-transparent rounded-full animate-spin"></div>
-                      <span>Connecting...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Wallet className="w-5 h-5" />
-                      <span>Connect Wallet</span>
-                    </>
-                  )}
-                </button>
+                <div className="flex justify-center">
+                  <ConnectButton
+                    showBalance={true}
+                    chainStatus="icon"
+                    accountStatus={{
+                      smallScreen: "avatar",
+                      largeScreen: "full",
+                    }}
+                  />
+                </div>
               </div>
             )}
           </div>
@@ -173,7 +145,7 @@ const ProfilePage = () => {
                   Token Balances
                 </h2>
                 <div className="text-sm text-gray-400">
-                  Base Sepolia Network
+                  Kaia Mainnet
                 </div>
               </div>
 
@@ -192,7 +164,6 @@ const ProfilePage = () => {
                     name={token.name}
                     balance={token.balance}
                     formattedBalance={token.formattedBalance}
-                    logo={token.logo}
                     loading={loading}
                     decimals={token.decimals}
                   />
@@ -211,36 +182,16 @@ const ProfilePage = () => {
               </p>
 
               {/* Connect Wallet Button */}
-              <button
-                onClick={async () => {
-                  try {
-                    await connectWallet();
-                    console.log(
-                      "✅ Wallet connected successfully from profile",
-                    );
-                  } catch (error) {
-                    console.error("❌ Error connecting wallet:", error);
-                  }
-                }}
-                disabled={isConnecting}
-                className={`px-8 py-4 rounded-xl font-medium transition-all duration-300 flex items-center justify-center space-x-3 mx-auto ${
-                  isConnecting
-                    ? "bg-gray-500/50 text-gray-300 cursor-not-allowed"
-                    : "bg-gradient-to-r from-cyan-500 to-blue-600 text-white hover:shadow-lg hover:shadow-cyan-500/25 hover:scale-105"
-                }`}
-              >
-                {isConnecting ? (
-                  <>
-                    <div className="w-6 h-6 border-2 border-gray-300 border-t-transparent rounded-full animate-spin"></div>
-                    <span>Connecting...</span>
-                  </>
-                ) : (
-                  <>
-                    <Wallet className="w-6 h-6" />
-                    <span>Connect Wallet</span>
-                  </>
-                )}
-              </button>
+              <div className="flex justify-center">
+                <ConnectButton
+                  showBalance={true}
+                  chainStatus="icon"
+                  accountStatus={{
+                    smallScreen: "avatar",
+                    largeScreen: "full",
+                  }}
+                />
+              </div>
             </div>
           )}
 

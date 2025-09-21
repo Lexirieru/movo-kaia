@@ -7,7 +7,7 @@ export const tokens: Token[] = [
     logo: "/token/USDC-Base.png",
     decimals: 6,
     addresses: {
-      84532: "0xf9D5a610fe990bfCdF7dd9FD64bdfe89D6D1eb4c", // Base Sepolia
+      8217: "0x4360a156F73663eee4581A4E8BFDbAB675F0A873", // Kaia Mainnet
     },
   },
   {
@@ -16,34 +16,52 @@ export const tokens: Token[] = [
     logo: "/token/Tether-Base.png",
     decimals: 6,
     addresses: {
-      84532: "0x80327544e61e391304ad16f0BAFb2C5c7A76dfB3", // Base Sepolia
+      8217: "0x55D7Af35752065C381Af13a5DcDA86e5Fe3f4045", // Kaia Mainnet
     },
   },
   {
     name: "Mock IDRX Token",
     symbol: "IDRX",
     logo: "/token/IDRX-Base.png",
-    decimals: 18,
+    decimals: 6,
     addresses: {
-      84532: "0x77fEa84656B5EF40BF33e3835A9921dAEAadb976", // Base Sepolia
+      8217: "0x9B9D66405CDcAdbe5d1F300f67A1F89460e4C364", // Kaia Mainnet
     },
   },
   {
-    name: "Ether",
-    symbol: "ETH",
-    logo: "/token/eth-logo.svg",
+    name: "Mock MYRC Token",
+    symbol: "MYRC",
+    logo: "/token/MYRC-Kaia.png",
     decimals: 18,
     addresses: {
-      84532: "0x0000000000000000000000000000000000000000", // Base Sepolia (native)
+      8217: "0x2c3a47fdF42a795196C80FFf1775920e562284B4", // Kaia Mainnet
     },
   },
   {
-    name: "Wrapped Ether",
-    symbol: "WETH",
-    logo: "/token/weth-logo.svg",
+    name: "Mock PHPC Token",
+    symbol: "PHPC",
+    logo: "/token/PHPC-Kaia.png",
+    decimals: 6,
+    addresses: {
+      8217: "0xe5959e5C96348a2275A93630b34cB37571d6C2E7", // Kaia Mainnet
+    },
+  },
+  {
+    name: "Mock TNSGD Token",
+    symbol: "TNSGD",
+    logo: "/token/TNSGD-Kaia.png",
+    decimals: 6,
+    addresses: {
+      8217: "0xE26bAFF16B7c6119A05a3D65cf499DE321F67BAB", // Kaia Mainnet
+    },
+  },
+  {
+    name: "Kaia",
+    symbol: "KAIA",
+    logo: "/token/kaia-logo.svg",
     decimals: 18,
     addresses: {
-      84532: "0x4200000000000000000000000000000000000006", // Base Sepolia
+      8217: "0x0000000000000000000000000000000000000000", // Kaia Mainnet (native)
     },
   },
 ];

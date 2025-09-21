@@ -1,7 +1,7 @@
 'use client';
 
 import { useAccount, useConnect, useDisconnect, useSwitchChain, useBalance } from 'wagmi';
-import { base, baseSepolia } from 'viem/chains';
+import { kaiaMainnet } from '@/lib/smartContract';
 
 export const useWagmiWallet = () => {
   const { address, isConnected, chainId } = useAccount();
@@ -33,7 +33,7 @@ export const useWagmiWallet = () => {
   const switchNetwork = async (targetChainId: number) => {
     try {
       // Check if the chain is supported
-      const supportedChains = [base, baseSepolia];
+      const supportedChains = [kaiaMainnet];
       const targetChain = supportedChains.find(chain => chain.id === targetChainId);
       if (!targetChain) {
         throw new Error(`Chain with ID ${targetChainId} is not supported`);
@@ -51,12 +51,12 @@ export const useWagmiWallet = () => {
       return null;
     }
     
-    const supportedChains = [base, baseSepolia];
+    const supportedChains = [kaiaMainnet];
     const currentChain = supportedChains.find(chain => chain.id === chainId);
     return currentChain ? {
       id: currentChain.id,
       name: currentChain.name,
-      logo: `/chain/${currentChain.name.toLowerCase()}-logo.svg` // Default logo path
+      logo: `/chain/kaia-logo.svg` // Kaia logo path
     } : null;
   };
 

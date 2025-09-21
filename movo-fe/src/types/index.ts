@@ -40,6 +40,9 @@ export interface Chain {
     usdc?: string;
     usdt?: string;
     idrx?: string;
+    myrc?: string;
+    phpc?: string;
+    tnsgd?: string;
     blockExplorer: string;
   };
 }
